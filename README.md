@@ -27,4 +27,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 tools/trace.sh          # requirement -> test coverage
 ```
 
+CI (`.github/workflows/core.yml`) runs on a self-hosted macOS arm64 runner with label `cantor`,
+installed at `~/dev/cantor-runner` as a launchd service (`./svc.sh status|stop|start`).
+
 Tests are named after PRD requirement IDs (`lib_01_...`, `play_02_...`). Write the failing test first.

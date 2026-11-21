@@ -224,7 +224,7 @@ tests (NFR-11: 100% of P0 criteria automated).
 
 - [x] Cargo workspace with the PRD crate layout
 - [x] `lib_01_parses_hello_world_musicxml` red then green
-- [x] CI workflow skeleton (core jobs on Linux/macOS/Windows)
+- [x] CI on a self-hosted macOS arm64 runner (label `cantor`, repo github.com/hkhard/Cantor); Linux/Windows/iOS sim/Android jobs still to add (WP-0.2)
 - [ ] Corpus collection + Verovio oracle (WP-0.3, WP-0.4)
 - [ ] Spikes S1 to S5
 - [ ] Decisions Q3, Q5, Q6 from the product owner
