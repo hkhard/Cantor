@@ -1,0 +1,8 @@
+[package]
+name = "cantor-timeline"
+description = "Repeat unfolding, tempo map and timemap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

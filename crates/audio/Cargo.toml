@@ -1,0 +1,8 @@
+[package]
+name = "cantor-audio"
+description = "Scheduler, synth, mixer, offline render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

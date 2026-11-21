@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+[workspace.dependencies]
+cantor-score = { path = "crates/score" }
+cantor-timeline = { path = "crates/timeline" }
+quick-xml = "0.37"
+thiserror = "2"

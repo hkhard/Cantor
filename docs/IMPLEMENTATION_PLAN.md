@@ -1,0 +1,211 @@
+# Cantor: Implementation Plan
+
+Derived from `MusicXML Score Reader - PRD & Test-Driven Development Plan.md` (2026-11-21).
+This turns the PRD milestones into ordered, test-first work packages with explicit
+dependencies, test names and exit gates. Requirement IDs (LIB-01, PLAY-02, ...) are the
+PRD's; work package IDs (WP-x.y) are new.
+
+## 0. Guiding decisions
+
+| Topic | Decision | Reason |
+| --- | --- | --- |
+| Core language | Rust workspace, edition 2021, MSRV pinned in `rust-toolchain.toml` | PRD section 6 |
+| Single source of time | `timeline::Timemap` (unfolded, tempo-resolved) is consumed by audio, cursor, lyrics, vocal | PRD: "the unfolded timemap is the one source of time" |
+| Internal time units | Musical time = rational `divisions` ticks normalised to a fixed PPQ (960 per quarter). Real time = `u64` sample frames at the engine rate, seconds only at the edges | Avoids float drift (< 5 ms after 10 min target) |
+| Determinism | Every engine (synth, mixer, scheduler) supports offline render to a buffer | Enables audio tests (~8% of suite) without devices |
+| Test naming | `<reqid>_<behaviour>`, e.g. `play_02_dal_segno_al_coda_unfolds_in_order` | PRD TDD rule 2 |
+| Snapshots | `insta` with JSON (`*.timemap.json`, `*.events.json`, `*.lyrics.json`) | PRD fixtures section |
+| Oracle | Verovio CLI/Python run in `tools/oracle` produces expected outputs once, checked in; CI never needs Verovio to run unit tests | Keeps core CI hermetic |
+| Errors | `thiserror` per crate, no panics on bad input; fuzz the parser (`cargo fuzz`) | LIB-01 "never a crash" |
+
+## 1. Dependency graph
+
+```mermaid
+graph TD
+  M0[M0 Foundations + spikes] --> M1[M1 Score core]
+  M1 --> M2[M2 Playback + mixer]
+  M0 --> M3a[M3a PDF reader + library]
+  M1 --> M3b[M3b MusicXML view]
+  M2 --> M3c[M3c Cursor, auto-turn, perf mode]
+  M3a --> M4[M4 Annotation + sync]
+  M3b --> M4
+  M1 --> M5a[M5a Lyrics crate]
+  M2 --> M5b[M5b Vocal providers + render queue]
+  M5a --> M5b
+  M3c --> M6[M6 Beta + hardening]
+  M4 --> M6
+  M5b --> M6
+```
+
+Critical path: M0 -> M1 (parser, unfolding, timemap) -> M2 (scheduler, mixer) -> M3c -> M6.
+M3a (PDF, library, forScore import) and M5a (lyrics) are off the critical path and can run in parallel
+with a second developer from week 3 to 5.
+
+## 2. Crate responsibilities and public API sketch
+
+```
+crates/score     Score, Part, Staff, Voice, Measure, Event{Note,Rest,Chord}, Pitch, Lyric,
+                 Direction{Tempo,Dynamic,Segno,Coda,Fine,DaCapo,...}, Barline{Repeat,Ending}
+                 parse_musicxml(&[u8]) -> Result<Score>, parse_mxl(&[u8]) -> Result<Score>
+                 transpose(&Score, semitones) -> Score
+crates/timeline  unfold(&Score) -> Vec<MeasureVisit>; TempoMap; Timemap { events: Vec<TimedEvent> }
+                 TimedEvent { part, staff, voice, measure_visit, tick_on, tick_off, sec_on, sec_off, pitch, velocity }
+crates/audio     Channel{gain_db,pan,mute,solo}; Mixer; resolve_audibility(&[Channel]) -> Vec<bool>;
+                 Preset{MyPart,WithoutMe,Balanced,Custom}; Scheduler (sample clock); Synth trait
+                 (rustysynth impl); render_offline(&Timemap, &Mixer, sr) -> Vec<f32>; Loop{a,b}; Metronome
+crates/lyrics    extract(&Score, part, verse) -> Vec<Phrase>; Phrase{syllables: Vec<Syllable{text, notes, syllabic}>}
+crates/vocal     trait VocalProvider { estimate, render(phrase), voices }; adapters; RenderCache (content hash)
+crates/library   SQLite schema, metadata, search (FTS5), setlists, backup/restore, forScore import (.4SC/.4SS/.4SB)
+app/             Tauri 2 + Svelte; Verovio WASM view; PDF.js / PDFKit plugin; keyring plugin
+```
+
+## 3. Milestones as work packages
+
+Each WP lists: tests written first (red), then the build, then done criteria.
+
+### M0 Foundations + spikes (weeks 0 to 3)
+
+| WP | Tests first | Build | Done |
+| --- | --- | --- | --- |
+| WP-0.1 Workspace | `cargo test` on empty workspace; smoke test per crate | Cargo workspace with 6 crates, `rust-toolchain.toml`, `clippy`/`fmt` config | `cargo test --workspace` green locally |
+| WP-0.2 CI | CI job fails if any test fails, if fmt/clippy fail, or coverage < threshold | GitHub Actions: Linux, macOS, Windows core; iOS sim + Android emulator jobs stubbed until app exists | All 5 target jobs exist; core jobs green |
+| WP-0.3 Corpus | `fixtures_manifest_lists_existing_files` (every manifest entry exists, has expected outputs) | Collect 40 files: MusicXML unofficial test suite subset (repeats, voltas, tuplets, lyrics, transposing), 10 CPDL SATB, 1 stress score. `fixtures/manifest.toml` with licence per file | 40 files + licences recorded |
+| WP-0.4 Oracle | Oracle script is deterministic (run twice, identical output) | `tools/oracle`: Verovio (Python bindings) -> `*.timemap.json`, `*.events.json` (from Verovio MIDI) normalised to our schema | Expected outputs checked in |
+| WP-0.5 First red test | `lib_01_parses_hello_world_musicxml` | Minimal parser for that file | Green |
+| S1 Verovio WASM in Tauri on iPad | Measure first-page time on a 20-page score | Throwaway Tauri iOS app | Report: first page time, memory, LGPL plan |
+| S2 Singing quality | Pitch/onset metric script (pYIN) on 3 English + 3 Swedish pieces x 3 engines | Scripts in `tools/spikes/s2` | Report picks default engine, flags Swedish risk |
+| S3 ElevenLabs STS on sung guide | Same metric before and after STS | Script | Report: cents error delta; keep or drop hybrid |
+| S4 Pencil ink latency in WebView | High-speed video or `PointerEvent` timestamps vs display | Throwaway app | Report answers Q6 (native overlay needed?) |
+| S5 forScore formats | Parse each example file without unknown-byte loss (round-trip of container) | Format notes `docs/formats/forscore.md`, prototype parser in `crates/library` | Documented structure of .4SC/.4SS/.4SB |
+
+Blocking inputs from product owner: forScore example files (S5), decisions Q3, Q5, Q6.
+
+### M1 Score core (weeks 3 to 7)
+
+| WP | Tests first | Build | Done |
+| --- | --- | --- | --- |
+| WP-1.1 Partwise parser | `lib_01_parses_hello_world_musicxml`, `lib_01_parses_every_corpus_file`, `lib_01_invalid_xml_returns_error_not_panic`, fuzz target `parse_musicxml` | quick-xml streaming parser for `score-partwise`: part-list, attributes (divisions, key, time, clef, transpose, staves), note (pitch, unpitched, rest, duration, voice, staff, chord, grace, tie, time-modification, lyric), backup/forward, direction, sound, barline | >= 98% corpus parses |
+| WP-1.2 Timewise + MXL | `lib_01_parses_mxl_container`, `lib_01_timewise_equals_partwise_model` | zip + `META-INF/container.xml` rootfile lookup; timewise -> partwise conversion | Green |
+| WP-1.3 Model normalisation | `score_divisions_normalised_to_960_ppq` (proptest: any divisions value), `score_backup_forward_assign_voice_offsets` | Normalise ticks, resolve chords, voices per staff (needed for PLAY-05) | Green |
+| WP-1.4 Transpose | `view_05_transpose_roundtrip_property` (proptest, n in -24..24), `view_05_transposing_instrument_concert_pitch` | Pitch spelling via line-of-fifths, key signature transpose, `<transpose>` handling | Green |
+| WP-1.5 Unfolding | `play_02_simple_repeat`, `play_02_voltas_1_2`, `play_02_da_capo_al_fine`, `play_02_dal_segno_al_coda_unfolds_in_order`, `play_02_nested_and_times_attribute`, property: unfolded duration = sum of visited measure durations | Repeat stack state machine, endings by `number` list, jump directions from `<sound dacapo/dalsegno/tocoda/fine>` and words fallback | 100% navigation fixtures match oracle |
+| WP-1.6 Tempo map + timemap | `play_01_timemap_matches_oracle` per fixture (insta), `play_02_tempo_change_mid_measure`, `play_02_meter_change`, `play_02_tuplets_exact_ticks`, `play_02_ties_merge_notes`, `play_02_grace_notes_steal_time`, drift test: 10 min at 7/8 + tempo changes accumulates < 1 sample error | `TempoMap` (tick -> seconds, piecewise), `Timemap` builder, tie merging, grace policy | Gate M1 |
+
+Gate M1: >= 98% corpus parses; timemaps equal oracle on 100% of navigation fixtures; >= 85% line coverage (cargo-llvm-cov) on `score` and `timeline`.
+
+### M2 Playback + mixer (weeks 7 to 11)
+
+| WP | Tests first | Build | Done |
+| --- | --- | --- | --- |
+| WP-2.1 Event list | `play_01_events_equal_reference_midi` (pitch, onset, duration per fixture) | Timemap -> `MidiEvent` stream per channel | Green on corpus |
+| WP-2.2 Channels | `play_05_two_voices_one_staff_are_two_channels`, `play_09_midi_program_respected`, `play_09_soprano_falls_back_to_choir_aahs` | Channel graph keyed by (part, staff, voice); GM program mapping + name heuristics table | Green |
+| WP-2.3 Mute/solo/gain | `play_03_solo_mute_truth_table` (table-driven, all 2^n for n<=4 + proptest), `play_03_gain_range_minus_inf_to_plus6`, `play_04_my_part_sets_exact_gains`, `play_04_without_me_mutes_selected`, `play_04_balanced`, `play_04_custom_preset_persists` | Pure mixer maths in `audio::mix`, presets serialisable (serde) | Green |
+| WP-2.4 Synth + offline render | `audio_offline_render_is_deterministic`, `play_03_solo_correlation_gt_099` (property), `audio_no_clipping_at_64_parts` | `Synth` trait, rustysynth impl with MuseScore General SF2 (downloaded in CI, not committed if size is an issue), limiter | Green |
+| WP-2.5 Scheduler | `play_06_tempo_change_applies_next_beat`, `play_07_loop_wraps_within_one_buffer`, `play_06_count_in_bars`, `perf_03_metronome_jitter_lt_1ms` (offline) | Sample-clock scheduler, lookahead queue, tempo scaling via timemap re-resolution, A-B loop by measure-visit range | Green |
+| WP-2.6 Realtime output | Device test: buffer size <= 10 ms on Mac (`cpal`), xrun counter = 0 over 60 s at 64 parts | cpal backend, lock-free command queue (rtrb) from UI to audio thread, position feedback ring for cursor (NFR-02) | NFR-01 met on Mac; iPad measured in M3 |
+
+Gate M2: all PLAY P0 green; NFR-01 latency met on iPad and Mac.
+
+### M3 Reader UI (weeks 9 to 16)
+
+Split in three tracks.
+
+**M3a Library + PDF (from week 9, independent of playback)**
+
+| WP | Tests first | Build |
+| --- | --- | --- |
+| WP-3.1 Library DB | `lib_03_metadata_survives_restart`, `lib_03_export_import_roundtrip`, `lib_04_search_10k_lt_100ms` (bench), `data_03_restore_identical_hash` | SQLite (rusqlite) schema + migrations, FTS5 over metadata and part names |
+| WP-3.2 PDF import/view | `lib_02_500_page_import_lt_3s`, thumbnails lazy (Playwright) | PDF.js in web/desktop, PDFKit plugin on Apple |
+| WP-3.3 forScore import | `lib_07_every_example_imports`, `lib_07_annotation_positions_within_2pt`, `lib_07_unknown_fields_preserved`, `lib_08_setlist_order_and_placeholders`, `lib_08_backup_score_count` | Parsers from S5 |
+| WP-3.4 Setlists | `set_01_reorder`, `set_01_placeholder_in_performance_mode` | Setlist model + UI |
+
+**M3b MusicXML view (after M1)**
+
+| WP | Tests first | Build |
+| --- | --- | --- |
+| WP-3.5 Engraving | `view_01_golden_png_matches` (pixelmatch tolerance), `view_03_phone_width_ge_2_measures_per_system` | Verovio WASM worker, SVG per page, off UI thread (NFR-03) |
+| WP-3.6 Page modes | `view_02_each_mode_one_tap`, `view_02_position_kept_on_rotation` | Single, two-up, half-page, scroll |
+| WP-3.7 Part visibility/themes | `view_04_hidden_part_still_plays`, `view_06_contrast_ge_4_5` | Verovio part filter, CSS themes |
+
+**M3c Performance (after M2)**
+
+| WP | Tests first | Build |
+| --- | --- | --- |
+| WP-3.8 Cursor + auto-turn | `play_08_cursor_highlights_sounding_note`, `play_08_turns_before_last_system_ends` | Verovio `getElementsAtTime`, cursor driven by audio clock ring |
+| WP-3.9 Perf mode + pedals | `perf_01_no_annotation_in_performance_mode`, `perf_02_pedal_maps_to_action` (HID simulation) | Lock overlay, key mapping settings |
+| WP-3.10 E2E flow | Playwright: import -> open -> turn page -> play -> solo alto | Wiring |
+
+Gate M3: LIB, VIEW, SET, PERF P0 green; 20-page PDF opens in < 1 s on iPad.
+
+### M4 Annotation + sync (weeks 16 to 20)
+
+| WP | Tests first | Build |
+| --- | --- | --- |
+| WP-4.1 Ink model | `ann_01_undo_100_steps`, `ann_02_layer_visibility_persists`, `ann_03_stamps_scale_with_zoom` | Stroke model (Automerge doc per score), layers, stamps, text |
+| WP-4.2 Anchoring | `ann_04_annotation_stays_on_measure_after_reflow` (fixture at 3 widths) | Anchor = (measure id, staff, offset in measure-normalised coords) |
+| WP-4.3 Ink latency | Device test `ann_01_ink_latency_lt_20ms` | WebView canvas or native overlay per S4 |
+| WP-4.4 Sync + backup | `data_02_two_devices_converge` (CRDT merge property), `data_03_restore_identical_hash`, `data_01_p0_offline` | Folder sync of Automerge changes + SQLite export; backup bundle |
+| WP-4.5 Annotated PDF export | `ann_05_annotations_in_exported_pdf` (parse output with lopdf) | PDF writer |
+
+### M5 Sung lyrics (weeks 16 to 25)
+
+**M5a Lyrics (can start after WP-1.6, week 7, with a spare developer)**
+
+| WP | Tests first | Build |
+| --- | --- | --- |
+| WP-5.1 Extractor | `vox_01_lyric_fixtures_expected_phrases` (insta), property: no syllable on a rest, every `begin` closed by `end`, melisma spans notes until next syllable/extender end | `crates/lyrics` |
+| WP-5.2 Timing resolver | `vox_tempo_and_transpose_applied_from_timemap` | Phrase splitting at rests >= 1 beat or breath marks, seconds from timemap |
+
+**M5b Vocal**
+
+| WP | Tests first | Build |
+| --- | --- | --- |
+| WP-5.3 Provider trait + mock | `vox_03_rendered_track_becomes_mixer_channel`, `vox_06_estimate_requires_confirmation`, `nfr_12_cap_10_minutes` | `VocalProvider` trait, render queue, `MockProvider` |
+| WP-5.4 Cache | `vox_07_reopen_uses_cache_no_api_call`, `vox_08_mute_does_not_rerender`, `vox_08_tempo_rerenders_affected_phrases` | Content hash of (phrase, tempo, transpose, voice, provider), files on disk |
+| WP-5.5 Keys | `vox_02_key_never_in_logs` (log capture), `vox_02_key_deletable`, `vox_02_validated_with_test_call` (mock) | Keyring plugin, redacting `Secret<String>` type |
+| WP-5.6 Adapters | Contract tests per adapter against recorded fixtures: SoulX-Singer, OmniSinger, ElevenLabs Music (`music_v2_5` composition plan, <= 30 chunks, 3 to 120 s), errors/limits/retries | HTTP adapters (reqwest) |
+| WP-5.7 Accuracy nightly | `vox_04_median_pitch_error_lt_50_cents`, onset within one sixteenth | pYIN/CREPE script against live endpoints |
+| WP-5.8 Voice choice | `vox_09_consent_required_for_reference_clip`, clip sent only to chosen provider | Settings UI |
+
+### M6 Beta + hardening (weeks 25 to 30)
+
+Accessibility tests (axe in Playwright, VoiceOver labels), `nfr_10_sv_en_localisation_complete`,
+2-hour soak `nfr_02_no_drift_gt_5ms`, licence page from `fixtures`/asset manifest (NFR-09),
+TestFlight, Play beta, Windows installer.
+
+## 4. Staffing and calendar (2 to 3 developers)
+
+| Weeks | Dev A (core) | Dev B (app) | Dev C (optional, voice) |
+| --- | --- | --- | --- |
+| 0 to 3 | WP-0.1 to 0.5 | S1, S4 | S2, S3, S5 |
+| 3 to 7 | M1 | WP-3.1, 3.3 (forScore import) | WP-5.1 (lyrics) after WP-1.3 |
+| 7 to 11 | M2 | WP-3.2, 3.4, 3.5 | WP-5.2, 5.3 |
+| 11 to 16 | WP-2.6 iPad, help M3c | M3b, M3c | WP-5.4, 5.5 |
+| 16 to 20 | M4 sync/backup core | M4 ink UI | WP-5.6 |
+| 20 to 25 | Perf + bugs | Polish | WP-5.7, 5.8 |
+| 25 to 30 | M6 | M6 | M6 |
+
+## 5. Traceability
+
+`docs/traceability.md` (generated) maps each requirement ID to its tests. A CI script
+(`tools/trace.sh`) greps test names for `<reqid>_` and fails if any P0 requirement has zero
+tests (NFR-11: 100% of P0 criteria automated).
+
+## 6. Risks that change the plan
+
+| Trigger | Plan change |
+| --- | --- |
+| S1: Verovio WASM first page > 1.5 s on iPad | Pre-engrave pages in a worker on import and cache SVG; fallback OSMD |
+| S4: WebView ink > 20 ms | Native PencilKit overlay plugin (Q6) |
+| S2: Swedish unusable | Ship English only for sung lyrics in beta; Swedish UI still ships |
+| S5: forScore format encrypted/opaque | Import embedded PDF + metadata only, warn about annotations |
+| Corpus < 98% after M1 | Add normalisation pass per exporter before M2 starts |
+
+## 7. Started in this repo (M0)
+
+- [x] Cargo workspace with the PRD crate layout
+- [x] `lib_01_parses_hello_world_musicxml` red then green
+- [x] CI workflow skeleton (core jobs on Linux/macOS/Windows)
+- [ ] Corpus collection + Verovio oracle (WP-0.3, WP-0.4)
+- [ ] Spikes S1 to S5
+- [ ] Decisions Q3, Q5, Q6 from the product owner

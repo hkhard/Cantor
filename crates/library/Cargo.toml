@@ -1,0 +1,8 @@
+[package]
+name = "cantor-library"
+description = "SQLite library, setlists, sync, backup, forScore import"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
