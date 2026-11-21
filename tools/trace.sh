@@ -12,7 +12,7 @@ missing=0
 while IFS='|' read -r _ id pri _; do
   id=$(echo "$id" | xargs); pri=$(echo "$pri" | xargs)
   prefix=$(echo "$id" | tr 'A-Z-' 'a-z_')
-  count=$(grep -rhoE "fn ${prefix}_[a-z0-9_]+" crates 2>/dev/null | sort -u | wc -l | xargs)
+  count=$({ grep -rhoE "fn ${prefix}_[a-z0-9_]+" crates 2>/dev/null || true; } | sort -u | wc -l | xargs)
   printf '%-8s %-3s %s tests\n' "$id" "$pri" "$count"
   if [[ "$pri" == "P0" && "$count" == "0" ]]; then missing=$((missing + 1)); fi
 done < <(grep -E '^\| [A-Z]+-[0-9]+ \| P[0-2] \|' "$PRD")
