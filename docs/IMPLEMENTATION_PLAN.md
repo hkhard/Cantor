@@ -226,5 +226,6 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [x] `lib_01_parses_hello_world_musicxml` red then green
 - [x] CI on a self-hosted macOS arm64 runner (label `cantor`, repo github.com/hkhard/Cantor); Linux/Windows/iOS sim/Android jobs still to add (WP-0.2)
 - [ ] Corpus collection + Verovio oracle (WP-0.3, WP-0.4)
-- [ ] Spikes S1 to S5
+- [ ] Spikes S1 to S4
+- [x] S5 forScore formats: `.4sc` and `.4ss` documented in `docs/formats/forscore.md`; importer in `crates/library/src/forscore.rs` (LIB-07/LIB-08 tests green on synthetic and real samples). Open: annotations, attachments, placeholders, `.4sb` (need more samples)
 - [ ] Decisions Q3, Q5, Q6 from the product owner
