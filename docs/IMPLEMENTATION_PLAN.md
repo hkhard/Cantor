@@ -173,6 +173,25 @@ Accessibility tests (axe in Playwright, VoiceOver labels), `nfr_10_sv_en_localis
 2-hour soak `nfr_02_no_drift_gt_5ms`, licence page from `fixtures`/asset manifest (NFR-09),
 TestFlight, Play beta, Windows installer.
 
+### P1, P2 and NFRs not covered by a WP above
+
+| Req | Slot | Test first |
+| --- | --- | --- |
+| LIB-05 (P1) Link PDF + MusicXML | M3c, after WP-3.8 | `lib_05_cursor_on_pdf_with_manual_measure_map` |
+| LIB-06 (P2) OMR via Audiveris | v2 | `lib_06_omr_output_opens_and_plays` |
+| LIB-09 (P2) Export .4SC/.4SS | v2, reuses S5 parser | `lib_09_roundtrip_keeps_annotations` |
+| PLAY-10 (P1) Dynamics/articulations | M2, with WP-2.1 | `play_10_pp_lt_mf_lt_ff_velocity`, `play_10_staccato_halves_length` |
+| PLAY-11 (P1) Export WAV/M4A | M2, after WP-2.4 (reuses offline render) | `play_11_export_length_within_10ms` |
+| PLAY-12 (P1) Background audio, media keys | M3c | Device tests on iOS/Android (lock screen) |
+| VOX-05 (P1) ElevenLabs performance mode | M5b, WP-5.6 | `vox_05_labelled_not_score_accurate`, `vox_05_aligned_by_word_timestamps` |
+| SET-02 (P1) Setlist bundle | M4, with WP-4.4 | `set_02_bundle_identical_content_hash` |
+| PERF-04 (P1) Backing tracks + turn markers | M3c | `perf_04_turn_markers_within_50ms` |
+| NFR-04 Memory <= 400 MB | M6 | Device memory probe with 50 MB SF2 + 100-page score |
+| NFR-05 Offline | Same as DATA-01 (WP-4.4) | `data_01_p0_offline` |
+| NFR-06 Secrets | WP-5.5 | `vox_02_key_never_in_logs`, plus `nfr_06_backup_contains_no_keys` |
+| NFR-07 Privacy | M6 | `nfr_07_no_network_without_opt_in` (network capture in E2E) |
+| NFR-08 Accessibility | M6 (axe), labels checked from M3 | `nfr_08_all_controls_labelled` |
+
 ## 4. Staffing and calendar (2 to 3 developers)
 
 | Weeks | Dev A (core) | Dev B (app) | Dev C (optional, voice) |
