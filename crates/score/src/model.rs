@@ -37,7 +37,31 @@ pub struct Measure {
     pub time_signature: Option<(u32, u32)>,
     /// Tempo changes `(offset in measure, quarter notes per minute)`.
     pub tempos: Vec<(Tick, f64)>,
+    /// Repeats, endings and jumps (PLAY-02).
+    pub nav: Navigation,
     pub events: Vec<Event>,
+}
+
+/// Navigation marks of a measure, from `<barline>` and `<sound>`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Navigation {
+    /// `<repeat direction="forward">` at the left barline.
+    pub repeat_start: bool,
+    /// `<repeat direction="backward">`: total number of times the section plays
+    /// (`times` attribute, default 2).
+    pub repeat_end: Option<u32>,
+    /// Volta numbers this measure belongs to (`<ending number="1, 2">`),
+    /// carried across the measures between ending start and stop.
+    pub ending: Vec<u32>,
+    pub segno: Option<String>,
+    pub coda: Option<String>,
+    /// Jump to the coda with this label when passing here after a D.C./D.S.
+    pub tocoda: Option<String>,
+    /// D.S.: jump back to the segno with this label.
+    pub dalsegno: Option<String>,
+    pub dacapo: bool,
+    /// Stop here after a D.C./D.S.
+    pub fine: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

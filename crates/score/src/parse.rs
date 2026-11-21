@@ -1,7 +1,7 @@
 //! `score-partwise` parser and MXL container (LIB-01). Timewise follows in WP-1.2.
 
 use crate::dom::{self, DomError, Element};
-use crate::model::{Event, EventKind, Measure, Part, Pitch, Score, Step, Tick, PPQ};
+use crate::model::{Event, EventKind, Measure, Navigation, Part, Pitch, Score, Step, Tick, PPQ};
 use std::io::Read;
 
 #[derive(Debug, thiserror::Error)]
@@ -173,6 +173,8 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
     // Divisions and time signature persist across measures until changed.
     let mut divisions: u64 = 1;
     let mut time_sig: Option<(u32, u32)> = None;
+    // Volta numbers open across measures (ending start .. stop/discontinue).
+    let mut open_ending: Vec<u32> = Vec::new();
     let mut out = Vec::new();
 
     for m in part.children("measure") {
@@ -188,6 +190,10 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
         let mut last_onset: Tick = 0;
         let mut events = Vec::new();
         let mut tempos = Vec::new();
+        let mut nav = Navigation {
+            ending: open_ending.clone(),
+            ..Navigation::default()
+        };
 
         for child in &m.children {
             match child.name.as_str() {
@@ -224,13 +230,64 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                     high_water = high_water.max(cursor);
                 }
                 "direction" => {
-                    if let Some(t) = child.child("sound").and_then(tempo_of) {
-                        tempos.push((cursor, t));
+                    if let Some(s) = child.child("sound") {
+                        if let Some(t) = tempo_of(s) {
+                            tempos.push((cursor, t));
+                        }
+                        apply_sound_nav(s, &mut nav);
+                    }
+                    // Graphic segno/coda without <sound> still mark targets.
+                    if let Some(dt) = child.child("direction-type") {
+                        if dt.child("segno").is_some() && nav.segno.is_none() {
+                            nav.segno = Some(String::new());
+                        }
+                        if dt.child("coda").is_some() && nav.coda.is_none() {
+                            nav.coda = Some(String::new());
+                        }
                     }
                 }
                 "sound" => {
                     if let Some(t) = tempo_of(child) {
                         tempos.push((cursor, t));
+                    }
+                    apply_sound_nav(child, &mut nav);
+                }
+                "barline" => {
+                    if let Some(r) = child.child("repeat") {
+                        match r.attr("direction") {
+                            Some("forward") => nav.repeat_start = true,
+                            Some("backward") => {
+                                let times = r
+                                    .attr("times")
+                                    .and_then(|t| t.trim().parse::<u32>().ok())
+                                    .unwrap_or(2)
+                                    .max(1);
+                                nav.repeat_end = Some(times);
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let Some(e) = child.child("ending") {
+                        let nums = parse_ending_numbers(e.attr("number").unwrap_or_default());
+                        match e.attr("type") {
+                            Some("start") => {
+                                open_ending = nums.clone();
+                                nav.ending = nums;
+                            }
+                            Some("stop") | Some("discontinue") => {
+                                if nav.ending.is_empty() {
+                                    nav.ending = nums;
+                                }
+                                open_ending.clear();
+                            }
+                            _ => {}
+                        }
+                    }
+                    if child.child("segno").is_some() && nav.segno.is_none() {
+                        nav.segno = Some(String::new());
+                    }
+                    if child.child("coda").is_some() && nav.coda.is_none() {
+                        nav.coda = Some(String::new());
                     }
                 }
                 "note" => {
@@ -288,10 +345,50 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
             implicit,
             time_signature: time_sig,
             tempos,
+            nav,
             events,
         });
     }
     Ok(out)
+}
+
+/// `<sound>` navigation attributes (MusicXML playback semantics).
+fn apply_sound_nav(s: &Element, nav: &mut Navigation) {
+    let label = |k: &str| s.attr(k).map(|v| v.trim().to_string());
+    if let Some(v) = label("segno") {
+        nav.segno = Some(v);
+    }
+    if let Some(v) = label("coda") {
+        nav.coda = Some(v);
+    }
+    if let Some(v) = label("tocoda") {
+        nav.tocoda = Some(v);
+    }
+    if let Some(v) = label("dalsegno") {
+        nav.dalsegno = Some(v);
+    }
+    if s.attr("dacapo") == Some("yes") {
+        nav.dacapo = true;
+    }
+    if s.attr("fine").is_some() {
+        nav.fine = true;
+    }
+}
+
+/// `"1, 2"` or `"1 2"` or `"1-3"` to volta numbers.
+fn parse_ending_numbers(s: &str) -> Vec<u32> {
+    let mut out = Vec::new();
+    for tok in s.split([',', ' ']).map(str::trim).filter(|t| !t.is_empty()) {
+        let tok = tok.trim_end_matches('.');
+        if let Some((a, b)) = tok.split_once('-') {
+            if let (Ok(a), Ok(b)) = (a.parse::<u32>(), b.parse::<u32>()) {
+                out.extend(a..=b.min(a + 16));
+            }
+        } else if let Ok(n) = tok.parse() {
+            out.push(n);
+        }
+    }
+    out
 }
 
 fn parse_pitch(ctx: &Ctx<'_>, p: &Element) -> Result<Pitch, ParseError> {

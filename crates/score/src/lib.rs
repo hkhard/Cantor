@@ -7,6 +7,8 @@
 mod dom;
 mod model;
 mod parse;
+mod write;
 
-pub use model::{Event, EventKind, Measure, Part, Pitch, Score, Step, Tick, PPQ};
+pub use model::{Event, EventKind, Measure, Navigation, Part, Pitch, Score, Step, Tick, PPQ};
 pub use parse::{parse_musicxml, parse_mxl, parse_score_file, ParseError};
+pub use write::write_musicxml;

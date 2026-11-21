@@ -62,6 +62,9 @@ fn main() -> ExitCode {
                         c.midi.display(),
                         t0.elapsed().as_secs_f64()
                     );
+                    if !c.skipped_pages.is_empty() {
+                        println!("     pages without music skipped: {:?}", c.skipped_pages);
+                    }
                 }
                 Err(e) => {
                     failed += 1;

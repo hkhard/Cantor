@@ -140,9 +140,16 @@ Measured on the product owner's 12 scanned choral scores (spike S6):
 | --- | --- |
 | Recognised from the raw PDF | 9 of 12 |
 | Recognised after scan cleanup (WP-3.12) | +1 (kunglilje: 665 notes) |
-| Still failing | Glimmande Nymf (Audiveris crash on page 1), I bröllopsgården (page 1 crash, works with `-sheets 2-6`), Supa klockan öfver tolf (old engraving with faint staff lines, 6 notes found, now reported as failed instead of a near-empty MIDI) |
+| Recognised page by page (book crashed on a page without music) | +2: Glimmande Nymf (page 3 is verse text), I bröllopsgården (page 1 is a blank/cover scan) |
+| Still failing | Supa klockan öfver tolf (old engraving with faint staff lines, 6 notes found, reported as failed instead of a near-empty MIDI) |
 | Same notes and onsets as MuseScore's playback of the same MusicXML | Olaf Trygvason 100%, Stad i ljus 100%, Jag och min far 98%, Bacchi 95%, Calypso 92%, Är jag född 91% |
-| Island 19% | Repeats not unfolded yet (WP-1.5); MuseScore plays them |
+| Island | 99% after repeat unfolding (was 19%) |
+| Glimmande Nymf | 100% |
+| I bröllopsgården | 36%: the scan has many meter changes (7/8, 5/4, 15/16) that OMR misses, so measure lengths differ from MuseScore's reading; needs the correction UI (WP-3.13) |
+
+OCR for lyrics and text: Audiveris needs Tesseract `tessdata` (full, not
+`tessdata_fast`, it uses the legacy engine). With `swe+eng`, Å/Ä/Ö are read
+correctly ("Är jag född"); with English only they become A/a/o.
 
 That measures **our MIDI generation** against an independent player. It does
 not measure **OMR accuracy** against the printed page; that needs hand-checked
@@ -263,4 +270,5 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [ ] Decisions Q3, Q5, Q6 from the product owner
 - [x] S6 OMR: `cantor-omr` turns PDF/.4sc/.4ss into MusicXML + MIDI (Audiveris + scan cleanup); 10 of 12 sample scores converted
 - [x] MXL container, ties, tempo, measure lengths, MIDI programs in `cantor-score`; timemap and SMF writer in `cantor-timeline`
-- [ ] Next: repeat unfolding (WP-1.5, Island), per-page retry for Audiveris crashes, Rust port of scan cleanup, OMR ground truth for 3 pieces
+- [x] Repeat/volta/D.C./D.S./Coda/Fine unfolding (WP-1.5, 15 PLAY-02 tests), MusicXML writer, page-by-page OMR fallback, Swedish OCR for lyrics: 11 of 12 sample scores produce MIDI (Supa klockan still fails)
+- [ ] Next: lyrics into the model (VOX-01), tempo from metronome marks, Rust port of scan cleanup, OMR ground truth for 3 pieces, correction UI design

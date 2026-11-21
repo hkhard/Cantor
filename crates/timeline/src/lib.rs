@@ -2,10 +2,12 @@
 //!
 //! The [`Timemap`] is the single source of time (PRD section 6): playback,
 //! cursor, MIDI export and sung lyrics all read note times from it.
-//! Repeat/volta/D.S. unfolding (PLAY-02, WP-1.5) is not done yet: measures
-//! play in written order.
+//! Repeats, voltas and D.C./D.S./Coda/Fine are unfolded first (PLAY-02).
 
 pub mod smf;
+mod unfold;
+
+pub use unfold::unfold;
 
 use cantor_score::{EventKind, Score, Tick};
 use std::collections::HashMap;
@@ -20,7 +22,7 @@ pub struct TimedNote {
     pub part: usize,
     pub staff: u32,
     pub voice: u32,
-    /// Index of the measure in written order.
+    /// Written measure index the note comes from.
     pub measure: usize,
     pub pitch: u8,
     pub tick_on: Tick,
@@ -33,7 +35,9 @@ pub struct TimedNote {
 pub struct Timemap {
     /// Notes sorted by onset, then part, then pitch.
     pub notes: Vec<TimedNote>,
-    /// Absolute start tick of each measure index (shared by all parts).
+    /// Written measure index of each played measure (repeats unfolded).
+    pub measure_order: Vec<usize>,
+    /// Absolute start tick of each played measure, parallel to `measure_order`.
     pub measure_starts: Vec<Tick>,
     /// Tempo changes `(absolute tick, quarter notes per minute)`, first at tick 0.
     pub tempos: Vec<(Tick, f64)>,
@@ -61,7 +65,7 @@ fn seconds_at(tempos: &[(Tick, f64)], tick: Tick) -> f64 {
     sec
 }
 
-/// Build the timemap for a score in written order (no repeat unfolding yet).
+/// Build the timemap for a score in playback order (repeats unfolded).
 ///
 /// Measures are aligned by index across parts: each measure starts where the
 /// longest part's previous measure ended. A part with a misread rhythm (common
@@ -73,31 +77,44 @@ pub fn build_timemap(score: &Score) -> Timemap {
         .map(|p| p.measures.len())
         .max()
         .unwrap_or(0);
-    let mut measure_starts = Vec::with_capacity(n_measures);
+    // Played length of each written measure.
+    let lengths: Vec<Tick> = (0..n_measures)
+        .map(|i| {
+            let ms: Vec<_> = score
+                .parts
+                .iter()
+                .filter_map(|p| p.measures.get(i))
+                .collect();
+            let nominal = ms.iter().map(|m| m.duration).max().unwrap_or(0);
+            let content = ms.iter().map(|m| m.content_duration).max().unwrap_or(0);
+            // Every part shorter than the time signature: a pickup, a written
+            // partial measure, or a time change OMR missed. Play the content
+            // (MuseScore does the same). Empty measures keep their full length.
+            if content > 0 && content < nominal {
+                content
+            } else {
+                nominal
+            }
+        })
+        .collect();
+
+    let measure_order = unfold(score);
+    let mut measure_starts = Vec::with_capacity(measure_order.len());
     let mut t: Tick = 0;
-    for i in 0..n_measures {
+    for &mi in &measure_order {
         measure_starts.push(t);
-        let ms: Vec<_> = score
-            .parts
-            .iter()
-            .filter_map(|p| p.measures.get(i))
-            .collect();
-        let nominal = ms.iter().map(|m| m.duration).max().unwrap_or(0);
-        let content = ms.iter().map(|m| m.content_duration).max().unwrap_or(0);
-        // Every part shorter than the time signature: a pickup, a written
-        // partial measure, or a time change OMR missed. Play the content
-        // (MuseScore does the same). Empty measures keep their full length.
-        let short = content > 0 && content < nominal;
-        t += if short { content } else { nominal };
+        t += lengths[mi];
     }
     let duration_ticks = t;
 
     // Tempo map: union of tempo marks from all parts, first one at a tick wins.
     let mut tempos: Vec<(Tick, f64)> = Vec::new();
     for p in &score.parts {
-        for (i, m) in p.measures.iter().enumerate() {
-            for &(off, bpm) in &m.tempos {
-                tempos.push((measure_starts[i] + off, bpm));
+        for (visit, &mi) in measure_order.iter().enumerate() {
+            if let Some(m) = p.measures.get(mi) {
+                for &(off, bpm) in &m.tempos {
+                    tempos.push((measure_starts[visit] + off, bpm));
+                }
             }
         }
     }
@@ -110,9 +127,12 @@ pub fn build_timemap(score: &Score) -> Timemap {
 
     let mut notes: Vec<TimedNote> = Vec::new();
     for (pi, p) in score.parts.iter().enumerate() {
-        // Open ties: (staff-independent) pitch -> index of the sounding note.
+        // Open ties: pitch -> index of the sounding note.
         let mut open: HashMap<u8, usize> = HashMap::new();
-        for (mi, m) in p.measures.iter().enumerate() {
+        for (visit, &mi) in measure_order.iter().enumerate() {
+            let Some(m) = p.measures.get(mi) else {
+                continue;
+            };
             for e in &m.events {
                 let EventKind::Note(pitch) = &e.kind else {
                     continue;
@@ -126,15 +146,18 @@ pub fn build_timemap(score: &Score) -> Timemap {
                 if midi > 127 {
                     continue;
                 }
-                let on = measure_starts[mi] + e.offset;
+                let on = measure_starts[visit] + e.offset;
                 let off = on + e.duration;
                 if e.tie_stop {
                     if let Some(&idx) = open.get(&midi) {
-                        notes[idx].tick_off = notes[idx].tick_off.max(off);
-                        if !e.tie_start {
-                            open.remove(&midi);
+                        // Only continue a tie that ends where this note starts.
+                        if notes[idx].tick_off == on {
+                            notes[idx].tick_off = off;
+                            if !e.tie_start {
+                                open.remove(&midi);
+                            }
+                            continue;
                         }
-                        continue;
                     }
                 }
                 notes.push(TimedNote {
@@ -166,6 +189,7 @@ pub fn build_timemap(score: &Score) -> Timemap {
         duration_sec: seconds_at(&tempos, duration_ticks),
         notes,
         measure_starts,
+        measure_order,
         tempos,
         duration_ticks,
     }

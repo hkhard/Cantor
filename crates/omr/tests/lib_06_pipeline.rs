@@ -286,6 +286,72 @@ fn lib_06_sparse_result_triggers_cleanup() {
     assert!(out.cleaned);
 }
 
+/// Audiveris aborts a whole book when one page has no staves (a page of
+/// verses). The pipeline then recognises page by page, skips failed pages and
+/// joins the rest in page order.
+#[test]
+fn lib_06_page_by_page_when_book_fails() {
+    struct PagedEngine {
+        calls: Mutex<Vec<Option<u32>>>,
+    }
+    impl OmrEngine for PagedEngine {
+        fn name(&self) -> &str {
+            "paged"
+        }
+        fn recognise(&self, _: &Path, _: &Path) -> Result<PathBuf, OmrError> {
+            self.calls.lock().unwrap().push(None);
+            Err(OmrError::Engine {
+                engine: "paged".into(),
+                detail: "page 3: no staves".into(),
+            })
+        }
+        fn page_count(&self, _: &Path) -> Option<u32> {
+            Some(3)
+        }
+        fn recognise_page(&self, _: &Path, page: u32, out_dir: &Path) -> Result<PathBuf, OmrError> {
+            self.calls.lock().unwrap().push(Some(page));
+            if page == 3 {
+                return Err(OmrError::Engine {
+                    engine: "paged".into(),
+                    detail: "no staves".into(),
+                });
+            }
+            let step = if page == 1 { "C" } else { "D" };
+            let xml = TINY_XML.replace("<step>A</step>", &format!("<step>{step}</step>"));
+            let out = out_dir.join(format!("p{page}.musicxml"));
+            std::fs::write(&out, xml).unwrap();
+            Ok(out)
+        }
+    }
+    let engine = PagedEngine {
+        calls: Mutex::new(vec![]),
+    };
+    let dir = tmp("paged");
+    let out = cantor_omr::convert_with(
+        &engine,
+        None,
+        Input::Pdf {
+            title: "Nymf".into(),
+            bytes: b"%PDF".to_vec(),
+        },
+        &dir,
+    )
+    .unwrap();
+    assert_eq!(
+        *engine.calls.lock().unwrap(),
+        [None, Some(1), Some(2), Some(3)]
+    );
+    assert_eq!(out.measures, 2, "one measure from each good page");
+    assert_eq!(out.skipped_pages, vec![3]);
+    let s = cantor_score::parse_score_file(&std::fs::read(&out.musicxml).unwrap()).unwrap();
+    let pitches: Vec<_> = s.parts[0]
+        .measures
+        .iter()
+        .map(|m| m.events[0].kind.midi())
+        .collect();
+    assert_eq!(pitches, [Some(60), Some(62)], "pages joined in order");
+}
+
 /// Runs the real Audiveris on a real PDF. Opt-in: needs Audiveris and samples.
 /// `CANTOR_AUDIVERIS=/path/to/Audiveris CANTOR_SAMPLES=dir cargo test -- --ignored`
 #[test]
@@ -311,4 +377,49 @@ fn lib_06_audiveris_recognises_real_sample() {
     .unwrap();
     assert!(out.parts >= 2, "TTBB on two staves");
     assert!(out.notes > 100, "got {} notes", out.notes);
+}
+
+#[test]
+fn lib_06_count_pages_pdf_and_tiff() {
+    assert_eq!(
+        cantor_omr::count_pages(b"%PDF-1.4 1 0 obj <</Type /Pages /Count 2>> 2 0 obj <</Type /Page>> 3 0 obj <</Type/Page>>"),
+        Some(2)
+    );
+    // Little-endian TIFF with two IFDs (0 entries each).
+    let mut t = b"II*\0".to_vec();
+    t.extend(8u32.to_le_bytes()); // first IFD at 8
+    t.extend(0u16.to_le_bytes()); // 0 entries
+    t.extend(14u32.to_le_bytes()); // next IFD at 14
+    t.extend(0u16.to_le_bytes());
+    t.extend(0u32.to_le_bytes()); // end
+    assert_eq!(cantor_omr::count_pages(&t), Some(2));
+    assert_eq!(cantor_omr::count_pages(b"garbage"), None);
+}
+
+/// VOX-01 needs lyrics; Audiveris reads them with Tesseract. Swedish and
+/// English are requested by default so å/ä/ö survive (seen on "Är jag född").
+#[test]
+fn lib_06_audiveris_requests_swedish_and_english_ocr() {
+    let a =
+        cantor_omr::Audiveris::new("/bin/false").with_languages(cantor_omr::DEFAULT_OCR_LANGUAGES);
+    let args: Vec<String> = a
+        .args(Some(2), Path::new("/out"))
+        .into_iter()
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        args,
+        [
+            "-batch",
+            "-transcribe",
+            "-export",
+            "-option",
+            "org.audiveris.omr.text.Language.defaultSpecification=swe+eng",
+            "-sheets",
+            "2",
+            "-output",
+            "/out",
+            "--"
+        ]
+    );
 }
