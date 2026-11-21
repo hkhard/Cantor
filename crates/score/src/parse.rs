@@ -1,7 +1,8 @@
-//! `score-partwise` parser (LIB-01). Timewise and MXL follow in WP-1.2.
+//! `score-partwise` parser and MXL container (LIB-01). Timewise follows in WP-1.2.
 
 use crate::dom::{self, DomError, Element};
 use crate::model::{Event, EventKind, Measure, Part, Pitch, Score, Step, Tick, PPQ};
+use std::io::Read;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
@@ -15,12 +16,68 @@ pub enum ParseError {
         measure: String,
         msg: String,
     },
+    #[error("broken MXL container: {0}")]
+    Mxl(String),
 }
 
 impl From<DomError> for ParseError {
     fn from(e: DomError) -> Self {
         ParseError::Xml(e.to_string())
     }
+}
+
+/// Parse a score file of any supported kind, sniffed from its bytes:
+/// compressed MXL (zip) or uncompressed MusicXML.
+pub fn parse_score_file(bytes: &[u8]) -> Result<Score, ParseError> {
+    if bytes.starts_with(b"PK\x03\x04") {
+        parse_mxl(bytes)
+    } else {
+        parse_musicxml(bytes)
+    }
+}
+
+/// Parse a compressed MusicXML (`.mxl`) container.
+pub fn parse_mxl(bytes: &[u8]) -> Result<Score, ParseError> {
+    let mxl = |e: &dyn std::fmt::Display| ParseError::Mxl(e.to_string());
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| mxl(&e))?;
+    let mut read = |name: &str| -> Result<Vec<u8>, ParseError> {
+        let mut f = zip.by_name(name).map_err(|e| mxl(&e))?;
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf).map_err(|e| mxl(&e))?;
+        Ok(buf)
+    };
+
+    let rootfile = match read("META-INF/container.xml") {
+        Ok(c) => {
+            let c = dom::parse(&c)?;
+            c.child("rootfiles")
+                .and_then(|r| r.child("rootfile"))
+                .and_then(|r| r.attr("full-path"))
+                .map(str::to_string)
+                .ok_or_else(|| ParseError::Mxl("container.xml has no rootfile".into()))?
+        }
+        Err(_) => {
+            // No container: accept a single score file at any path.
+            let names: Vec<String> = zip
+                .file_names()
+                .filter_map(|n| n.ok().map(|n| n.into_owned()))
+                .filter(|n| !n.starts_with("META-INF/"))
+                .filter(|n| n.ends_with(".xml") || n.ends_with(".musicxml"))
+                .collect();
+            match names.as_slice() {
+                [one] => one.clone(),
+                _ => {
+                    return Err(ParseError::Mxl(
+                        "no container.xml and no single score file".into(),
+                    ))
+                }
+            }
+        }
+    };
+    let mut f = zip.by_name(&rootfile).map_err(|e| mxl(&e))?;
+    let mut xml = Vec::new();
+    f.read_to_end(&mut xml).map_err(|e| mxl(&e))?;
+    parse_musicxml(&xml)
 }
 
 /// Parse an uncompressed MusicXML document.
@@ -32,30 +89,50 @@ pub fn parse_musicxml(bytes: &[u8]) -> Result<Score, ParseError> {
     }
 }
 
-fn parse_partwise(root: &Element) -> Result<Score, ParseError> {
-    let names: Vec<(String, String)> = root
-        .child("part-list")
-        .map(|pl| {
-            pl.children("score-part")
-                .map(|sp| {
-                    let id = sp.attr("id").unwrap_or_default().to_string();
-                    let name = sp.child_text("part-name").unwrap_or_default().to_string();
-                    (id, name)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+struct PartInfo {
+    id: String,
+    name: String,
+    program: Option<u8>,
+    channel: Option<u8>,
+}
 
+fn part_list(root: &Element) -> Vec<PartInfo> {
+    let Some(pl) = root.child("part-list") else {
+        return Vec::new();
+    };
+    pl.children("score-part")
+        .map(|sp| {
+            let midi = sp.child("midi-instrument");
+            let one_based = |name: &str| {
+                midi.and_then(|m| m.child_text(name))
+                    .and_then(|t| t.parse::<u16>().ok())
+                    .filter(|v| (1..=128).contains(v))
+                    .map(|v| (v - 1) as u8)
+            };
+            PartInfo {
+                id: sp.attr("id").unwrap_or_default().to_string(),
+                name: sp.child_text("part-name").unwrap_or_default().to_string(),
+                program: one_based("midi-program"),
+                channel: one_based("midi-channel").filter(|c| *c < 16),
+            }
+        })
+        .collect()
+}
+
+fn parse_partwise(root: &Element) -> Result<Score, ParseError> {
+    let infos = part_list(root);
     let mut parts = Vec::new();
     for p in root.children("part") {
         let id = p.attr("id").unwrap_or_default().to_string();
-        let name = names
-            .iter()
-            .find(|(i, _)| *i == id)
-            .map(|(_, n)| n.clone())
-            .unwrap_or_default();
+        let info = infos.iter().find(|i| i.id == id);
         let measures = parse_part_measures(&id, p)?;
-        parts.push(Part { id, name, measures });
+        parts.push(Part {
+            name: info.map(|i| i.name.clone()).unwrap_or_default(),
+            midi_program: info.and_then(|i| i.program),
+            midi_channel: info.and_then(|i| i.channel),
+            id,
+            measures,
+        });
     }
     Ok(Score { parts })
 }
@@ -85,9 +162,17 @@ impl Ctx<'_> {
     }
 }
 
+fn tempo_of(sound: &Element) -> Option<f64> {
+    sound
+        .attr("tempo")
+        .and_then(|t| t.trim().parse::<f64>().ok())
+        .filter(|t| *t > 0.0 && t.is_finite())
+}
+
 fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, ParseError> {
-    // Divisions persist across measures until changed.
+    // Divisions and time signature persist across measures until changed.
     let mut divisions: u64 = 1;
+    let mut time_sig: Option<(u32, u32)> = None;
     let mut out = Vec::new();
 
     for m in part.children("measure") {
@@ -99,8 +184,10 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
         let to_ticks = |d: u64, div: u64| d * PPQ / div;
 
         let mut cursor: Tick = 0;
+        let mut high_water: Tick = 0;
         let mut last_onset: Tick = 0;
         let mut events = Vec::new();
+        let mut tempos = Vec::new();
 
         for child in &m.children {
             match child.name.as_str() {
@@ -111,6 +198,22 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                         }
                         divisions = d;
                     }
+                    if let Some(t) = child.child("time") {
+                        let beats = t.child_text("beats").and_then(|b| {
+                            // Compound beats like "3+2" add up.
+                            b.split('+')
+                                .map(|x| x.trim().parse::<u32>().ok())
+                                .sum::<Option<u32>>()
+                        });
+                        let beat_type = t
+                            .child_text("beat-type")
+                            .and_then(|b| b.parse::<u32>().ok());
+                        if let (Some(b), Some(bt)) = (beats, beat_type) {
+                            if b > 0 && bt > 0 {
+                                time_sig = Some((b, bt));
+                            }
+                        }
+                    }
                 }
                 "backup" => {
                     let d = to_ticks(ctx.num::<u64>(child, "duration")?.unwrap_or(0), divisions);
@@ -118,6 +221,17 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                 }
                 "forward" => {
                     cursor += to_ticks(ctx.num::<u64>(child, "duration")?.unwrap_or(0), divisions);
+                    high_water = high_water.max(cursor);
+                }
+                "direction" => {
+                    if let Some(t) = child.child("sound").and_then(tempo_of) {
+                        tempos.push((cursor, t));
+                    }
+                }
+                "sound" => {
+                    if let Some(t) = tempo_of(child) {
+                        tempos.push((cursor, t));
+                    }
                 }
                 "note" => {
                     let is_chord = child.child("chord").is_some();
@@ -131,9 +245,16 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                     } else if let Some(p) = child.child("pitch") {
                         EventKind::Note(parse_pitch(&ctx, p)?)
                     } else {
-                        // Unpitched percussion: modelled in WP-1.1 follow-up.
+                        // Unpitched percussion: modelled in a WP-1.1 follow-up. Still
+                        // occupies time so following notes keep their positions.
+                        if !is_chord && !is_grace {
+                            last_onset = cursor;
+                            cursor += duration;
+                            high_water = high_water.max(cursor);
+                        }
                         continue;
                     };
+                    let tie = |ty: &str| child.children("tie").any(|t| t.attr("type") == Some(ty));
                     let offset = if is_chord { last_onset } else { cursor };
                     events.push(Event {
                         offset,
@@ -141,16 +262,34 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                         voice,
                         staff,
                         kind,
+                        tie_start: tie("start"),
+                        tie_stop: tie("stop"),
                     });
                     if !is_chord && !is_grace {
                         last_onset = cursor;
                         cursor += duration;
+                        high_water = high_water.max(cursor);
                     }
                 }
                 _ => {}
             }
         }
-        out.push(Measure { number, events });
+
+        let nominal = time_sig.map(|(b, bt)| b as u64 * 4 * PPQ / bt as u64);
+        let implicit = m.attr("implicit") == Some("yes");
+        let duration = match nominal {
+            Some(n) if !implicit && high_water <= n => n,
+            _ => high_water,
+        };
+        out.push(Measure {
+            number,
+            duration,
+            content_duration: high_water,
+            implicit,
+            time_signature: time_sig,
+            tempos,
+            events,
+        });
     }
     Ok(out)
 }

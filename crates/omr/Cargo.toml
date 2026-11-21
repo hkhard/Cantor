@@ -1,0 +1,16 @@
+[package]
+name = "cantor-omr"
+description = "PDF to MusicXML via optical music recognition (Audiveris), then MIDI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cantor-score.workspace = true
+cantor-timeline.workspace = true
+cantor-library = { path = "../library" }
+thiserror.workspace = true
+
+[[bin]]
+name = "cantor-omr"
+path = "src/main.rs"

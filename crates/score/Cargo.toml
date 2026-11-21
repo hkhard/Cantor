@@ -8,3 +8,7 @@ license.workspace = true
 [dependencies]
 quick-xml.workspace = true
 thiserror.workspace = true
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate"] }

@@ -4,3 +4,6 @@ node_modules/
 
 # Private sample files from the product owner (copyrighted scores), never commit
 scores/
+
+# Python venvs for tools
+tools/**/.venv/

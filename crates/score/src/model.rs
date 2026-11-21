@@ -6,22 +6,37 @@ pub const PPQ: Tick = 960;
 /// Musical time in ticks at [`PPQ`].
 pub type Tick = u64;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Score {
     pub parts: Vec<Part>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Part {
     pub id: String,
     pub name: String,
+    /// General MIDI program, 0-based (MusicXML `<midi-program>` is 1-based).
+    pub midi_program: Option<u8>,
+    /// MIDI channel, 0-based (MusicXML `<midi-channel>` is 1-based).
+    pub midi_channel: Option<u8>,
     pub measures: Vec<Measure>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Measure {
     /// The `number` attribute, kept as text (MusicXML allows "1a", "X1", ...).
     pub number: String,
+    /// Length in ticks: the time signature length, or the content length for
+    /// implicit (pickup) measures and measures whose content overruns.
+    pub duration: Tick,
+    /// Length actually filled by notes, rests and forwards in the longest voice.
+    pub content_duration: Tick,
+    /// `implicit="yes"`: a pickup or split measure that does not count.
+    pub implicit: bool,
+    /// Time signature in effect (carried over from earlier measures).
+    pub time_signature: Option<(u32, u32)>,
+    /// Tempo changes `(offset in measure, quarter notes per minute)`.
+    pub tempos: Vec<(Tick, f64)>,
     pub events: Vec<Event>,
 }
 
@@ -35,6 +50,10 @@ pub struct Event {
     /// 1-based staff number within the part (MusicXML default 1).
     pub staff: u32,
     pub kind: EventKind,
+    /// `<tie type="start">`: sound continues into the next note of this pitch.
+    pub tie_start: bool,
+    /// `<tie type="stop">`: this note continues the previous one, no new attack.
+    pub tie_stop: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -9,4 +9,4 @@ mod model;
 mod parse;
 
 pub use model::{Event, EventKind, Measure, Part, Pitch, Score, Step, Tick, PPQ};
-pub use parse::{parse_musicxml, ParseError};
+pub use parse::{parse_musicxml, parse_mxl, parse_score_file, ParseError};

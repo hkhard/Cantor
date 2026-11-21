@@ -119,6 +119,35 @@ Split in three tracks.
 | WP-3.3 forScore import | `lib_07_every_example_imports`, `lib_07_annotation_positions_within_2pt`, `lib_07_unknown_fields_preserved`, `lib_08_setlist_order_and_placeholders`, `lib_08_backup_score_count` | Parsers from S5 |
 | WP-3.4 Setlists | `set_01_reorder`, `set_01_placeholder_in_performance_mode` | Setlist model + UI |
 
+**M3o OMR: notes from PDFs (promoted from v2, decision 2026-11-21)**
+
+forScore files and PDFs carry no note data, so playback, mixer and sung parts
+for a forScore library need optical music recognition. LIB-06 moves from P2 to
+P0 for v1. Pipeline: PDF -> Audiveris -> MusicXML -> timemap -> MIDI/audio.
+The user corrects recognition errors later (WP-3.13).
+
+| WP | Tests first | Build |
+| --- | --- | --- |
+| WP-3.11 Pipeline | `lib_06_pdf_to_musicxml_and_midi`, `lib_06_4sc_embedded_pdf_is_recognised`, `lib_06_engine_failure_is_reported_not_panicked` | `crates/omr`: `OmrEngine` trait, Audiveris CLI adapter, `cantor-omr` tool (done) |
+| WP-3.12 Scan cleanup | `lib_06_retries_with_cleaned_scan_when_raw_pdf_fails`, `lib_06_empty_result_triggers_cleanup` | 300 DPI render, crop, deblur, threshold, despeckle (Python today in `tools/omr`, port to Rust) |
+| WP-3.13 Correction UI | `lib_06_user_edit_survives_reopen`, `lib_06_low_confidence_measures_flagged` | Measure-level review: overlay recognised notes on the PDF, flag measures whose length does not match the time signature, edit pitch/duration |
+| WP-3.14 Where OMR runs | `lib_06_remote_engine_contract` (mock server) | Desktop: Audiveris sidecar (85 MB download, ships its own Java runtime). iPad/phone: remote OMR server the user runs (same model as HF voice), or OMR on the desktop app and sync |
+| WP-3.15 Measure map | `lib_05_cursor_on_pdf_from_omr_measure_map` | Keep Audiveris staff/measure boxes (`.omr` book) so the play cursor and auto-turn work on the original PDF (LIB-05) |
+
+Measured on the product owner's 12 scanned choral scores (spike S6):
+
+| Result | Scores |
+| --- | --- |
+| Recognised from the raw PDF | 9 of 12 |
+| Recognised after scan cleanup (WP-3.12) | +1 (kunglilje: 665 notes) |
+| Still failing | Glimmande Nymf (Audiveris crash on page 1), I bröllopsgården (page 1 crash, works with `-sheets 2-6`), Supa klockan öfver tolf (old engraving with faint staff lines, 6 notes found, now reported as failed instead of a near-empty MIDI) |
+| Same notes and onsets as MuseScore's playback of the same MusicXML | Olaf Trygvason 100%, Stad i ljus 100%, Jag och min far 98%, Bacchi 95%, Calypso 92%, Är jag född 91% |
+| Island 19% | Repeats not unfolded yet (WP-1.5); MuseScore plays them |
+
+That measures **our MIDI generation** against an independent player. It does
+not measure **OMR accuracy** against the printed page; that needs hand-checked
+ground truth for a few pieces (WP-3.13 fixtures).
+
 **M3b MusicXML view (after M1)**
 
 | WP | Tests first | Build |
@@ -178,7 +207,7 @@ TestFlight, Play beta, Windows installer.
 | Req | Slot | Test first |
 | --- | --- | --- |
 | LIB-05 (P1) Link PDF + MusicXML | M3c, after WP-3.8 | `lib_05_cursor_on_pdf_with_manual_measure_map` |
-| LIB-06 (P2) OMR via Audiveris | v2 | `lib_06_omr_output_opens_and_plays` |
+| LIB-06 OMR via Audiveris | **P0 for v1** (was P2), see M3o | `lib_06_*` (8 tests) |
 | LIB-09 (P2) Export .4SC/.4SS | v2, reuses S5 parser | `lib_09_roundtrip_keeps_annotations` |
 | PLAY-10 (P1) Dynamics/articulations | M2, with WP-2.1 | `play_10_pp_lt_mf_lt_ff_velocity`, `play_10_staccato_halves_length` |
 | PLAY-11 (P1) Export WAV/M4A | M2, after WP-2.4 (reuses offline render) | `play_11_export_length_within_10ms` |
@@ -218,6 +247,9 @@ tests (NFR-11: 100% of P0 criteria automated).
 | S4: WebView ink > 20 ms | Native PencilKit overlay plugin (Q6) |
 | S2: Swedish unusable | Ship English only for sung lyrics in beta; Swedish UI still ships |
 | S5: forScore format encrypted/opaque | Import embedded PDF + metadata only, warn about annotations |
+| OMR quality too low on real choir scans | Ship correction UI (WP-3.13) before playback for PDFs; try a second engine (oemer, or a cloud OMR) behind `OmrEngine`; ask users for born-digital PDFs or MusicXML from the publisher |
+| Audiveris (AGPL-3.0) licence | Run as a separate process/server, never linked; legal review in M0 alongside Verovio |
+| No Java on iPad | OMR on desktop or a user-run server; iPad gets the MusicXML by sync |
 | Corpus < 98% after M1 | Add normalisation pass per exporter before M2 starts |
 
 ## 7. Started in this repo (M0)
@@ -229,3 +261,6 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [ ] Spikes S1 to S4
 - [x] S5 forScore formats: `.4sc` and `.4ss` documented in `docs/formats/forscore.md`; importer in `crates/library/src/forscore.rs` (LIB-07/LIB-08 tests green on synthetic and real samples). Open: annotations, attachments, placeholders, `.4sb` (need more samples)
 - [ ] Decisions Q3, Q5, Q6 from the product owner
+- [x] S6 OMR: `cantor-omr` turns PDF/.4sc/.4ss into MusicXML + MIDI (Audiveris + scan cleanup); 10 of 12 sample scores converted
+- [x] MXL container, ties, tempo, measure lengths, MIDI programs in `cantor-score`; timemap and SMF writer in `cantor-timeline`
+- [ ] Next: repeat unfolding (WP-1.5, Island), per-page retry for Audiveris crashes, Rust port of scan cleanup, OMR ground truth for 3 pieces

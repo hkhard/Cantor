@@ -366,3 +366,25 @@ mod tests {
         assert_eq!(parse_rect("{{a, 0}, {1, 1}}"), None);
     }
 }
+
+/// Fixture builders for tests in this and dependent crates.
+#[doc(hidden)]
+pub mod testing {
+    use flate2::{write::GzEncoder, Compression};
+    use plist::{Dictionary, Value};
+    use std::io::Write;
+
+    /// Minimal `.4sc`: gzip(binary plist {pdfData, "<file>|title"}).
+    pub fn fake_4sc(file: &str, title: &str, pdf: &[u8]) -> Vec<u8> {
+        let mut d = Dictionary::new();
+        d.insert("pdfData".into(), Value::Data(pdf.to_vec()));
+        d.insert(format!("{file}|title"), title.into());
+        let mut raw = Vec::new();
+        Value::Dictionary(d)
+            .to_writer_binary(&mut raw)
+            .expect("plist to Vec");
+        let mut gz = GzEncoder::new(Vec::new(), Compression::default());
+        gz.write_all(&raw).expect("gzip to Vec");
+        gz.finish().expect("gzip to Vec")
+    }
+}
