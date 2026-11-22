@@ -636,9 +636,18 @@ fn restore_pending(name: String, discard: bool, paths: State<'_, Paths>) -> Resu
 /// NFR-03/04 probe: the UI reports a timing; the backend adds the process
 /// memory footprint and writes both to the log (Console / devicectl).
 #[tauri::command]
-fn perf_mark(name: String, ms: f64) -> serde_json::Value {
+fn perf_mark(name: String, ms: f64, paths: State<'_, Paths>) -> serde_json::Value {
     let mem = resident_mb();
     log::info!("perf {name}: {ms:.0} ms, memory {mem:.0} MB");
+    // Also appended to Documents/.perf.log, readable off the device.
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(paths.user.join(".perf.log"))
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "{name}\t{ms:.0} ms\t{mem:.0} MB");
+    }
     serde_json::json!({ "name": name, "ms": ms, "memory_mb": mem })
 }
 

@@ -60,6 +60,7 @@ fn excluded(rel: &str) -> bool {
     EXCLUDED_DIRS.contains(&top)
         || top.starts_with(".before-restore-")
         || rel.ends_with(".tmp")
+        || rel == ".perf.log"
         || rel.split('/').any(|p| p == ".DS_Store")
 }
 
