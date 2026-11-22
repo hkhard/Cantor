@@ -55,7 +55,29 @@ pub struct Measure {
     pub tempos: Vec<(Tick, f64)>,
     /// Repeats, endings and jumps (PLAY-02).
     pub nav: Navigation,
+    /// Swing changes `(offset in measure, swing)`; `None` = straight.
+    pub swing: Vec<(Tick, Option<Swing>)>,
     pub events: Vec<Event>,
+}
+
+/// Swing feel (PLAY-10): within each pair of `unit` notes (eighths or
+/// sixteenths), the first lasts `first / (first + second)` of the pair.
+/// MusicXML `<sound><swing>`; a bare "Swing" means triplet feel, 2:1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Swing {
+    pub first: u32,
+    pub second: u32,
+    /// Length of one swung note in ticks (PPQ/2 for eighths, PPQ/4 for 16ths).
+    pub unit: Tick,
+}
+
+impl Swing {
+    /// Triplet swing on eighths, used when a score says "Swing" without a ratio.
+    pub const TRIPLET_EIGHTHS: Swing = Swing {
+        first: 2,
+        second: 1,
+        unit: PPQ / 2,
+    };
 }
 
 /// Navigation marks of a measure, from `<barline>` and `<sound>`.

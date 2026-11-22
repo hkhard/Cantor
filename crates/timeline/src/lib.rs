@@ -10,7 +10,7 @@ mod unfold;
 
 pub use unfold::unfold;
 
-use cantor_score::{EventKind, Score, Tick};
+use cantor_score::{EventKind, Score, Swing, Tick};
 use std::collections::HashMap;
 
 /// Quarter notes per minute used when a score has no tempo marking
@@ -126,6 +126,11 @@ pub fn build_timemap(score: &Score) -> Timemap {
     }
     tempos.dedup_by(|b, a| a.1 == b.1);
 
+    // Swing in effect at each played measure's start, and changes inside it.
+    // Swing marks apply to all parts (a "Swing" over the top staff swings
+    // the whole band), carried across barlines until "Straight".
+    let swing_at = swing_map(score, &measure_order);
+
     let mut notes: Vec<TimedNote> = Vec::new();
     for (pi, p) in score.parts.iter().enumerate() {
         // Open ties: pitch -> index of the sounding note.
@@ -147,8 +152,9 @@ pub fn build_timemap(score: &Score) -> Timemap {
                 if midi > 127 {
                     continue;
                 }
-                let on = measure_starts[visit] + e.offset;
-                let off = on + e.duration;
+                let sw = &swing_at[visit];
+                let on = measure_starts[visit] + swung(sw, e.offset);
+                let off = measure_starts[visit] + swung(sw, e.offset + e.duration);
                 if e.tie_stop {
                     if let Some(&idx) = open.get(&midi) {
                         // Only continue a tie that ends where this note starts.
@@ -194,4 +200,62 @@ pub fn build_timemap(score: &Score) -> Timemap {
         tempos,
         duration_ticks,
     }
+}
+
+/// Swing changes inside one played measure: `(offset, swing)`, the first at 0.
+type MeasureSwing = Vec<(Tick, Option<Swing>)>;
+
+fn swing_map(score: &Score, order: &[usize]) -> Vec<MeasureSwing> {
+    let mut current: Option<Swing> = None;
+    let mut out = Vec::with_capacity(order.len());
+    for &mi in order {
+        let mut changes: Vec<(Tick, Option<Swing>)> = score
+            .parts
+            .iter()
+            .filter_map(|p| p.measures.get(mi))
+            .flat_map(|m| m.swing.iter().copied())
+            .collect();
+        changes.sort_by_key(|c| c.0);
+        changes.dedup_by_key(|c| c.0);
+        let mut m = vec![(0, current)];
+        for (off, sw) in changes {
+            if off == 0 {
+                m[0].1 = sw;
+            } else {
+                m.push((off, sw));
+            }
+            current = sw;
+        }
+        out.push(m);
+    }
+    out
+}
+
+/// Played position of a written offset in a measure under swing (PLAY-10).
+/// Within each pair of swing units starting on a pair boundary, the first
+/// unit is stretched to `first / (first + second)` of the pair and the rest
+/// compressed, linearly, so ends of notes move with their starts and every
+/// pair boundary (beat) stays where it is written.
+fn swung(changes: &[(Tick, Option<Swing>)], offset: Tick) -> Tick {
+    let sw = changes
+        .iter()
+        .rev()
+        .find(|c| c.0 <= offset)
+        .and_then(|c| c.1);
+    let Some(sw) = sw else {
+        return offset;
+    };
+    let pair = sw.unit * 2;
+    if pair == 0 || sw.first + sw.second == 0 {
+        return offset;
+    }
+    let base = offset - offset % pair;
+    let x = offset % pair;
+    let long = pair * sw.first as Tick / (sw.first + sw.second) as Tick;
+    let y = if x <= sw.unit {
+        x * long / sw.unit
+    } else {
+        long + (x - sw.unit) * (pair - long) / (pair - sw.unit)
+    };
+    base + y
 }

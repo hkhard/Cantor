@@ -2,7 +2,8 @@
 
 use crate::dom::{self, DomError, Element};
 use crate::model::{
-    Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Syllabic, Tick, PPQ,
+    Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Swing, Syllabic, Tick,
+    PPQ,
 };
 use std::io::Read;
 
@@ -179,6 +180,48 @@ impl Ctx<'_> {
     }
 }
 
+/// `<sound><swing>`: `Some(None)` = straight, `Some(Some(_))` = swing,
+/// `None` = no swing information in this sound.
+fn swing_of(sound: &Element) -> Option<Option<Swing>> {
+    let sw = sound.child("swing")?;
+    if sw.child("straight").is_some() {
+        return Some(None);
+    }
+    let num = |n: &str| sw.child_text(n).and_then(|t| t.trim().parse::<u32>().ok());
+    let unit = match sw.child_text("swing-type").map(str::trim) {
+        Some("16th") => PPQ / 4,
+        _ => PPQ / 2,
+    };
+    Some(Some(match (num("first"), num("second")) {
+        (Some(first), Some(second)) if first > 0 && second > 0 => Swing {
+            first,
+            second,
+            unit,
+        },
+        _ => Swing {
+            unit,
+            ..Swing::TRIPLET_EIGHTHS
+        },
+    }))
+}
+
+/// Swing from the words of a direction ("Swing", "Straight", "Swing feel").
+fn swing_from_words(dir: &Element) -> Option<Option<Swing>> {
+    let dt = dir.child("direction-type")?;
+    let words: String = dt
+        .children("words")
+        .map(|w| w.text.trim().to_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if words.contains("straight") || words.contains("no swing") {
+        Some(None)
+    } else if words.contains("swing") {
+        Some(Some(Swing::TRIPLET_EIGHTHS))
+    } else {
+        None
+    }
+}
+
 fn tempo_of(sound: &Element) -> Option<f64> {
     sound
         .attr("tempo")
@@ -207,6 +250,7 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
         let mut last_onset: Tick = 0;
         let mut events = Vec::new();
         let mut tempos = Vec::new();
+        let mut swing: Vec<(Tick, Option<Swing>)> = Vec::new();
         let mut nav = Navigation {
             ending: open_ending.clone(),
             ..Navigation::default()
@@ -247,6 +291,14 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                     high_water = high_water.max(cursor);
                 }
                 "direction" => {
+                    // The encoded <swing> wins over the words.
+                    if let Some(sw) = child
+                        .child("sound")
+                        .and_then(swing_of)
+                        .or_else(|| swing_from_words(child))
+                    {
+                        swing.push((cursor, sw));
+                    }
                     if let Some(s) = child.child("sound") {
                         if let Some(t) = tempo_of(s) {
                             tempos.push((cursor, t));
@@ -264,6 +316,9 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                     }
                 }
                 "sound" => {
+                    if let Some(sw) = swing_of(child) {
+                        swing.push((cursor, sw));
+                    }
                     if let Some(t) = tempo_of(child) {
                         tempos.push((cursor, t));
                     }
@@ -364,6 +419,7 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
             time_signature: time_sig,
             tempos,
             nav,
+            swing,
             events,
         });
     }
