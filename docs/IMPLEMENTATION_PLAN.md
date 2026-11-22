@@ -146,6 +146,7 @@ Measured on the product owner's 12 scanned choral scores (spike S6):
 | Island | 99% after repeat unfolding (was 19%) |
 | Glimmande Nymf | 100% |
 | I bröllopsgården | 36%: the scan has many meter changes (7/8, 5/4, 15/16) that OMR misses, so measure lengths differ from MuseScore's reading; needs the correction UI (WP-3.13) |
+| Do you hear what I hear (TTBB, added 2026-11-22) | 18 PDF pages that are iPad screenshots of two-page publisher "PREVIEW" spreads at about 100 DPI, each spread captured twice. Raw: only 2 pages read (40 tenor notes). With `tools/omr/split_spreads.py` (crop screen border, split at the gutter, upscale, background division removes the grey watermark, drop duplicate pages): 141 measures, 4 voices with 240-259 notes each, piano 1797 notes, 332 s. Pitch accuracy not checked against a reference. Lyrics OCR is poor at this resolution: words run together ("doyouseewhat"), about 20 unknown words per voice, sung on "la". Not yet wired into the automatic fallback ladder |
 
 OCR for lyrics and text: Audiveris needs Tesseract `tessdata` (full, not
 `tessdata_fast`, it uses the legacy engine). With `swe+eng`, Å/Ä/Ö are read
