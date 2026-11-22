@@ -1,17 +1,20 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
-  import { api, type ChannelInfo, type Opened, type ScoreEntry, type Strip } from './lib/api'
-  import { engrave, type Engraved } from './lib/engrave'
+  import { api, type ChannelInfo, type Opened, type ScoreEntry, type Strip, type ScoreSettings, type Setlist } from './lib/api'
+  import { engrave, partNames, withoutParts, type Engraved } from './lib/engrave'
   import Appearance from './lib/Appearance.svelte'
   import PdfView from './lib/PdfView.svelte'
-  import { scoreFileUrl } from './lib/pdf'
+  import Library from './lib/Library.svelte'
+  import { scoreFileUrl, type PageMode } from './lib/pdf'
+  import { t } from './lib/i18n.svelte'
+  import { ask } from './lib/prompts.svelte'
+  import Dialog from './lib/Dialog.svelte'
   import Icon from './lib/Icon.svelte'
   import { listen } from '@tauri-apps/api/event'
+  import { openAnnotations, editAnnotations, STAMPS, type AnnDoc, type AnnCommand, type Tool } from './lib/annot'
 
   let scores: ScoreEntry[] = $state([])
   let notice = $state('')
-  let importing = $state(false)
-  let fileInput: HTMLInputElement | undefined = $state()
   let opened: Opened | null = $state(null)
   let engraved: Engraved | null = $state(null)
   let page = $state(1)
@@ -39,6 +42,134 @@
   // PLAY-06
   let metronome = $state(false)
   let countIn = $state(false)
+  let exportOpen = $state(false)
+  let exporting = $state('')
+
+  // ANN-01..03: annotation mode on the original page.
+  let ann: AnnDoc | null = $state(null)
+  let annotating = $state(false)
+  let tool: Tool = $state('pen')
+  let inkColor = $state('#1d4ed8')
+  let annLayer = $state(0)
+  let stamp = $state('Breath')
+  let layersOpen = $state(false)
+  const inkColors = ['#1d4ed8', '#b91c1c', '#15803d', '#1d1d1f']
+
+  async function annEdit(c: AnnCommand) {
+    try {
+      ann = await editAnnotations('apply', c)
+    } catch (e) {
+      notice = String(e)
+    }
+  }
+  async function annUndo(redo = false) {
+    try {
+      ann = await editAnnotations(redo ? 'redo' : 'undo')
+    } catch {
+      /* nothing to undo */
+    }
+  }
+  async function addLayer() {
+    const name = await ask(t('ann.layerName'), `${t('ann.layer')} ${(ann?.layers.length ?? 0) + 1}`)
+    if (!name) return
+    await annEdit({ op: 'AddLayer', name })
+    if (ann) annLayer = ann.layers.length - 1
+  }
+
+  // Remembered per score (library store): mixer, my part, tempo, view,
+  // choir, transposition (VIEW-05), hidden parts (VIEW-04), saved mixes (PLAY-04).
+  let currentEntry: ScoreEntry | null = $state(null)
+  let settings: ScoreSettings | null = $state(null)
+  let parts: string[] = $state([])
+  let moreOpen = $state(false)
+  let pageMode: PageMode = $state((localStorage.getItem('cantor.pageMode') as PageMode) ?? 'single')
+  /** Open from a setlist: position for previous/next piece (SET-01). */
+  let setCtx: { list: Setlist; index: number } | null = $state(null)
+
+  let persistTimer: number | undefined
+  function persist() {
+    if (!currentEntry || !settings) return
+    settings.strips = strips.map((s) => ({ ...s, volume_db: s.volume_db === -Infinity ? -1000 : s.volume_db }))
+    settings.my_part = mine
+    settings.tempo_percent = tempo
+    settings.view = view
+    const id = currentEntry.file
+    const snap = $state.snapshot(settings) as ScoreSettings
+    clearTimeout(persistTimer)
+    persistTimer = setTimeout(() => api.saveScoreSettings(id, snap).catch(() => {}), 300) as unknown as number
+  }
+
+  function notationXml(): string {
+    return opened ? withoutParts(opened.musicxml, settings?.hidden_parts ?? []) : ''
+  }
+
+  async function setTranspose(n: number) {
+    if (!settings || !currentEntry) return
+    settings.transpose = Math.max(-12, Math.min(12, n))
+    persist()
+    const keepSet = setCtx
+    await open(currentEntry, opened?.choir === 'auto' ? undefined : opened?.choir, keepSet)
+  }
+
+  async function toggleHidden(i: number) {
+    if (!settings || !opened) return
+    const h = new Set(settings.hidden_parts)
+    if (h.has(i)) h.delete(i)
+    else if (h.size < parts.length - 1) h.add(i)
+    settings.hidden_parts = [...h].sort((a, b) => a - b)
+    persist()
+    lastSize = ''
+    if (view === 'notation') await relayout()
+    else if (scoreEl) await relayout()
+    else {
+      const w = Math.max(600, window.innerWidth - (mixerOpen ? 320 : 0))
+      const h2 = Math.max(600, window.innerHeight - 140)
+      engraved = await engrave(notationXml(), w, h2)
+    }
+  }
+
+  function setPageMode(m: PageMode) {
+    pageMode = m
+    localStorage.setItem('cantor.pageMode', m)
+  }
+
+  async function savePreset() {
+    if (!settings) return
+    const name = await ask(t('mix.presetName'), `Mix ${settings.presets.length + 1}`)
+    if (!name) return
+    settings.presets.push({ name, strips: strips.map((s) => ({ ...s, volume_db: s.volume_db === -Infinity ? -1000 : s.volume_db })) })
+    persist()
+  }
+
+  async function applyCustom(i: number) {
+    const p = settings?.presets[i]
+    if (!p) return
+    for (let c = 0; c < strips.length && c < p.strips.length; c++) {
+      const st = p.strips[c]
+      strips[c] = { volume_db: st.volume_db <= -40 ? -Infinity : st.volume_db, mute: st.mute, solo: st.solo }
+      await api.setChannel(c, { volumeDb: st.volume_db, mute: st.mute, solo: st.solo })
+    }
+    persist()
+  }
+
+  async function removePreset(i: number) {
+    settings?.presets.splice(i, 1)
+    persist()
+  }
+
+  async function stepSet(d: number) {
+    if (!setCtx) return
+    const items = setCtx.list.items
+    for (let i = setCtx.index + d; i >= 0 && i < items.length; i += d) {
+      const it = items[i]
+      if (it.kind !== 'score') continue
+      const s = scores.find((x) => x.file === it.score)
+      if (s) {
+        await open(s, undefined, { list: setCtx.list, index: i })
+        return
+      }
+    }
+  }
 
   let scoreEl: HTMLDivElement | undefined = $state()
   let currentMeasure = -1
@@ -51,9 +182,7 @@
       listen<string[]>('library-changed', async (ev) => {
         scores = await api.listScores()
         const added = ev.payload ?? []
-        notice = added.length
-          ? `Importerade ${added.length} ${added.length === 1 ? 'fil' : 'filer'}`
-          : ''
+        notice = added.length ? t('lib.imported', { n: added.length }) : ''
         // A single shared score opens straight away.
         if (added.length === 1) {
           const s = scores.find((x) => x.file === added[0])
@@ -78,15 +207,38 @@
     return `${m}:${r.toString().padStart(2, '0')}`
   }
 
-  async function open(entry: ScoreEntry, choir?: string) {
+  async function open(entry: ScoreEntry, choir?: string, set?: { list: Setlist; index: number }) {
     error = ''
-    loading = `Öppnar ${entry.title} …`
+    loading = t('read.opening', { title: entry.title })
     try {
       await stopPolling()
-      opened = await api.openScore(entry.file, choir)
+      setCtx = set ?? null
+      if (currentEntry?.file !== entry.file || !settings) {
+        settings = await api.scoreSettings(entry.file).catch(() => null)
+      }
+      currentEntry = entry
+      if (!choir && settings && settings.choir !== 'auto') choir = settings.choir
+      if (settings && choir) settings.choir = choir as ScoreSettings['choir']
+      opened = await api.openScore(entry.file, choir, settings?.transpose ?? 0)
+      parts = opened.musicxml ? partNames(opened.musicxml) : []
       strips = opened.channels.map(() => ({ volume_db: 0, mute: false, solo: false }))
       mine = null
       view = opened.pdf_url ? 'pdf' : 'notation'
+      if (settings) {
+        if (settings.view === 'notation' || !opened.pdf_url) view = opened.musicxml ? (opened.pdf_url ? settings.view : 'notation') : 'pdf'
+        if (settings.strips.length === opened.channels.length) {
+          for (let c = 0; c < strips.length; c++) {
+            const st = settings.strips[c]
+            strips[c] = { volume_db: st.volume_db <= -40 ? -Infinity : st.volume_db, mute: st.mute, solo: st.solo }
+            if (st.volume_db !== 0 || st.mute || st.solo)
+              api.setChannel(c, { volumeDb: st.volume_db, mute: st.mute, solo: st.solo })
+          }
+        }
+        if (settings.my_part !== null && settings.my_part < strips.length) mine = settings.my_part
+      }
+      annotating = false
+      annLayer = 0
+      ann = await openAnnotations(entry.file).catch(() => null)
       loopPick = 'off'
       loopA = null
       loopB = null
@@ -94,19 +246,20 @@
       playingMeasure = -1
       playing = false
       position = 0
-      tempo = 100
+      tempo = settings?.tempo_percent ?? 100
+      if (tempo !== 100 && opened.channels.length) api.setTempo(tempo / 100)
       if (!opened.musicxml) {
         // PDF only: show the page, no sound or notation.
         engraved = null
         svg = ''
         return
       }
-      loading = 'Sätter noterna …'
+      loading = t('read.engraving')
       await tick()
       // In PDF view the notation pane is not mounted: size from the window.
       const w = scoreEl?.clientWidth ?? Math.max(600, window.innerWidth - (mixerOpen ? 320 : 0))
       const h = scoreEl?.clientHeight ?? Math.max(600, window.innerHeight - 140)
-      engraved = await engrave(opened.musicxml, w, h)
+      engraved = await engrave(notationXml(), w, h)
       lastSize = `${w}x${h}`
       page = 1
       currentMeasure = -1
@@ -120,6 +273,8 @@
   }
 
   function close() {
+    persist()
+    setCtx = null
     stopPolling()
     api.pause().catch(() => {})
     opened = null
@@ -239,6 +394,7 @@
   async function setTempo(e: Event) {
     tempo = Number((e.target as HTMLInputElement).value)
     await api.setTempo(tempo / 100)
+    persist()
   }
 
   function turn(d: number) {
@@ -257,29 +413,34 @@
   async function setMute(i: number) {
     strips[i].mute = !strips[i].mute
     await api.setChannel(i, { mute: strips[i].mute })
+    persist()
   }
 
   async function setSolo(i: number) {
     strips[i].solo = !strips[i].solo
     await api.setChannel(i, { solo: strips[i].solo })
+    persist()
   }
 
   async function setVolume(i: number, e: Event) {
     const v = Number((e.target as HTMLInputElement).value)
     strips[i].volume_db = v <= -40 ? -Infinity : v
     await api.setChannel(i, { volumeDb: v <= -40 ? -1000 : v })
+    persist()
   }
 
   async function preset(p: 'my_part' | 'without_me' | 'balanced') {
     if (p !== 'balanced' && mine === null) return
     strips = await api.applyPreset(p, mine ?? undefined)
+    persist()
   }
 
   async function changeChoir(e: Event) {
     if (!opened) return
     const v = (e.target as HTMLSelectElement).value
-    const entry = scores.find((s) => s.title === opened!.title)
-    if (entry) await open(entry, v === 'auto' ? undefined : v)
+    if (settings) settings.choir = v as ScoreSettings['choir']
+    persist()
+    if (currentEntry) await open(currentEntry, v === 'auto' ? undefined : v, setCtx ?? undefined)
   }
 
   function roleClass(c: ChannelInfo) {
@@ -336,6 +497,18 @@
     }
   }
 
+  async function exportAudio(what: 'mix' | 'parts') {
+    exportOpen = false
+    exporting = what === 'mix' ? t('tr.exportingMix') : t('tr.exportingParts')
+    try {
+      const names = await api.exportAudio(what)
+      exporting = t('tr.exported', { n: names.length })
+    } catch (e) {
+      exporting = t('tr.exportFailed', { e: String(e) })
+    }
+    setTimeout(() => (exporting = ''), 6000)
+  }
+
   async function toggleMetronome() {
     metronome = !metronome
     await api.setClick({ metronome })
@@ -361,7 +534,7 @@
     const key = `${w}x${h}`
     if (key === lastSize || w < 200) return
     lastSize = key
-    engraved = await engrave(opened.musicxml, w, h)
+    engraved = await engrave(notationXml(), w, h)
     const loc = engraved.measurePage.get(currentMeasure >= 0 ? currentMeasure : 0)
     page = loc?.page ?? 1
     svg = engraved.render(page)
@@ -378,6 +551,7 @@
 
   async function switchView(v: 'pdf' | 'notation') {
     view = v
+    persist()
     currentMeasure = -1
     if (v === 'notation' && engraved) {
       await tick()
@@ -387,137 +561,247 @@
     }
   }
 
-  async function importPicked(e: Event) {
-    const input = e.target as HTMLInputElement
-    const files = [...(input.files ?? [])]
-    input.value = ''
-    if (!files.length) return
-    importing = true
-    notice = ''
-    const added: string[] = []
-    const failed: string[] = []
-    for (const f of files) {
+  /** PERF-02: Bluetooth page turners (AirTurn, PageFlip, ...) are
+   *  keyboards; each key maps to an action the user can change. */
+  type PedalAction = 'next' | 'prev' | 'play' | 'none'
+  const pedalKeys = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Space', 'Enter']
+  const defaultPedals: Record<string, PedalAction> = {
+    ArrowRight: 'next',
+    ArrowDown: 'next',
+    PageDown: 'next',
+    ArrowLeft: 'prev',
+    ArrowUp: 'prev',
+    PageUp: 'prev',
+    Space: 'play',
+    Enter: 'none',
+  }
+  let pedals: Record<string, PedalAction> = $state(
+    (() => {
       try {
-        added.push(...(await api.importFile(f)))
-      } catch (err) {
-        failed.push(String(err))
+        return { ...defaultPedals, ...JSON.parse(localStorage.getItem('cantor.pedals') ?? '{}') }
+      } catch {
+        return { ...defaultPedals }
       }
-    }
-    importing = false
-    scores = await api.listScores()
-    notice = [
-      added.length ? `Importerade ${added.length} ${added.length === 1 ? 'fil' : 'filer'}` : '',
-      ...failed,
-    ]
-      .filter(Boolean)
-      .join(' · ')
+    })(),
+  )
+  let pedalsOpen = $state(false)
+  function setPedal(key: string, a: PedalAction) {
+    pedals[key] = a
+    localStorage.setItem('cantor.pedals', JSON.stringify(pedals))
   }
 
-  async function removeScore(s: ScoreEntry) {
-    if (!confirm(`Ta bort "${s.title}" från ditt bibliotek?`)) return
-    await api.deleteScore(s.file)
-    scores = await api.listScores()
+  // PERF-01: performance mode hides everything but the music and makes the
+  // left/right halves of the screen page-turn zones; editing is locked.
+  let performance = $state(false)
+
+  let pdfView: { turn: (d: number) => void } | undefined = $state()
+  function turnAny(d: number) {
+    if (view === 'pdf' && pdfView) pdfView.turn(d)
+    else turn(d)
   }
 
   function onKey(e: KeyboardEvent) {
     if (!opened) return
-    if (e.code === 'Space') {
-      e.preventDefault()
-      toggle()
-    } else if (e.code === 'ArrowRight' || e.code === 'PageDown') turn(1)
-    else if (e.code === 'ArrowLeft' || e.code === 'PageUp') turn(-1)
+    const target = e.target as HTMLElement | null
+    if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
+    const action = pedals[e.code]
+    if (!action || action === 'none') {
+      if (e.code === 'Escape' && performance) performance = false
+      return
+    }
+    e.preventDefault()
+    if (action === 'next') turnAny(1)
+    else if (action === 'prev') turnAny(-1)
+    else if (action === 'play' && opened.channels.length) toggle()
   }
 </script>
 
 <svelte:window onkeydown={onKey} />
 
 {#if !opened}
-  <main class="library">
-    <header>
-      <img class="mark" src="/cantor-mark.svg" alt="" width="64" height="64" />
-      <div class="titles">
-        <h1>Cantor</h1>
-        <p class="sub">Noter som spelar alla stämmor</p>
-      </div>
-      <Appearance />
-    </header>
-    {#if error}<p class="error">{error}</p>{/if}
-    {#if loading}<p class="loading">{loading}</p>{/if}
-    <div class="libbar">
-      <button class="chip on" onclick={() => fileInput?.click()} disabled={importing}
-        >{importing ? 'Importerar …' : '＋ Importera'}</button
-      >
-      <input
-        bind:this={fileInput}
-        type="file"
-        multiple
-        accept=".mxl,.musicxml,.xml,.pdf,.4sc,.4ss,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
-        style="display:none"
-        onchange={importPicked}
-      />
-      {#if notice}<span class="notice">{notice}</span>{/if}
-    </div>
-    <ul class="scores">
-      {#each scores as s (s.file)}
-        <li>
-          <button onclick={() => open(s)}>
-            <span>{s.title}</span>
-            <span class="badges">
-              {#if s.playable}<span class="badge">♪ spelar</span>{/if}
-              {#if s.pdf}<span class="badge">PDF</span>{/if}
-              {#if s.user}<span class="badge mine">Mina</span>{/if}
-            </span>
-          </button>
-          {#if s.user}
-            <button class="remove" onclick={() => removeScore(s)} aria-label="Ta bort {s.title}">×</button>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-    <p class="note">Sjungen text finns bara på engelska. Svensk text visas i noterna.</p>
-  </main>
+  <Library
+    {scores}
+    bind:notice
+    {error}
+    {loading}
+    onopen={(s, set) => open(s, undefined, set)}
+    onrefresh={async () => {
+      scores = await api.listScores()
+    }}
+  />
 {:else}
-  <main class="reader">
+  <main class="reader" class:performance>
+    {#if performance}
+      <!-- PERF-01: big turn zones, no editing; a small exit button. -->
+      <button class="turnzone left" onclick={() => turnAny(-1)} aria-label={t('read.prev')}></button>
+      <button class="turnzone right" onclick={() => turnAny(1)} aria-label={t('read.next')}></button>
+      <button class="perfexit glass" onclick={() => (performance = false)}>{t('read.performExit')}</button>
+    {/if}
     <nav class="top glass">
-      <button class="icon" onclick={close} aria-label="Bibliotek"><Icon name="back" size={20} /> Bibliotek</button>
-      <h2>{opened.title}</h2>
-      <label class="choir"
-        >Kör
-        <select value={opened.choir} onchange={changeChoir}>
-          <option value="auto">Auto</option>
-          <option value="mixed">Blandad</option>
-          <option value="male">Manskör</option>
-          <option value="female">Damkör</option>
-        </select>
-      </label>
-      {#if opened.pdf_url}
-        <div class="seg" role="group" aria-label="Visning">
-          <button class:on={view === 'pdf'} onclick={() => switchView('pdf')}>Original</button>
-          <button class:on={view === 'notation'} onclick={() => switchView('notation')}>Notbild</button>
+      <button class="icon" onclick={close} aria-label={t('read.library')}><Icon name="back" size={20} /> <span class="wide">{t('read.library')}</span></button>
+      {#if setCtx}
+        <button class="icon" onclick={() => stepSet(-1)} disabled={setCtx.index === 0} aria-label="◀">◀</button>
+      {/if}
+      <h2>{opened.title}{#if setCtx}<span class="setpos"> · {setCtx.list.name} {setCtx.index + 1}/{setCtx.list.items.length}</span>{/if}</h2>
+      {#if setCtx}
+        <button class="icon" onclick={() => stepSet(1)} disabled={setCtx.index >= setCtx.list.items.length - 1} aria-label="▶">▶</button>
+      {/if}
+      {#if opened.pdf_url && opened.musicxml}
+        <div class="seg" role="group" aria-label={t('read.pageMode')}>
+          <button class:on={view === 'pdf'} onclick={() => switchView('pdf')}>{t('read.original')}</button>
+          <button class:on={view === 'notation'} onclick={() => switchView('notation')}>{t('read.notation')}</button>
         </div>
       {/if}
-      <button class="icon" class:active={appearanceOpen} onclick={() => (appearanceOpen = !appearanceOpen)} aria-label="Utseende"
-        ><Icon name="appearance" /></button
-      >
-      <button class="icon" class:active={mixerOpen} onclick={() => (mixerOpen = !mixerOpen)}
-        ><Icon name="sliders" /> {mixerOpen ? 'Dölj mixer' : 'Mixer'}</button
-      >
-      {#if appearanceOpen}
-        <div class="popover glass"><Appearance /></div>
+      {#if view === 'pdf' && opened.pdf_url && ann}
+        <button class="icon" class:active={annotating} onclick={() => (annotating = !annotating)}
+          >{annotating ? t('common.done') : t('read.annotate')}</button
+        >
+      {/if}
+      <button class="icon" class:active={moreOpen} onclick={() => { moreOpen = !moreOpen; pedalsOpen = false; appearanceOpen = false }} aria-haspopup="dialog">•••</button>
+      {#if opened.channels.length}
+        <button class="icon" class:active={mixerOpen} onclick={() => (mixerOpen = !mixerOpen)}
+          ><Icon name="sliders" /> <span class="wide">{mixerOpen ? t('read.hideMixer') : t('read.mixer')}</span></button
+        >
+      {/if}
+      {#if moreOpen}
+        <div class="popover glass more">
+          <button class="primary" onclick={() => { performance = true; mixerOpen = false; annotating = false; moreOpen = false }}>{t('read.perform')}</button>
+          {#if opened.channels.length}
+            <label class="row"
+              >{t('read.choir')}
+              <select value={opened.choir} onchange={changeChoir}>
+                <option value="auto">{t('read.choirAuto')}</option>
+                <option value="mixed">{t('read.choirMixed')}</option>
+                <option value="male">{t('read.choirMale')}</option>
+                <option value="female">{t('read.choirFemale')}</option>
+              </select>
+            </label>
+          {/if}
+          {#if opened.musicxml}
+            <div class="row">
+              <span>{t('read.transpose')}</span>
+              <span class="stepper">
+                <button onclick={() => setTranspose((settings?.transpose ?? 0) - 1)} aria-label="−1">−</button>
+                <span class="val">{(settings?.transpose ?? 0) > 0 ? '+' : ''}{settings?.transpose ?? 0}</span>
+                <button onclick={() => setTranspose((settings?.transpose ?? 0) + 1)} aria-label="+1">+</button>
+                {#if settings?.transpose}<button onclick={() => setTranspose(0)}>0</button>{/if}
+              </span>
+            </div>
+            {#if parts.length > 1}
+              <div class="col">
+                <span>{t('read.parts')}</span>
+                {#each parts as name, i}
+                  <label class="check"
+                    ><input type="checkbox" checked={!settings?.hidden_parts.includes(i)} onchange={() => toggleHidden(i)} /> {name}</label
+                  >
+                {/each}
+              </div>
+            {/if}
+          {/if}
+          {#if opened.pdf_url}
+            <label class="row"
+              >{t('read.pageMode')}
+              <select value={pageMode} onchange={(e) => setPageMode((e.target as HTMLSelectElement).value as PageMode)}>
+                <option value="single">{t('read.pageSingle')}</option>
+                <option value="two">{t('read.pageTwo')}</option>
+                <option value="half">{t('read.pageHalf')}</option>
+                <option value="scroll">{t('read.pageScroll')}</option>
+              </select>
+            </label>
+          {/if}
+          <div class="row">
+            <button onclick={() => (pedalsOpen = !pedalsOpen)} class:on={pedalsOpen}>{t('read.pedal')}</button>
+            <button onclick={() => (appearanceOpen = !appearanceOpen)} class:on={appearanceOpen}><Icon name="appearance" /> {t('read.appearance')}</button>
+          </div>
+          {#if appearanceOpen}<Appearance />{/if}
+          {#if pedalsOpen}
+            <div class="col pedals">
+              <p class="hint">{t('read.pedalHint')}</p>
+              {#each pedalKeys as k}
+                <label class="row"
+                  >{k}
+                  <select value={pedals[k] ?? 'none'} onchange={(e) => setPedal(k, (e.target as HTMLSelectElement).value as PedalAction)}>
+                    <option value="next">{t('read.next')}</option>
+                    <option value="prev">{t('read.prev')}</option>
+                    <option value="play">{t('read.playPause')}</option>
+                    <option value="none">{t('read.nothing')}</option>
+                  </select>
+                </label>
+              {/each}
+            </div>
+          {/if}
+        </div>
       {/if}
     </nav>
+
+    {#if annotating && view === 'pdf' && ann}
+      <div class="annbar glass" role="toolbar">
+        <div class="seg" role="group">
+          <button class:on={tool === 'pen'} onclick={() => (tool = 'pen')}>{t('ann.pen')}</button>
+          <button class:on={tool === 'highlighter'} onclick={() => (tool = 'highlighter')}>{t('ann.highlighter')}</button>
+          <button class:on={tool === 'eraser'} onclick={() => (tool = 'eraser')}>{t('ann.eraser')}</button>
+          <button class:on={tool === 'text'} onclick={() => (tool = 'text')}>{t('ann.text')}</button>
+          <button class:on={tool === 'stamp'} onclick={() => (tool = 'stamp')}>{t('ann.stamp')}</button>
+        </div>
+        {#if tool === 'pen' || tool === 'text'}
+          <span class="colors" role="group" aria-label={t('ann.color')}>
+            {#each inkColors as c}
+              <button class="swatch" class:on={inkColor === c} style="background:{c}" onclick={() => (inkColor = c)} aria-label="{t('ann.color')} {c}"></button>
+            {/each}
+          </span>
+        {/if}
+        {#if tool === 'stamp'}
+          <span class="stamps" role="group" aria-label={t('ann.stamp')}>
+            {#each STAMPS as st}
+              <button class:on={stamp === st.id} onclick={() => (stamp = st.id)}>{st.label}</button>
+            {/each}
+          </span>
+        {/if}
+        <button class="icon" onclick={() => annUndo()} aria-label={t('ann.undo')}>↶</button>
+        <button class="icon" onclick={() => annUndo(true)} aria-label={t('ann.redo')}>↷</button>
+        <span class="exportwrap">
+          <button class="icon" class:active={layersOpen} onclick={() => (layersOpen = !layersOpen)}
+            >{t('ann.layer')}: {ann.layers[annLayer]?.name ?? ''}</button
+          >
+          {#if layersOpen}
+            <span class="menu glass layers">
+              {#each ann.layers as l, i}
+                <span class="layerrow">
+                  <input
+                    type="checkbox"
+                    checked={l.visible}
+                    onchange={() => annEdit({ op: 'SetLayerVisible', layer: i, visible: !l.visible })}
+                    aria-label={l.name}
+                  />
+                  <button class:on={annLayer === i} onclick={() => (annLayer = i)}>{l.name}</button>
+                </span>
+              {/each}
+              <button onclick={addLayer}>{t('ann.newLayer')}</button>
+            </span>
+          {/if}
+        </span>
+      </div>
+    {/if}
 
     <div class="body">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       {#if view === 'pdf' && opened.pdf_url}
         <div class="score pdf">
           <PdfView
+            bind:this={pdfView}
             url={scoreFileUrl(opened.pdf_url)}
             boxes={opened.measure_boxes}
             measure={playingMeasure}
             {follow}
             onseek={seekMeasure}
             loop={loopA !== null ? [loopA, loopB ?? loopA] : null}
+            mode={performance && pageMode === 'scroll' ? 'single' : pageMode}
+            {ann}
+            tool={annotating && !performance ? tool : null}
+            {inkColor}
+            layer={annLayer}
+            {stamp}
+            onedit={annEdit}
           />
         </div>
       {:else}
@@ -526,8 +810,8 @@
         {#if error}<p class="error">{error}</p>{/if}
         {@html svg}
         {#if engraved && engraved.pages > 1}
-          <button class="pageturn left" onclick={(e) => { e.stopPropagation(); turn(-1) }} aria-label="Föregående sida"></button>
-          <button class="pageturn right" onclick={(e) => { e.stopPropagation(); turn(1) }} aria-label="Nästa sida"></button>
+          <button class="pageturn left" onclick={(e) => { e.stopPropagation(); turn(-1) }} aria-label={t('read.prev')}></button>
+          <button class="pageturn right" onclick={(e) => { e.stopPropagation(); turn(1) }} aria-label={t('read.next')}></button>
         {/if}
       </div>
       {/if}
@@ -535,13 +819,21 @@
       {#if mixerOpen && opened.channels.length}
         <aside class="mixer glass">
           <div class="presets">
-            <button onclick={() => preset('my_part')} disabled={mine === null}>Min stämma</button>
-            <button onclick={() => preset('without_me')} disabled={mine === null}>Utan mig</button>
-            <button onclick={() => preset('balanced')}>Balans</button>
+            <button onclick={() => preset('my_part')} disabled={mine === null}>{t('mix.myPart')}</button>
+            <button onclick={() => preset('without_me')} disabled={mine === null}>{t('mix.withoutMe')}</button>
+            <button onclick={() => preset('balanced')}>{t('mix.balanced')}</button>
+          </div>
+          <div class="presets custom">
+            {#each settings?.presets ?? [] as p, i}
+              <span class="cp"
+                ><button onclick={() => applyCustom(i)}>{p.name}</button><button class="x" onclick={() => removePreset(i)} aria-label="{t('common.delete')} {p.name}">×</button></span
+              >
+            {/each}
+            <button onclick={savePreset}>{t('mix.savePreset')}</button>
           </div>
           {#each opened.channels as c, i (i)}
             <div class="strip {roleClass(c)}" class:mine={mine === i}>
-              <button class="name" onclick={() => (mine = mine === i ? null : i)} title="Välj som min stämma">
+              <button class="name" onclick={() => { mine = mine === i ? null : i; persist() }} title={t('mix.hint')}>
                 <span class="label">{c.label}</span>
                 <span class="inst">{c.instrument}</span>
               </button>
@@ -552,48 +844,59 @@
                 step="1"
                 value={strips[i].volume_db === -Infinity ? -40 : strips[i].volume_db}
                 oninput={(e) => setVolume(i, e)}
-                aria-label="Volym {c.label}"
+                aria-label={t('mix.volume', { label: c.label })}
               />
               <button class="m" class:on={strips[i].mute} onclick={() => setMute(i)}>M</button>
               <button class="s" class:on={strips[i].solo} onclick={() => setSolo(i)}>S</button>
+              <button class="pipe" onclick={() => api.pitchPipe(i)} aria-label="{t('mix.pipe')} {c.label}">♪</button>
             </div>
           {/each}
-          <p class="hint">Tryck på ett namn för att välja din stämma.</p>
+          <p class="hint">{t('mix.hint')}</p>
         </aside>
       {/if}
     </div>
 
     {#if !opened.channels.length}
-      <footer class="transport glass silent">
-        Bara PDF: inga noter att spela. Lägg till en MusicXML-fil med samma namn (från MuseScore eller en
-        notskanner) så spelar stycket.
-      </footer>
+      <footer class="transport glass silent">{t('read.pdfOnly')}</footer>
     {:else}
     <footer class="transport glass">
-      <button class="icon" onclick={toStart} aria-label="Till början"><Icon name="start" /></button>
-      <button class="play" onclick={toggle} aria-label={playing ? 'Paus' : 'Spela'}><Icon name={playing ? 'pause' : 'play'} size={24} /></button>
+      <button class="icon" onclick={toStart} aria-label={t('tr.start')}><Icon name="start" /></button>
+      <button class="play" onclick={toggle} aria-label={playing ? t('tr.pause') : t('tr.play')}><Icon name={playing ? 'pause' : 'play'} size={24} /></button>
       <span class="time">{fmt(position)}</span>
-      <input class="scrub" type="range" min="0" max={opened.duration} step="0.1" value={position} onchange={scrub} aria-label="Position" />
+      <input class="scrub" type="range" min="0" max={opened.duration} step="0.1" value={position} onchange={scrub} aria-label={t('tr.position')} />
       <span class="time">{fmt(opened.duration)}</span>
       <label class="tempo"
-        >Tempo {tempo}%
+        >{t('tr.tempo')} {tempo}%
         <input type="range" min="25" max="200" step="5" value={tempo} oninput={setTempo} />
       </label>
+      <button class="chip" onclick={() => api.pitchPipe()} title={t('tr.pipeHint')}>♪ {t('tr.pipe')}</button>
       <button
         class="chip"
         class:on={loopPick !== 'off' || loopB !== null}
         onclick={toggleLoop}
-        aria-label="Slinga A–B"
+        aria-label={t('tr.loop')}
         ><Icon name="loop" size={18} />
-        {#if loopPick === 'a'}Tryck första takten{:else if loopPick === 'b'}Tryck sista takten{:else if loopA !== null && loopB !== null}T. {loopA + 1}–{loopB + 1}{:else}Slinga{/if}</button
+        {#if loopPick === 'a'}{t('tr.loopA')}{:else if loopPick === 'b'}{t('tr.loopB')}{:else if loopA !== null && loopB !== null}{t('tr.bars', { a: loopA + 1, b: loopB + 1 })}{:else}{t('tr.loop')}{/if}</button
       >
-      <button class="chip" class:on={metronome} onclick={toggleMetronome} aria-label="Metronom"
-        ><Icon name="metronome" size={18} /> Klick</button
+      <button class="chip" class:on={metronome} onclick={toggleMetronome} aria-label={t('tr.click')}
+        ><Icon name="metronome" size={18} /> {t('tr.click')}</button
       >
-      <button class="chip" class:on={countIn} onclick={toggleCountIn}>Inräkning</button>
-      <label class="follow"><input type="checkbox" bind:checked={follow} /> Följ</label>
+      <button class="chip" class:on={countIn} onclick={toggleCountIn}>{t('tr.countIn')}</button>
+      <span class="exportwrap">
+        <button class="chip" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu">{t('tr.export')}</button>
+        {#if exportOpen}
+          <span class="menu glass" role="menu">
+            <button role="menuitem" onclick={() => exportAudio('mix')}>{t('tr.exportMix')}</button>
+            <button role="menuitem" onclick={() => exportAudio('parts')}>{t('tr.exportParts')}</button>
+          </span>
+        {/if}
+      </span>
+      {#if exporting}<span class="exporting">{exporting}</span>{/if}
+      <label class="follow"><input type="checkbox" bind:checked={follow} /> {t('tr.follow')}</label>
       {#if engraved && view === 'notation'}<span class="page">{page}/{engraved.pages}</span>{/if}
     </footer>
     {/if}
   </main>
 {/if}
+
+<Dialog />

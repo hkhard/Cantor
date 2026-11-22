@@ -1,9 +1,15 @@
 <script lang="ts">
   // The original page as the singer knows it (PDF), with the playing
-  // measure outlined from the OMR measure map (LIB-05).
-  import { onDestroy } from 'svelte'
+  // measure outlined from the OMR measure map (LIB-05), annotations
+  // (ANN-01..03) and page modes (VIEW-02): single page, two pages side by
+  // side, half-page turns (the bottom of this page stays while the top of
+  // the next one appears, as on a music stand), and continuous scroll.
+  import { onDestroy, tick } from 'svelte'
   import type { PDFDocumentProxy } from 'pdfjs-dist'
-  import { openPdf, renderPage, type MeasureBox } from './pdf'
+  import { openPdf, type MeasureBox, type PageMode } from './pdf'
+  import PdfPage from './PdfPage.svelte'
+  import type { AnnDoc, AnnCommand, Tool } from './annot'
+  import { t } from './i18n.svelte'
 
   interface Props {
     url: string
@@ -15,18 +21,39 @@
     onseek: (measure: number) => void
     /** A-B loop range (written measures), shaded on the page. */
     loop?: [number, number] | null
+    mode?: PageMode
+    ann?: AnnDoc | null
+    tool?: Tool | null
+    inkColor?: string
+    layer?: number
+    stamp?: string
+    onedit?: (c: AnnCommand) => void
   }
-  let { url, boxes, measure, follow, onseek, loop = null }: Props = $props()
+  let {
+    url,
+    boxes,
+    measure,
+    follow,
+    onseek,
+    loop = null,
+    mode = 'single',
+    ann = null,
+    tool = null,
+    inkColor = '#1d4ed8',
+    layer = 0,
+    stamp = 'Breath',
+    onedit = () => {},
+  }: Props = $props()
 
   let host: HTMLDivElement | undefined = $state()
-  let canvas: HTMLCanvasElement | undefined = $state()
   let doc: PDFDocumentProxy | null = $state(null)
   let pages = $state(0)
   let page = $state(1)
-  let size = $state({ w: 0, h: 0 })
+  /** Half-page mode: the top half already shows the next page. */
+  let half = $state(false)
+  let box = $state({ w: 0, h: 0 })
   let error = $state('')
-  let rendering = false
-  let pending: number | null = null
+  let pageEls: (HTMLDivElement | undefined)[] = $state([])
 
   export function pageInfo() {
     return { page, pages }
@@ -35,32 +62,14 @@
   async function load(u: string) {
     error = ''
     try {
-      doc = await openPdf(u)
-      pages = doc.numPages
+      const d = await openPdf(u)
+      doc?.destroy()
+      doc = d
+      pages = d.numPages
       page = 1
-      await draw()
+      half = false
     } catch (e) {
-      error = `Kunde inte öppna PDF: ${e}`
-    }
-  }
-
-  async function draw() {
-    if (!doc || !canvas || !host) return
-    if (rendering) {
-      pending = page
-      return
-    }
-    rendering = true
-    try {
-      size = await renderPage(doc, page, canvas, host.clientWidth, host.clientHeight)
-    } catch (e) {
-      error = String(e)
-    } finally {
-      rendering = false
-      if (pending !== null && pending !== page) {
-        pending = null
-        draw()
-      } else pending = null
+      error = t('pdf.openFailed', { e: String(e) })
     }
   }
 
@@ -68,74 +77,119 @@
     if (url) load(url)
   })
 
-  // Follow the playing measure onto its page.
-  $effect(() => {
-    const b = boxes && measure >= 0 ? boxes[measure] : null
-    if (follow && b && b.page !== page && b.page <= pages) {
-      page = b.page
-      draw()
-    }
-  })
-
-  let resizeObs: ResizeObserver | undefined
   $effect(() => {
     if (!host) return
-    resizeObs = new ResizeObserver(() => draw())
-    resizeObs.observe(host)
-    return () => resizeObs?.disconnect()
+    const ro = new ResizeObserver(() => {
+      if (host) box = { w: host.clientWidth, h: host.clientHeight }
+    })
+    ro.observe(host)
+    return () => ro.disconnect()
   })
   onDestroy(() => doc?.destroy())
 
-  export function turn(d: number) {
-    const p = Math.min(pages, Math.max(1, page + d))
-    if (p !== page) {
-      page = p
-      draw()
+  // A half-turned page only exists in half-page mode.
+  $effect(() => {
+    if (mode !== 'half') half = false
+  })
+
+  // Two pages side by side only when there is room (landscape).
+  let twoUp = $derived(mode === 'two' && box.w > box.h * 1.1)
+  let step = $derived(twoUp ? 2 : 1)
+
+  function show(p: number) {
+    p = Math.min(pages, Math.max(1, p))
+    if (twoUp && p % 2 === 0) p -= 1
+    page = p
+    half = false
+    if (mode === 'scroll') {
+      tick().then(() => pageEls[p - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     }
   }
 
-  function tap(e: MouseEvent) {
-    if (!boxes || !canvas) return
-    const r = canvas.getBoundingClientRect()
-    const x = (e.clientX - r.left) / r.width
-    const y = (e.clientY - r.top) / r.height
-    const i = boxes.findIndex(
-      (b) => b.page === page && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h,
-    )
-    if (i >= 0) onseek(i)
+  export function turn(d: number) {
+    if (mode === 'half') {
+      if (d > 0) {
+        if (!half && page < pages) half = true
+        else if (half) show(page + 1)
+      } else if (half) half = false
+      else if (page > 1) {
+        page -= 1
+        half = true
+      }
+      return
+    }
+    if (mode === 'scroll' && host) {
+      host.scrollBy({ top: d * host.clientHeight * 0.85, behavior: 'smooth' })
+      return
+    }
+    show(page + d * step)
   }
 
-  let cur = $derived(boxes && measure >= 0 ? boxes[measure] : null)
-  let loopBoxes = $derived(
-    boxes && loop ? boxes.slice(loop[0], loop[1] + 1).filter((b) => b.page === page) : [],
-  )
+  // Follow the playing measure onto its page.
+  $effect(() => {
+    const b = boxes && measure >= 0 ? boxes[measure] : null
+    if (!follow || !b || b.page > pages) return
+    if (mode === 'scroll') {
+      const el = pageEls[b.page - 1]
+      if (el && host) {
+        const top = el.offsetTop + b.y * el.clientHeight
+        const bottom = el.offsetTop + (b.y + b.h) * el.clientHeight
+        if (top < host.scrollTop || bottom > host.scrollTop + host.clientHeight)
+          host.scrollTo({ top: top - host.clientHeight * 0.2, behavior: 'smooth' })
+      }
+      return
+    }
+    if (mode === 'half') {
+      // On the lower half of a page: show it. Top of the next page while the
+      // previous bottom is still in view: the half-turned state.
+      if (b.page === page + 1 && b.y + b.h <= 0.55) half = true
+      else if (b.page !== page) show(b.page)
+      return
+    }
+    const visible = twoUp ? b.page === page || b.page === page + 1 : b.page === page
+    if (!visible) show(b.page)
+  })
+
+  let common = $derived({ boxes, measure, loop, ann, tool, inkColor, layer, stamp, onedit, onseek })
 </script>
 
-<div class="pdfhost" bind:this={host}>
+<div class="pdfhost" class:scroll={mode === 'scroll'} bind:this={host}>
   {#if error}<p class="error">{error}</p>{/if}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="sheet" style="width:{size.w}px;height:{size.h}px" onclick={tap}>
-    <canvas bind:this={canvas}></canvas>
-    {#each loopBoxes as b}
-      <div
-        class="loopbox"
-        style="left:{b.x * size.w}px;top:{b.y * size.h}px;width:{b.w * size.w}px;height:{b.h * size.h}px"
-      ></div>
-    {/each}
-    {#if cur && cur.page === page}
-      <div
-        class="cursor"
-        style="left:{cur.x * size.w}px;top:{cur.y * size.h}px;width:{cur.w * size.w}px;height:{cur.h * size.h}px"
-      ></div>
+  {#if doc && box.w > 0}
+    {#if mode === 'scroll'}
+      <div class="column">
+        {#each Array.from({ length: pages }, (_, i) => i + 1) as n (n)}
+          <PdfPage {doc} {n} fitW={Math.min(box.w - 16, 1400)} fitH={0} {...common} bind:el={pageEls[n - 1]} />
+        {/each}
+      </div>
+    {:else if twoUp}
+      <div class="spread">
+        <PdfPage {doc} n={page} fitW={box.w / 2 - 6} fitH={box.h} {...common} />
+        {#if page + 1 <= pages}
+          <PdfPage {doc} n={page + 1} fitW={box.w / 2 - 6} fitH={box.h} {...common} />
+        {/if}
+      </div>
+    {:else}
+      <div class="stack">
+        <PdfPage {doc} n={page} fitW={box.w} fitH={box.h} {...common} />
+        {#if mode === 'half' && half && page + 1 <= pages}
+          <div class="halfover">
+            <PdfPage {doc} n={page + 1} fitW={box.w} fitH={box.h} {...common} clip="inset(0 0 50% 0)" />
+            <div class="halfline"></div>
+          </div>
+        {/if}
+      </div>
     {/if}
-  </div>
-  {#if pages > 1}
-    <button class="pageturn left" onclick={() => turn(-1)} aria-label="Föregående sida"></button>
-    <button class="pageturn right" onclick={() => turn(1)} aria-label="Nästa sida"></button>
   {/if}
-  <span class="pageno">{page}/{pages}</span>
+  {#if pages > 1 && !tool && mode !== 'scroll'}
+    <button class="pageturn left" onclick={() => turn(-1)} aria-label={t('read.prev')}></button>
+    <button class="pageturn right" onclick={() => turn(1)} aria-label={t('read.next')}></button>
+  {/if}
+  {#if mode !== 'scroll'}
+    <span class="pageno">{twoUp && page + 1 <= pages ? `${page}–${page + 1}` : page}{half ? '½' : ''}/{pages}</span>
+  {/if}
   {#if !boxes}
-    <p class="nomap">Takterna på sidan är inte kopplade till ljudet för det här stycket, så markören visas inte.</p>
+    <p class="nomap">{t('pdf.noMap')}</p>
   {/if}
 </div>
 
@@ -148,30 +202,37 @@
     justify-content: center;
     background: #eceae4;
   }
-  .sheet {
-    position: relative;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-    background: white;
-  }
-  canvas {
+  .pdfhost.scroll {
     display: block;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  .cursor {
-    position: absolute;
-    border: 3px solid rgba(184, 86, 43, 0.75);
-    background: rgba(184, 86, 43, 0.1);
-    border-radius: 6px;
-    pointer-events: none;
-    transition:
-      left 0.12s,
-      top 0.12s,
-      width 0.12s;
+  .column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0 40px;
   }
-  .loopbox {
+  .spread {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .stack {
+    position: relative;
+  }
+  .halfover {
     position: absolute;
-    background: rgba(184, 86, 43, 0.08);
-    border-top: 3px solid rgba(184, 86, 43, 0.5);
-    border-bottom: 3px solid rgba(184, 86, 43, 0.5);
+    left: 0;
+    top: 0;
+  }
+  .halfline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    border-top: 2px dashed rgba(184, 86, 43, 0.6);
     pointer-events: none;
   }
   .pageturn {
@@ -204,6 +265,7 @@
     font-size: 12px;
     color: #77716a;
     margin: 0;
+    pointer-events: none;
   }
   .error {
     position: absolute;

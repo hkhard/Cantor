@@ -71,3 +71,64 @@ export async function engrave(
   })
   return { pages, measurePage, render: (p: number) => tk.renderToSVG(p) }
 }
+
+/** Part names in a MusicXML document, in order. */
+export function partNames(musicxml: string): string[] {
+  const doc = new DOMParser().parseFromString(musicxml, 'application/xml')
+  return [...doc.querySelectorAll('part-list > score-part')].map(
+    (sp, i) => sp.querySelector('part-name')?.textContent?.trim() || `Stämma ${i + 1}`,
+  )
+}
+
+const STEP: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+
+/** Parts written without a clef (some converted files) get one from their
+ *  range: treble, treble-8 (tenor) or bass. Otherwise Verovio assumes
+ *  treble and low parts sit on ledger lines. */
+function addMissingClefs(doc: Document) {
+  for (const part of doc.querySelectorAll('score-partwise > part')) {
+    if (part.querySelector('clef')) continue
+    const keys: number[] = []
+    for (const p of part.querySelectorAll('note > pitch')) {
+      const st = STEP[p.querySelector('step')?.textContent ?? 'C'] ?? 0
+      const oct = Number(p.querySelector('octave')?.textContent ?? 4)
+      keys.push((oct + 1) * 12 + st + Number(p.querySelector('alter')?.textContent ?? 0))
+    }
+    if (!keys.length) continue
+    keys.sort((a, b) => a - b)
+    const med = keys[keys.length >> 1]
+    const [sign, line, oct] = med >= 64 ? ['G', '2', 0] : med >= 55 ? ['G', '2', -1] : ['F', '4', 0]
+    let attrs = part.querySelector('measure > attributes')
+    if (!attrs) {
+      attrs = doc.createElement('attributes')
+      part.querySelector('measure')?.prepend(attrs)
+    }
+    const clef = doc.createElement('clef')
+    clef.innerHTML = `<sign>${sign}</sign><line>${line}</line>${oct ? `<clef-octave-change>${oct}</clef-octave-change>` : ''}`
+    // MusicXML order: divisions, key, time, staves, ..., clef.
+    attrs.appendChild(clef)
+  }
+}
+
+/** VIEW-04: the MusicXML prepared for notation, without the parts at
+ *  `hidden` (indices in document order). Sound is unaffected. */
+export function withoutParts(musicxml: string, hidden: number[]): string {
+  if (!musicxml) return musicxml
+  const doc = new DOMParser().parseFromString(musicxml, 'application/xml')
+  if (doc.querySelector('parsererror')) return musicxml
+  const missing = [...doc.querySelectorAll('score-partwise > part')].some((p) => !p.querySelector('clef'))
+  if (!hidden.length && !missing) return musicxml
+  addMissingClefs(doc)
+  const sps = [...doc.querySelectorAll('part-list > score-part')]
+  if (hidden.length >= sps.length) return new XMLSerializer().serializeToString(doc)
+  for (const i of hidden) {
+    const sp = sps[i]
+    if (!sp) continue
+    const id = sp.getAttribute('id')
+    sp.remove()
+    doc.querySelectorAll(`score-partwise > part`).forEach((p) => {
+      if (p.getAttribute('id') === id) p.remove()
+    })
+  }
+  return new XMLSerializer().serializeToString(doc)
+}

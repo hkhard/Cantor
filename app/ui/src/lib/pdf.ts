@@ -4,6 +4,9 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
+/** VIEW-02 page modes. */
+export type PageMode = 'single' | 'two' | 'half' | 'scroll'
+
 export interface MeasureBox {
   page: number
   x: number
@@ -26,7 +29,15 @@ export async function openPdf(url: string): Promise<pdfjs.PDFDocumentProxy> {
   const resp = await fetch(url)
   if (!resp.ok) throw new Error(`PDF ${resp.status}`)
   const data = new Uint8Array(await resp.arrayBuffer())
-  return pdfjs.getDocument({ data }).promise
+  const base = new URL('/pdfjs/', location.href).href
+  return pdfjs.getDocument({
+    data,
+    wasmUrl: base + 'wasm/',
+    standardFontDataUrl: base + 'standard_fonts/',
+    cMapUrl: base + 'cmaps/',
+    cMapPacked: true,
+    iccUrl: base + 'iccs/',
+  }).promise
 }
 
 /** Render a page to fit `width` x `height` CSS pixels; returns the canvas

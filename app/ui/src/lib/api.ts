@@ -49,9 +49,64 @@ export interface Strip {
   solo: boolean
 }
 
+export interface Metadata {
+  title: string
+  composer: string
+  arranger: string
+  key: string
+  tempo: number | null
+  genre: string
+  tags: string[]
+  rating: number | null
+  difficulty: number | null
+  part_names: string[]
+}
+
+export type SetItem =
+  | { kind: 'score'; score: string; start_page: number | null }
+  | { kind: 'placeholder'; title: string }
+
+export interface Setlist {
+  id: string
+  name: string
+  items: SetItem[]
+}
+
+export interface Preset {
+  name: string
+  strips: Strip[]
+}
+
+export interface ScoreSettings {
+  my_part: number | null
+  strips: Strip[]
+  tempo_percent: number
+  view: 'pdf' | 'notation'
+  choir: 'auto' | 'male' | 'female' | 'mixed'
+  presets: Preset[]
+  transpose: number
+  hidden_parts: number[]
+}
+
+export function emptyMetadata(title = ''): Metadata {
+  return { title, composer: '', arranger: '', key: '', tempo: null, genre: '', tags: [], rating: null, difficulty: null, part_names: [] }
+}
+
 export const api = {
   listScores: () => invoke<ScoreEntry[]>('list_scores'),
-  openScore: (file: string, choir?: string) => invoke<Opened>('open_score', { file, choir }),
+  openScore: (file: string, choir?: string, transpose?: number) =>
+    invoke<Opened>('open_score', { file, choir, transpose }),
+  libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[] }>('library_data'),
+  setMetadata: (id: string, metadata: Metadata) => invoke<void>('set_metadata', { id, metadata }),
+  search: (query: string) => invoke<string[]>('search_scores', { query }),
+  createSetlist: (name: string) => invoke<string>('save_setlist', { name, setlist: null }),
+  saveSetlist: (setlist: Setlist) => invoke<string>('save_setlist', { setlist, name: null }),
+  deleteSetlist: (id: string) => invoke<void>('delete_setlist', { id }),
+  scoreSettings: (id: string) => invoke<ScoreSettings>('score_settings', { id }),
+  saveScoreSettings: (id: string, settings: ScoreSettings) =>
+    invoke<void>('save_score_settings', { id, settings }),
+  /** PERF-03: starting note of one part, or every part as a chord. */
+  pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),
   seek: (seconds: number) => invoke<void>('seek', { seconds }),
@@ -63,6 +118,8 @@ export const api = {
       headers: { 'x-name': encodeURIComponent(f.name) },
     }),
   deleteScore: (file: string) => invoke<void>('delete_score', { file }),
+  /** PLAY-11: "mix" = what you hear, "parts" = one learning track per voice. */
+  exportAudio: (what: 'mix' | 'parts') => invoke<string[]>('export_audio', { what }),
   /** A-B loop over written measures a..=b (0-based); omit both to turn off. */
   setLoop: (a?: number, b?: number) => invoke<void>('set_loop', { a, b }),
   setClick: (c: { metronome?: boolean; countIn?: boolean }) =>

@@ -15,3 +15,4 @@ app/src-tauri/resources/scores/
 app/ui/dist/
 # Copied into the iOS project on every build (contains the private scores)
 app/src-tauri/gen/apple/assets/
+target-wt/

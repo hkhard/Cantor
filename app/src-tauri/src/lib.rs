@@ -6,6 +6,8 @@
 //! `cantor_audio::Engine` (rustysynth + GeneralUser GS).
 
 mod audio;
+mod remote;
+mod share;
 
 use cantor_audio::{Engine, Preset, SoundFontSynth};
 use cantor_timeline::channels::{choir_from_title, plan_channels_for, Choir};
@@ -72,6 +74,42 @@ fn sweep_incoming(paths: &Paths) -> Vec<String> {
 
 /// Import one file into the user library; returns the new score ids.
 fn import_path(paths: &Paths, path: &std::path::Path) -> Vec<String> {
+    let ids = import_path_inner(paths, path);
+    if path
+        .extension()
+        .is_some_and(|x| x.eq_ignore_ascii_case("4ss"))
+    {
+        if let Ok(bytes) = std::fs::read(path) {
+            let name = path
+                .file_stem()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            setlist_from_4ss(paths, &name, &bytes, &ids);
+        }
+    }
+    ids
+}
+
+/// LIB-08: a forScore setlist also becomes a Cantor setlist, in the same
+/// order, pointing at the scores just imported from it.
+fn setlist_from_4ss(paths: &Paths, name: &str, bytes: &[u8], ids: &[String]) {
+    let Ok(set) = cantor_library::forscore::parse_4ss(bytes) else {
+        return;
+    };
+    let titles = set.items.iter().filter_map(|it| match it.entry {
+        cantor_library::forscore::SetlistEntry::Score(_) => Some(it.title.clone()),
+        _ => None,
+    });
+    let imported: Vec<(String, String)> = titles.zip(ids.iter().cloned()).collect();
+    let sl = cantor_library::store::setlist_from_forscore(name, &set, &imported);
+    let mut st = cantor_library::store::Store::open(&paths.user);
+    st.put_setlist(sl);
+    if let Err(e) = st.save() {
+        log::warn!("setlist save: {e:?}");
+    }
+}
+
+fn import_path_inner(paths: &Paths, path: &std::path::Path) -> Vec<String> {
     let Ok(bytes) = std::fs::read(path) else {
         log::warn!("import: cannot read {}", path.display());
         return Vec::new();
@@ -89,12 +127,123 @@ fn import_path(paths: &Paths, path: &std::path::Path) -> Vec<String> {
     }
 }
 
+fn store(paths: &Paths) -> cantor_library::store::Store {
+    cantor_library::store::Store::open(&paths.user)
+}
+
+fn save_store(st: &cantor_library::store::Store) -> Result<(), String> {
+    st.save().map_err(|e| format!("{e:?}"))
+}
+
+#[derive(Serialize)]
+struct LibraryData {
+    metadata: std::collections::BTreeMap<String, cantor_library::store::Metadata>,
+    setlists: Vec<cantor_library::store::Setlist>,
+}
+
+/// Metadata (LIB-03) and setlists (SET-01) for the library screen.
+#[tauri::command]
+fn library_data(paths: State<'_, Paths>) -> LibraryData {
+    let st = store(&paths);
+    LibraryData {
+        metadata: st.all_metadata().clone(),
+        setlists: st.setlists().to_vec(),
+    }
+}
+
+#[tauri::command]
+fn set_metadata(
+    id: String,
+    metadata: cantor_library::store::Metadata,
+    paths: State<'_, Paths>,
+) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.set_metadata(&id, metadata);
+    save_store(&st)
+}
+
+/// LIB-04: search titles, composers, tags, genres; returns score ids.
+#[tauri::command]
+fn search_scores(query: String, paths: State<'_, Paths>) -> Vec<String> {
+    let entries: Vec<(String, String)> = paths
+        .dirs()
+        .iter()
+        .enumerate()
+        .flat_map(|(d, dir)| {
+            cantor_library::import::list_library(&[dir])
+                .into_iter()
+                .map(move |e| (format!("{d}:{}", e.stem), e.title))
+        })
+        .collect();
+    store(&paths).search(&query, &entries)
+}
+
+/// Create (no id) or replace a setlist; returns its id.
+#[tauri::command]
+fn save_setlist(
+    setlist: Option<cantor_library::store::Setlist>,
+    name: Option<String>,
+    paths: State<'_, Paths>,
+) -> Result<String, String> {
+    let mut st = store(&paths);
+    let id = match setlist {
+        Some(sl) => {
+            let id = sl.id.clone();
+            st.put_setlist(sl);
+            id
+        }
+        None => st.create_setlist(name.as_deref().unwrap_or("Ny lista")),
+    };
+    save_store(&st)?;
+    Ok(id)
+}
+
+#[tauri::command]
+fn delete_setlist(id: String, paths: State<'_, Paths>) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.delete_setlist(&id);
+    save_store(&st)
+}
+
+/// Settings remembered per score (mixer, my part, tempo, view, presets,
+/// transposition, hidden parts).
+#[tauri::command]
+fn score_settings(id: String, paths: State<'_, Paths>) -> cantor_library::store::ScoreSettings {
+    store(&paths).settings(&id).cloned().unwrap_or_default()
+}
+
+#[tauri::command]
+fn save_score_settings(
+    id: String,
+    settings: cantor_library::store::ScoreSettings,
+    paths: State<'_, Paths>,
+) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.set_settings(&id, settings);
+    save_store(&st)
+}
+
+/// PERF-03: give the starting note of one part, or all parts as a chord.
+#[tauri::command]
+fn pitch_pipe(channel: Option<usize>, player: State<'_, Shared>) -> Result<(), String> {
+    with_engine(&player, |e| e.pitch_pipe(channel, 1.6))
+}
+
 #[derive(Default)]
 struct Player {
     engine: Option<Arc<Mutex<Engine<SoundFontSynth>>>>,
     stream: Option<audio::Output>,
     /// Channel labels of the open score, for presets.
     channels: usize,
+    /// What is needed to render the open score offline (export).
+    render: Option<RenderSource>,
+}
+
+/// The open score, kept so exports can render with fresh engines.
+struct RenderSource {
+    title: String,
+    timemap: cantor_timeline::Timemap,
+    plan: cantor_timeline::channels::ChannelPlan,
 }
 
 type Shared = Mutex<Player>;
@@ -185,25 +334,35 @@ fn gm_name(p: u8) -> &'static str {
 #[tauri::command]
 fn list_scores(paths: State<'_, Paths>) -> Result<Vec<ScoreEntry>, String> {
     sweep_incoming(&paths);
+    let st = store(&paths);
     let mut out = Vec::new();
     for (d, dir) in paths.dirs().iter().enumerate() {
         for e in cantor_library::import::list_library(&[dir]) {
+            let file = format!("{d}:{}", e.stem);
+            let title = st
+                .metadata(&file)
+                .map(|m| m.title.clone())
+                .filter(|t| !t.is_empty())
+                .unwrap_or(e.title);
             out.push(ScoreEntry {
-                file: format!("{d}:{}", e.stem),
-                title: e.title,
+                file,
+                title,
                 playable: e.score_file.is_some(),
                 pdf: e.pdf_file.is_some(),
                 user: d == 1,
             });
         }
     }
-    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    out.sort_by_key(|a| a.title.to_lowercase());
     Ok(out)
 }
 
 /// Import a file picked in the app (raw bytes, name in the `x-name` header).
 #[tauri::command]
-fn import_bytes(request: tauri::ipc::Request<'_>, paths: State<'_, Paths>) -> Result<Vec<String>, String> {
+fn import_bytes(
+    request: tauri::ipc::Request<'_>,
+    paths: State<'_, Paths>,
+) -> Result<Vec<String>, String> {
     let name = request
         .headers()
         .get("x-name")
@@ -217,6 +376,175 @@ fn import_bytes(request: tauri::ipc::Request<'_>, paths: State<'_, Paths>) -> Re
     Ok(items.into_iter().map(|i| format!("1:{}", i.stem)).collect())
 }
 
+/// Export rehearsal audio (PLAY-11): `"mix"` renders what you hear (mixer,
+/// tempo); `"parts"` renders one file per voice, each with that voice loud and
+/// the others at -12 dB (the "My part" preset), so every singer gets a
+/// learning track. Files go to Documents/Export (visible in Files) and the
+/// share sheet opens. Returns the file names.
+#[tauri::command]
+async fn export_audio(what: String, app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let (jobs, out_dir) = {
+        let paths = app.state::<Paths>();
+        let player = app.state::<Shared>();
+        let p = player.lock().unwrap();
+        let src = p.render.as_ref().ok_or("no score open")?;
+        let engine = p.engine.as_ref().ok_or("no score open")?;
+        let live = engine.lock().unwrap();
+        let tempo = live.tempo_scale();
+        let mix: Vec<(f32, bool, bool)> = (0..p.channels)
+            .map(|i| {
+                let m = live.mixer();
+                (m.volume_db(i), m.muted(i), m.soloed(i))
+            })
+            .collect();
+        let safe = |s: &str| {
+            s.chars()
+                .map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c })
+                .collect::<String>()
+        };
+        let tempo_tag = if (tempo - 1.0).abs() > 1e-6 {
+            format!(" {}%", (tempo * 100.0).round())
+        } else {
+            String::new()
+        };
+        let mut jobs: Vec<(String, Option<usize>)> = Vec::new();
+        if what == "parts" {
+            for (i, c) in src.plan.channels.iter().enumerate() {
+                if c.role.is_vocal() {
+                    jobs.push((
+                        format!("{} - {}{}.wav", safe(&src.title), safe(&c.label), tempo_tag),
+                        Some(i),
+                    ));
+                }
+            }
+        } else {
+            jobs.push((format!("{}{}.wav", safe(&src.title), tempo_tag), None));
+        }
+        let out_dir = paths.user.join("Export");
+        std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+        let render = (
+            src.timemap.clone(),
+            src.plan.clone(),
+            paths.soundfont.clone(),
+            tempo,
+            mix,
+        );
+        (
+            jobs.into_iter()
+                .map(|j| (j, render.clone()))
+                .collect::<Vec<_>>(),
+            out_dir,
+        )
+    };
+    // Render off the UI thread; each job gets its own synth and engine.
+    let out = out_dir.clone();
+    let names = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, String> {
+        let mut names = Vec::new();
+        for ((name, part), (tm, plan, sf, tempo, mix)) in jobs {
+            let sr = 44_100;
+            let synth = SoundFontSynth::open(&sf, sr)?;
+            let mut e = Engine::new(synth, &tm, &plan, sr);
+            e.set_tempo_scale(tempo);
+            match part {
+                Some(i) => e.mixer_mut().apply(Preset::MyPart(i)),
+                None => {
+                    for (i, &(db, mute, solo)) in mix.iter().enumerate() {
+                        let m = e.mixer_mut();
+                        m.set_volume_db(i, db);
+                        m.set_mute(i, mute);
+                        m.set_solo(i, solo);
+                    }
+                }
+            }
+            let wav = cantor_audio::export_wav(&mut e, 2.0);
+            std::fs::write(out.join(&name), wav).map_err(|e| e.to_string())?;
+            names.push(name);
+        }
+        Ok(names)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let files: Vec<PathBuf> = names.iter().map(|n| out_dir.join(n)).collect();
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(share::share_files(&files));
+    })
+    .map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())??;
+    Ok(names)
+}
+
+/// Annotations of the open score (ANN-01..04), edited through the crate's
+/// undoable [`cantor_annotations::Editor`] and saved after every change to
+/// `Documents/Annotations/<dir>_<stem>.json` (bundled scores are read-only,
+/// so annotations always live in the user folder).
+#[derive(Default)]
+struct Annotations {
+    open: Option<(PathBuf, cantor_annotations::Editor)>,
+}
+
+fn annotations_path(paths: &Paths, file: &str) -> PathBuf {
+    let safe: String = file
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || " -_().".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    paths.user.join("Annotations").join(format!("{safe}.json"))
+}
+
+/// Load (or create) the annotation document for a score.
+#[tauri::command]
+fn annotations_open(
+    file: String,
+    paths: State<'_, Paths>,
+    ann: State<'_, Mutex<Annotations>>,
+) -> Result<cantor_annotations::Document, String> {
+    let path = annotations_path(&paths, &file);
+    let doc = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| cantor_annotations::Document::from_json(&s).ok())
+        .unwrap_or_default();
+    let out = doc.clone();
+    ann.lock().unwrap().open = Some((path, cantor_annotations::Editor::new(doc)));
+    Ok(out)
+}
+
+/// Apply an edit (`"undo"`/`"redo"` or a command) and return the document.
+#[tauri::command]
+fn annotations_edit(
+    action: String,
+    command: Option<cantor_annotations::Command>,
+    ann: State<'_, Mutex<Annotations>>,
+) -> Result<cantor_annotations::Document, String> {
+    let mut a = ann.lock().unwrap();
+    let (path, ed) = a.open.as_mut().ok_or("no annotations open")?;
+    match action.as_str() {
+        "undo" => {
+            ed.undo();
+        }
+        "redo" => {
+            ed.redo();
+        }
+        _ => {
+            let cmd = command.ok_or("missing command")?;
+            ed.apply(cmd).map_err(|e| format!("{e:?}"))?;
+        }
+    }
+    let doc = ed.document().clone();
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, doc.to_json().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &*path).map_err(|e| e.to_string())?;
+    Ok(doc)
+}
+
 /// Remove an imported score (all its files) from the user library.
 #[tauri::command]
 fn delete_score(file: String, paths: State<'_, Paths>) -> Result<(), String> {
@@ -224,34 +552,42 @@ fn delete_score(file: String, paths: State<'_, Paths>) -> Result<(), String> {
         return Err("bundled scores cannot be removed".into());
     }
     let e = paths.entry(&file)?;
-    for f in [e.score_file, e.pdf_file, Some(format!("{}.measures.json", e.stem))]
-        .into_iter()
-        .flatten()
+    for f in [
+        e.score_file,
+        e.pdf_file,
+        Some(format!("{}.measures.json", e.stem)),
+    ]
+    .into_iter()
+    .flatten()
     {
         let _ = std::fs::remove_file(e.dir.join(f));
     }
-    Ok(())
+    // Setlists keep a placeholder with the title (SET-01).
+    let mut st = store(&paths);
+    st.remove_score(&file, &e.title);
+    save_store(&st)
 }
 
 #[tauri::command]
 fn open_score(
     file: String,
     choir: Option<String>,
+    transpose: Option<i32>,
     paths: State<'_, Paths>,
     player: State<'_, Shared>,
+    remote_slot: State<'_, remote::SharedEngine>,
 ) -> Result<Opened, String> {
     let entry = paths.entry(&file)?;
     let dir_index = file.split(':').next().unwrap_or("0").to_string();
-    let pdf_url = entry
-        .pdf_file
-        .as_ref()
-        .map(|f| format!("{dir_index}/{f}"));
+    let pdf_url = entry.pdf_file.as_ref().map(|f| format!("{dir_index}/{f}"));
     let Some(score_file) = entry.score_file.clone() else {
         // PDF only (e.g. a forScore .4sc): readable, no sound until converted.
         let mut p = player.lock().unwrap();
         p.stream = None;
         p.engine = None;
         p.channels = 0;
+        p.render = None;
+        *remote_slot.lock().unwrap() = None;
         return Ok(Opened {
             title: entry.title,
             musicxml: String::new(),
@@ -265,12 +601,20 @@ fn open_score(
         });
     };
     let bytes = std::fs::read(entry.dir.join(&score_file)).map_err(|e| e.to_string())?;
-    let score = cantor_score::parse_score_file(&bytes).map_err(|e| e.to_string())?;
+    let mut score = cantor_score::parse_score_file(&bytes).map_err(|e| e.to_string())?;
     // OMR files: drop OCR text that is not lyrics (dynamics, credits) and
     // chord symbols made from misread text before showing them.
-    let musicxml = cantor_lyrics::clean_omr_musicxml(&String::from_utf8_lossy(
+    let mut musicxml = cantor_lyrics::clean_omr_musicxml(&String::from_utf8_lossy(
         &cantor_score::musicxml_bytes(&bytes).map_err(|e| e.to_string())?,
     ));
+    // VIEW-05: transpose both what sounds and what is shown.
+    let transpose = transpose.unwrap_or(0).clamp(-12, 12);
+    if transpose != 0 {
+        score = score.transposed(transpose);
+        if let Ok(x) = cantor_score::musicxml_transposed(&musicxml, transpose) {
+            musicxml = x;
+        }
+    }
     let tm = cantor_timeline::build_timemap(&score);
     let title = entry.title.clone();
     let choir = match choir.as_deref() {
@@ -288,8 +632,14 @@ fn open_score(
     let synth = SoundFontSynth::open(&paths.soundfont, sr)?;
     let engine = Arc::new(Mutex::new(Engine::new(synth, &tm, &plan, sr)));
     p.stream = Some(audio::Output::start(engine.clone())?);
+    *remote_slot.lock().unwrap() = Some(engine.clone());
     p.engine = Some(engine);
     p.channels = plan.channels.len();
+    p.render = Some(RenderSource {
+        title: title.clone(),
+        timemap: tm.clone(),
+        plan: plan.clone(),
+    });
 
     let measures = tm
         .measure_starts
@@ -398,12 +748,26 @@ fn set_click(
 
 #[tauri::command]
 fn status(player: State<'_, Shared>) -> Result<Status, String> {
-    with_engine(&player, |e| Status {
+    let title = player
+        .lock()
+        .unwrap()
+        .render
+        .as_ref()
+        .map(|r| r.title.clone())
+        .unwrap_or_default();
+    let st = with_engine(&player, |e| Status {
         playing: e.is_playing(),
         position: e.position(),
         duration: e.duration(),
         tempo: e.tempo_scale(),
-    })
+    })?;
+    // Lock screen card, refreshed about once a second while polled.
+    thread_local!(static LAST: std::cell::Cell<(bool, i64)> = const { std::cell::Cell::new((false, -1)) });
+    let key = (st.playing, st.position.floor() as i64);
+    if LAST.with(|l| l.replace(key)) != key {
+        remote::now_playing(&title, st.duration, st.position, st.playing);
+    }
+    Ok(st)
 }
 
 #[tauri::command]
@@ -531,6 +895,10 @@ pub fn run() {
             );
             app.manage(paths);
             app.manage(Shared::default());
+            app.manage(Mutex::new(Annotations::default()));
+            let slot: remote::SharedEngine = Default::default();
+            remote::install(slot.clone());
+            app.manage(slot);
             Ok(())
         })
         .register_uri_scheme_protocol("cantor", |ctx, req| {
@@ -567,7 +935,18 @@ pub fn run() {
             set_channel,
             apply_preset,
             import_bytes,
-            delete_score
+            delete_score,
+            export_audio,
+            annotations_open,
+            annotations_edit,
+            library_data,
+            set_metadata,
+            search_scores,
+            save_setlist,
+            delete_setlist,
+            score_settings,
+            save_score_settings,
+            pitch_pipe
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")

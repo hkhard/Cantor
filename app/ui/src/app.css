@@ -532,3 +532,199 @@ select {
     width: 90px;
   }
 }
+
+/* Export menu */
+.exportwrap {
+  position: relative;
+}
+.exportwrap .menu {
+  position: absolute;
+  bottom: 44px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 14px;
+  min-width: 230px;
+  z-index: 20;
+}
+.exportwrap .menu button {
+  text-align: left;
+  border: none;
+}
+.exporting {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* PERF-01 performance mode: only the music, big turn zones. */
+.reader.performance .top,
+.reader.performance .transport,
+.reader.performance .mixer {
+  display: none;
+}
+.turnzone {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  z-index: 30;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+.turnzone.left {
+  left: 0;
+}
+.turnzone.right {
+  right: 0;
+}
+.perfexit {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 31;
+  font-size: 13px;
+  opacity: 0.6;
+}
+.popover.pedals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 300px;
+}
+.popover.pedals label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+/* ANN-01..03 annotation toolbar */
+.annbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 8px 4px;
+  border-radius: 14px;
+  position: relative;
+  z-index: 5;
+}
+.annbar .colors,
+.annbar .stamps {
+  display: flex;
+  gap: 4px;
+}
+.annbar .swatch {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.annbar .swatch.on {
+  border-color: var(--accent, #b8562b);
+  box-shadow: 0 0 0 2px white inset;
+}
+.annbar .stamps button {
+  min-width: 34px;
+  font-style: italic;
+  font-weight: 700;
+}
+.annbar .stamps button.on {
+  outline: 2px solid var(--accent, #b8562b);
+}
+.annbar .layers {
+  min-width: 200px;
+}
+.annbar .layerrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.annbar .layerrow button.on {
+  font-weight: 700;
+}
+
+/* Reader "•••" popover: performance, choir, transpose, parts, page mode */
+.popover.more {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 290px;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+.popover.more .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 15px;
+}
+.popover.more .col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+}
+.popover.more .check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+.popover.more .stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.popover.more .stepper .val {
+  min-width: 2.4em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.popover.more .on {
+  outline: 2px solid var(--accent, #b8562b);
+}
+.top .setpos {
+  font-size: 13px;
+  opacity: 0.6;
+  font-family: -apple-system, system-ui, sans-serif;
+}
+/* iPad mini portrait: icon-only buttons so the title keeps room */
+@media (max-width: 820px) {
+  .top .wide {
+    display: none;
+  }
+}
+.mixer .presets.custom {
+  flex-wrap: wrap;
+}
+.mixer .presets.custom .cp {
+  display: inline-flex;
+}
+.mixer .presets.custom .cp .x {
+  padding: 0 8px;
+  min-width: 0;
+}
+.strip {
+  grid-template-columns: 1fr 34px 40px 40px;
+}
+.strip .pipe {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+  padding: 0;
+}
+.strip .m {
+  grid-column: 3;
+}
+.strip .s {
+  grid-column: 4;
+}
