@@ -73,7 +73,7 @@ Each WP lists: tests written first (red), then the build, then done criteria.
 | WP-0.4 Oracle | Oracle script is deterministic (run twice, identical output) | `tools/oracle`: Verovio (Python bindings) -> `*.timemap.json`, `*.events.json` (from Verovio MIDI) normalised to our schema | Expected outputs checked in |
 | WP-0.5 First red test | `lib_01_parses_hello_world_musicxml` | Minimal parser for that file | Green |
 | S1 Verovio WASM in Tauri on iPad | Measure first-page time on a 20-page score | Throwaway Tauri iOS app | Report: first page time, memory, LGPL plan |
-| S2 Singing quality | Pitch/onset metric script (pYIN) on 3 English + 3 Swedish pieces | Scripts in `tools/spikes/s2` | **Done for engine choice (2026-11-22, `docs/spikes/singing-engines.md`): DiffSinger is the default engine.** Remaining: train a Swedish DiffSinger voice from ~30 min and measure diction |
+| S2 Singing quality | Pitch/onset metric script (pYIN) on 3 English + 3 Swedish pieces | Scripts in `tools/spikes/s2` | **Engine chosen by ear (2026-11-22, `docs/spikes/singing-engines.md`): SoulX-Singer.** 8 steps without CFG renders at RTF 1.1 on M2. Remaining: pick steps by ear, Swedish (ARPAbet approximation test, then fine-tune) |
 | S3 ElevenLabs STS on sung guide | Same metric before and after STS | Script | Report: cents error delta; keep or drop hybrid |
 | S4 Pencil ink latency in WebView | High-speed video or `PointerEvent` timestamps vs display | Throwaway app | Report answers Q6 (native overlay needed?) |
 | S5 forScore formats | Parse each example file without unknown-byte loss (round-trip of container) | Format notes `docs/formats/forscore.md`, prototype parser in `crates/library` | Documented structure of .4SC/.4SS/.4SB |
@@ -211,8 +211,8 @@ Gate M3: LIB, VIEW, SET, PERF P0 green; 20-page PDF opens in < 1 s on iPad.
 | WP-5.3 Provider trait + mock | `vox_03_rendered_track_becomes_mixer_channel`, `vox_06_estimate_requires_confirmation`, `nfr_12_cap_10_minutes` | `VocalProvider` trait, render queue, `MockProvider` |
 | WP-5.4 Cache | `vox_07_reopen_uses_cache_no_api_call`, `vox_08_mute_does_not_rerender`, `vox_08_tempo_rerenders_affected_phrases` | Content hash of (phrase, tempo, transpose, voice, provider), files on disk |
 | WP-5.5 Keys | `vox_02_key_never_in_logs` (log capture), `vox_02_key_deletable`, `vox_02_validated_with_test_call` (mock) | Keyring plugin, redacting `Secret<String>` type |
-| WP-5.6 Adapters | **DiffSinger first** (on-device ONNX Runtime via the `ort` crate; input: phonemes, frame durations, f0 from the timemap, speaker embedding; voice banks in OpenUtau format). Then optional server engines: SoulX-Singer ("my voice", English), ElevenLabs Music (`music_v2_5`). Contract tests per adapter | `ort` + voice bank loader; HTTP adapters (reqwest) for server engines |
-| WP-5.6b Voice banks | `vox_09_voicebank_licence_shown`, `vox_09_bank_without_redistribution_right_not_bundled` | Commission an English and a Swedish voice bank (recording ~2 h each, MakeDiffSinger labelling, GPU training) under terms that allow bundling; CoreML conversion + fp16 of acoustic and vocoder |
+| WP-5.6 Adapters | **SoulX-Singer first** (serialiser done in `cantor-vocal::soulx`; runner: Core ML conversion on Mac/iPad, server for phones). DiffSinger (ONNX, with variance model) as fallback if a re-test sounds acceptable; ElevenLabs Music optional. Contract tests per adapter | Core ML / PyTorch runner, HTTP adapters (reqwest) for server engines |
+| WP-5.6b Voices | `vox_09_prompt_voice_licence_shown`, `vox_09_consent_required_for_reference_clip` | Ship 3 to 5 prepared SoulX voice prompts recorded under our own licence (S, A, T, B); Core ML conversion at fp16, int8 test for phones |
 | WP-5.7 Accuracy nightly | `vox_04_median_pitch_error_lt_50_cents`, onset within one sixteenth | pYIN/CREPE script against live endpoints |
 | WP-5.8 Voice choice | `vox_09_consent_required_for_reference_clip`, clip sent only to chosen provider | Settings UI |
 
@@ -266,8 +266,8 @@ tests (NFR-11: 100% of P0 criteria automated).
 | S1: Verovio WASM first page > 1.5 s on iPad | Pre-engrave pages in a worker on import and cache SVG; fallback OSMD |
 | S4: WebView ink > 20 ms | Native PencilKit overlay plugin (Q6) |
 | S2: Swedish unusable | Ship English only for sung lyrics in beta; Swedish UI still ships |
-| SoulX-Singer has no Swedish phonemes and does not fit on device (704 M params, RTF 5.5 on M2 GPU) | **Decided: DiffSinger is the default engine** (82 M, ONNX, RTF 1.5 on M2 CPU, 3 cents pitch error). Swedish needs a commissioned DiffSinger voice bank; SoulX stays an optional server engine |
-| No redistributable DiffSinger voice exists for Swedish, and English banks mostly forbid bundling | Commission own voice banks (budget item for Q3 commercial model); until then users install a bank themselves |
+| SoulX-Singer has no Swedish phonemes | Test Swedish-to-ARPAbet approximation by ear; if poor, fine-tune SoulX on Swedish choir recordings (needs GPU and data budget, Q3) |
+| SoulX is 704 M params (2.8 GB fp32) | Core ML fp16 (~1.4 GB) on M-series iPad/Mac; int8 or server/sync for phones; 8 steps without CFG measured at RTF 1.1 on M2 |
 | S5: forScore format encrypted/opaque | Import embedded PDF + metadata only, warn about annotations |
 | OMR quality too low on real choir scans | Ship correction UI (WP-3.13) before playback for PDFs; try a second engine (oemer, or a cloud OMR) behind `OmrEngine`; ask users for born-digital PDFs or MusicXML from the publisher |
 | Audiveris (AGPL-3.0) licence | Run as a separate process/server, never linked; legal review in M0 alongside Verovio |
@@ -288,5 +288,5 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [x] Repeat/volta/D.C./D.S./Coda/Fine unfolding (WP-1.5, 15 PLAY-02 tests), MusicXML writer, page-by-page OMR fallback, Swedish OCR for lyrics: 11 of 12 sample scores produce MIDI (Supa klockan still fails)
 - [x] Lyrics (VOX-01): `<lyric>` verse/syllabic/extend in the model and writer; `cantor-lyrics::extract` gives timed phrases per part/voice/verse (melismas, ties, repeats sing the next verse); runs on the OCR'd sample scores
 - [x] SoulX-Singer spike (`docs/spikes/soulx-singer.md`): fits English score mode; no Swedish; CUDA server. `cantor-vocal::soulx` serialises phrases to its target metadata (contract tests)
-- [x] Engine choice (`docs/spikes/singing-engines.md`): measured SoulX-Singer (704 M, RTF 5.5 MPS / 11 CPU on M2, not on-device) vs DiffSinger (82 M ONNX, RTF 1.5 CPU, 3 cents); DiffSinger becomes default, NNSVS dropped
-- [ ] Next: DiffSinger adapter in Rust (`ort`), English phonemizer (CMUdict + DiffSinger dictionary), VocalProvider trait + render cache (VOX-06/07), voice bank commissioning (English + Swedish), CoreML conversion spike
+- [x] Engine choice (`docs/spikes/singing-engines.md`): SoulX-Singer by ear; measured RTF 1.1 on M2 at 8 steps without CFG (13 cents); DiffSinger kept as fallback; NNSVS dropped
+- [ ] Next: pick SoulX steps by ear, run a real Cantor phrase through SoulX end to end (extractor -> serialiser -> render), Core ML conversion spike, Swedish ARPAbet test, VocalProvider trait + render cache (VOX-06/07)

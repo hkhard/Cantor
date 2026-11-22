@@ -1,5 +1,54 @@
 # Singing engine choice: SoulX-Singer vs DiffSinger vs NNSVS
 
+## Decision (revised 2026-11-22, after listening)
+
+**SoulX-Singer is the default engine.** The product owner compared the clips by
+ear: SoulX sounds like a singer; our DiffSinger render sounded synthetic with a
+breath artefact. Sound quality is the product, so it outranks size and speed.
+
+The speed objection below no longer holds. With 8 flow-matching steps and no
+classifier-free guidance SoulX renders at **RTF 1.1 on the M2 GPU** (MPS),
+about the same as DiffSinger on CPU, with 13 cents median pitch error:
+
+| SoulX setting (M2, MPS, 6.9 s phrase) | Render time | RTF | Pitch error (median) | Clip in `scores/out/` |
+| --- | --- | --- | --- | --- |
+| 32 steps, cfg 3 (default) | 38 s (131 s in one run under memory pressure) | 5.5 | 17 cents | `_soulx_steps32_cfg3.wav` |
+| 16 steps, cfg 3 | 21 s | 3.0 | 11 cents | `_soulx_steps16_cfg3.wav` |
+| 8 steps, cfg 3 | 14 s | 2.0 | 13 cents | `_soulx_steps8_cfg3.wav` |
+| 16 steps, no cfg | 17 s | 2.5 | 22 cents | `_soulx_steps16_cfg0.wav` |
+| **8 steps, no cfg** | **8 s** | **1.1** | 13 cents | `_soulx_steps8_cfg0.wav` |
+
+Next: pick the lowest setting that still sounds right by ear (listen to the
+five clips), then answer where it runs:
+
+1. **Mac / iPad with M-series**: PyTorch MPS works today; for the app, convert
+   to Core ML (fp16, about 1.4 GB). Feasible on iPads with 8 GB or more.
+2. **iPhone and Android**: 1.4 GB at fp16 is heavy; options are int8 (~0.7 GB,
+   quality to verify by ear), a user-run server, or rendering on the Mac/iPad
+   and syncing the stems.
+3. **Swedish**: still unsolved; SoulX has no Swedish phonemes. Options:
+   ARPAbet approximation (quick test), or fine-tune SoulX on Swedish choir
+   recordings.
+
+### Note on the "DiffSinger + ONNX Runtime Mobile" research (2026-11-22)
+
+It describes the same pipeline we measured (OpenVPI ONNX acoustic model +
+NSF-HiFiGAN-class vocoder). Two fair points for a re-test: our render used
+flat per-note f0 and no variance model (no pitch curve, breathiness), which
+makes any engine sound more synthetic, and voice quality varies a lot between
+banks. Caveats: `DiffSingerMiniEngine` is **AGPL-3.0** (reference only, not
+linkable into an App Store build), and the ONNX CoreML provider ran slower than
+CPU here. Its other advice (offline G2P, phrase-by-phrase rendering with a
+stem cache, voicebank licensing) applies equally to SoulX and is already in
+the plan (VOX-07).
+
+DiffSinger stays the fallback for devices that cannot hold SoulX, if a
+re-test with its variance model and a better bank sounds acceptable.
+
+---
+
+## Original analysis (superseded where it conflicts with the decision above)
+
 2026-11-22. Question from the product owner: can SoulX-Singer run on a modern
 iPhone/iPad instead of a user's NVIDIA server, and is NNSVS or DiffSinger
 better, maybe as a full replacement?
