@@ -137,6 +137,18 @@ exports.setup = async function setup(page, dir) {
         correct_note: (a) => {
           store.corrections = [...(store.corrections ?? []), a]
         },
+        sync_folder_name: () => store.syncFolder ?? null,
+        choose_sync_folder: () => {
+          store.syncFolder = 'Cantor (iCloud)'
+          return store.syncFolder
+        },
+        forget_sync_folder: () => {
+          store.syncFolder = null
+        },
+        sync_now: () => {
+          store.syncs = (store.syncs ?? 0) + 1
+          return { folder: store.syncFolder ?? null, sent: store.syncFolder ? 2 : 0, received: store.syncFolder ? 1 : 0, changed: 0, pending: 0 }
+        },
         pitch_pipe: ({ channel }) => {
           store.pipe.push(channel ?? 'all')
         },

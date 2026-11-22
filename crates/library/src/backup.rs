@@ -5,7 +5,8 @@
 //! (`library.json`: metadata, setlists, per-score settings and mixes),
 //! annotations (`Annotations/`) and kept forScore originals (`.forscore/`).
 //! Not included, because they are not library content: exports (`Export/`),
-//! the share-sheet inbox (`Inbox/`), received backups waiting (`Backups/`), already-imported originals
+//! the share-sheet inbox (`Inbox/`), received backups waiting (`Backups/`),
+//! sync state and the chosen sync folder (`.sync/`), already-imported originals
 //! (`.imported/`), temporary files (`.incoming/`, `*.tmp`) and earlier
 //! restore leftovers (`.before-restore-*`).
 //!
@@ -27,7 +28,14 @@ pub const BACKUP_VERSION: u32 = 1;
 const MANIFEST: &str = "manifest.json";
 
 /// Top-level entries of the library dir that are not library content.
-const EXCLUDED_DIRS: &[&str] = &["Export", "Inbox", "Backups", ".imported", ".incoming"];
+const EXCLUDED_DIRS: &[&str] = &[
+    "Export",
+    "Inbox",
+    "Backups",
+    ".imported",
+    ".incoming",
+    ".sync",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Manifest {

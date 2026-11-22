@@ -4,6 +4,40 @@
   import { api } from './api'
   import { confirmBox } from './prompts.svelte'
 
+  let syncName: string | null = $state(null)
+  let syncMsg = $state('')
+  api.syncFolderName().then((n) => (syncName = n)).catch(() => {})
+
+  async function chooseFolder() {
+    try {
+      const n = await api.chooseSyncFolder()
+      if (n) {
+        syncName = n
+        await syncNow()
+      }
+    } catch (e) {
+      syncMsg = t('backup.failed', { e: String(e) })
+    }
+  }
+
+  async function syncNow() {
+    busy = true
+    try {
+      const r = await api.syncNow()
+      syncMsg = t('sync.done', { sent: r.sent, received: r.received })
+      if (r.changed) onrestored?.()
+    } catch (e) {
+      syncMsg = t('backup.failed', { e: String(e) })
+    }
+    busy = false
+  }
+
+  async function stopSync() {
+    await api.forgetSyncFolder()
+    syncName = null
+    syncMsg = ''
+  }
+
   let backupMsg = $state('')
   let busy = $state(false)
   let restoreInput: HTMLInputElement | undefined = $state()
@@ -69,6 +103,19 @@
       <option value="2">200 %</option>
     </select>
   </label>
+  <h4>{t('sync.title')}</h4>
+  <p class="hint">{t('sync.hint')}</p>
+  {#if syncName}
+    <p>{t('sync.folder', { name: syncName })}</p>
+    <div class="row">
+      <button onclick={syncNow} disabled={busy}>{t('sync.now')}</button>
+      <button onclick={chooseFolder} disabled={busy}>{t('sync.change')}</button>
+      <button onclick={stopSync} disabled={busy}>{t('sync.stop')}</button>
+    </div>
+  {:else}
+    <div class="row"><button onclick={chooseFolder} disabled={busy}>{t('sync.choose')}</button></div>
+  {/if}
+  {#if syncMsg}<p role="status">{syncMsg}</p>{/if}
   <h4>{t('backup.title')}</h4>
   <p class="hint">{t('backup.hint')}</p>
   <div class="row">

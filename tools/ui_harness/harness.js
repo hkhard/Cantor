@@ -564,6 +564,20 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button[aria-label="Library"]')
   })
 
+  await step('data_02 choose a sync folder and sync', async () => {
+    if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
+    const before = await page.evaluate(() => window.__store.syncs ?? 0)
+    if (before < 1) throw new Error('library did not sync on launch')
+    await page.click('header button[aria-label="About Cantor"]')
+    await page.click('.about button:has-text("Choose folder")')
+    await page.waitForSelector('.about >> text=Syncing with the folder')
+    await page.waitForSelector('.about >> text=Synced: 2 changes sent, 1 received')
+    await shot('18-sync')
+    await page.click('.about button:has-text("Stop syncing")')
+    await page.waitForSelector('.about button:has-text("Choose folder")')
+    await page.click('.about button.primary')
+  })
+
   await step('nfr_10 swedish', async () => {
     if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
     await page.click('header button[aria-label="About Cantor"]')

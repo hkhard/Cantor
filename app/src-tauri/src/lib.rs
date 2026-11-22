@@ -6,6 +6,7 @@
 //! `cantor_audio::Engine` (rustysynth + GeneralUser GS).
 
 mod audio;
+mod folder;
 mod m4a;
 mod remote;
 mod share;
@@ -1009,6 +1010,125 @@ fn set_track_info(
     Ok(())
 }
 
+/// DATA-02: this device's stable id for the sync log (created once).
+fn device_id(paths: &Paths) -> String {
+    let p = paths.user.join(".sync").join("device-id");
+    if let Ok(s) = std::fs::read_to_string(&p) {
+        let s = s.trim().to_string();
+        if cantor_sync::valid_device_id(&s) {
+            return s;
+        }
+    }
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let id = format!("dev-{:x}-{:x}", secs, std::process::id());
+    let _ = std::fs::create_dir_all(p.parent().unwrap_or(&paths.user));
+    let _ = std::fs::write(&p, &id);
+    id
+}
+
+/// The chosen sync folder, if any (resolved from its bookmark).
+fn sync_folder(paths: &Paths) -> Option<PathBuf> {
+    let b = std::fs::read(folder::bookmark_path(&paths.user)).ok()?;
+    folder::resolve(&b)
+}
+
+#[derive(Serialize)]
+struct SyncStatus {
+    folder: Option<String>,
+    sent: usize,
+    received: usize,
+    changed: usize,
+    pending: usize,
+}
+
+/// DATA-02: sync the library with the chosen folder now. Returns what
+/// happened; `folder: None` when no folder is chosen.
+#[tauri::command]
+async fn sync_now(app: tauri::AppHandle) -> Result<SyncStatus, String> {
+    let paths = app.state::<Paths>();
+    let Some(shared) = sync_folder(&paths) else {
+        return Ok(SyncStatus {
+            folder: None,
+            sent: 0,
+            received: 0,
+            changed: 0,
+            pending: 0,
+        });
+    };
+    let user = paths.user.clone();
+    let id = device_id(&paths);
+    let name = shared.file_name().map(|n| n.to_string_lossy().to_string());
+    let r = tauri::async_runtime::spawn_blocking(move || {
+        cantor_sync::SyncFolder::open(&shared, &id)?.sync(&user)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(SyncStatus {
+        folder: name,
+        sent: r.sent,
+        received: r.received,
+        changed: r.files_written
+            + r.files_removed
+            + r.docs_written
+            + r.docs_removed
+            + usize::from(r.store_written),
+        pending: r.pending,
+    })
+}
+
+/// DATA-02: choose the sync folder (iOS: the Files folder picker; desktop:
+/// a path argument). Returns the folder name.
+#[tauri::command]
+async fn choose_sync_folder(
+    path: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<Option<String>, String> {
+    let paths = app.state::<Paths>();
+    let bookmark: Option<Vec<u8>> = {
+        #[cfg(target_os = "ios")]
+        {
+            let _ = &path;
+            let (tx, rx) = std::sync::mpsc::channel();
+            let (etx, erx) = std::sync::mpsc::channel();
+            app.run_on_main_thread(move || {
+                let _ = etx.send(folder::present(tx));
+            })
+            .map_err(|e| e.to_string())?;
+            erx.recv().map_err(|e| e.to_string())??;
+            tauri::async_runtime::spawn_blocking(move || rx.recv().ok().flatten())
+                .await
+                .map_err(|e| e.to_string())?
+        }
+        #[cfg(not(target_os = "ios"))]
+        {
+            path.map(|p| p.into_bytes())
+        }
+    };
+    let Some(b) = bookmark else {
+        return Ok(None);
+    };
+    let bp = folder::bookmark_path(&paths.user);
+    std::fs::create_dir_all(bp.parent().unwrap_or(&paths.user)).map_err(|e| e.to_string())?;
+    std::fs::write(&bp, &b).map_err(|e| e.to_string())?;
+    Ok(sync_folder(&paths).and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())))
+}
+
+/// DATA-02: stop syncing (the shared folder is left as it is).
+#[tauri::command]
+fn forget_sync_folder(paths: State<'_, Paths>) -> Result<(), String> {
+    let _ = std::fs::remove_file(folder::bookmark_path(&paths.user));
+    Ok(())
+}
+
+/// Name of the chosen sync folder, if any.
+#[tauri::command]
+fn sync_folder_name(paths: State<'_, Paths>) -> Option<String> {
+    sync_folder(&paths).and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+}
+
 /// Open the share sheet for files (on the UI thread, as UIKit requires).
 fn share_on_main(app: &tauri::AppHandle, files: Vec<PathBuf>) -> Result<(), String> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1685,7 +1805,11 @@ pub fn run() {
             correct_note,
             attach_track,
             remove_track,
-            set_track_info
+            set_track_info,
+            sync_now,
+            choose_sync_folder,
+            forget_sync_folder,
+            sync_folder_name
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")
@@ -1714,4 +1838,71 @@ pub fn run() {
             }
             let _ = (app, event);
         });
+}
+
+#[cfg(test)]
+mod data_02_app {
+    use super::*;
+
+    fn paths(name: &str) -> Paths {
+        let d = std::env::temp_dir().join(format!("cantor-app-sync-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        Paths {
+            scores: d.join("bundled"),
+            user: d,
+            soundfont: PathBuf::new(),
+        }
+    }
+
+    #[test]
+    fn data_02_two_devices_share_a_folder_through_the_app_settings() {
+        let shared = std::env::temp_dir().join(format!("cantor-app-shared-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&shared);
+        std::fs::create_dir_all(&shared).unwrap();
+        let (a, b) = (paths("a"), paths("b"));
+        // Device ids are stable and distinct.
+        let ida = device_id(&a);
+        assert_eq!(device_id(&a), ida);
+        assert_ne!(device_id(&b), ida);
+        // Desktop "bookmark" = the path; both devices choose the same folder.
+        for p in [&a, &b] {
+            let bp = folder::bookmark_path(&p.user);
+            std::fs::create_dir_all(bp.parent().unwrap()).unwrap();
+            std::fs::write(&bp, shared.to_string_lossy().as_bytes()).unwrap();
+            assert_eq!(sync_folder(p).as_deref(), Some(shared.as_path()));
+        }
+        // A score imported on A arrives on B, with its metadata.
+        std::fs::write(a.user.join("Olaf.pdf"), b"%PDF-1.4 olaf").unwrap();
+        let mut st = store(&a);
+        st.set_metadata(
+            "1:Olaf",
+            cantor_library::store::Metadata {
+                title: "Olaf Trygvason".into(),
+                ..Default::default()
+            },
+        );
+        st.save().unwrap();
+        let sync = |p: &Paths| {
+            cantor_sync::SyncFolder::open(&sync_folder(p).unwrap(), &device_id(p))
+                .unwrap()
+                .sync(&p.user)
+                .unwrap()
+        };
+        sync(&a);
+        sync(&b);
+        assert_eq!(
+            std::fs::read(b.user.join("Olaf.pdf")).unwrap(),
+            b"%PDF-1.4 olaf"
+        );
+        assert_eq!(
+            store(&b).metadata("1:Olaf").unwrap().title,
+            "Olaf Trygvason"
+        );
+        // The library hash matches; sync state and the device id are not library content.
+        assert_eq!(
+            cantor_library::backup::library_hash(&a.user).unwrap(),
+            cantor_library::backup::library_hash(&b.user).unwrap()
+        );
+    }
 }

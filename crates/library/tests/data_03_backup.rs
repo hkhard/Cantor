@@ -40,6 +40,7 @@ fn library(dir: &Path) {
     put(dir, "Export/Que.wav", b"RIFF");
     put(dir, "Inbox/new.mxl", b"x");
     put(dir, "Backups/older.cantorbackup", b"PK");
+    put(dir, ".sync/state.json", b"{}");
     put(dir, ".imported/old.4sc", b"x");
     put(dir, ".incoming/tmp.4ss", b"x");
 }
@@ -58,6 +59,7 @@ fn data_03_backup_then_restore_gives_identical_library_hash() {
     assert!(dst.join(".forscore/Olaf.4sc").exists());
     assert!(!dst.join("Export").exists() && !dst.join("Inbox").exists());
     assert!(!dst.join("Backups").exists(), "no backups inside backups");
+    assert!(!dst.join(".sync").exists(), "sync state is per device");
     assert!(BACKUP_EXT == "cantorbackup");
 }
 

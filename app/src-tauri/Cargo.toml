@@ -21,6 +21,7 @@ cantor-audio = { path = "../../crates/audio" }
 cantor-lyrics = { path = "../../crates/lyrics" }
 cantor-library = { path = "../../crates/library" }
 cantor-annotations = { path = "../../crates/annotations" }
+cantor-sync = { path = "../../crates/sync" }
 cpal = "0.18"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -31,8 +32,9 @@ tauri-plugin-log = "2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL", "NSDictionary", "NSValue", "NSObject"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL", "NSDictionary", "NSValue", "NSObject", "NSData", "NSError"] }
 objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
 objc2-media-player = { version = "0.3", features = ["MPRemoteCommand", "MPRemoteCommandCenter", "MPRemoteCommandEvent", "MPNowPlayingInfoCenter", "MPMediaItem", "MPMediaEntity", "block2"] }
 block2 = "0.6"
-objc2-ui-kit = { version = "0.3", features = ["UIActivity", "UIActivityViewController", "UIApplication", "UIPopoverPresentationController", "UIPresentationController", "UIResponder", "UIView", "UIViewController", "UIWindow", "objc2-core-foundation", "block2"] }
+objc2-ui-kit = { version = "0.3", features = ["UIActivity", "UIActivityViewController", "UIApplication", "UIPopoverPresentationController", "UIPresentationController", "UIResponder", "UIView", "UIViewController", "UIWindow", "UIDocumentPickerViewController", "objc2-core-foundation", "objc2-uniform-type-identifiers", "block2"] }
+objc2-uniform-type-identifiers = { version = "0.3", features = ["UTType", "UTCoreTypes"] }

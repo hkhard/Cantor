@@ -164,6 +164,14 @@ const sv = {
   'trk.offset': 'Start i inspelningen (s)',
   'trk.addTurn': 'Vänd till sida {page} här',
   'trk.turnAt': '{time}: sida {page}',
+  'sync.title': 'Synka mellan enheter',
+  'sync.hint': 'Välj en mapp i iCloud Drive, OneDrive eller Google Drive. Noter, anteckningar, listor och mixar hålls lika på alla dina iPads som använder samma mapp.',
+  'sync.choose': 'Välj mapp …',
+  'sync.change': 'Byt mapp …',
+  'sync.stop': 'Sluta synka',
+  'sync.now': 'Synka nu',
+  'sync.folder': 'Synkar med mappen "{name}".',
+  'sync.done': 'Synkat: {sent} ändringar skickade, {received} mottagna.',
   'pdf.openFailed': 'Kunde inte öppna PDF: {e}',
 } as const
 
@@ -330,6 +338,14 @@ const en: Record<Key, string> = {
   'trk.offset': 'Start in the recording (s)',
   'trk.addTurn': 'Turn to page {page} here',
   'trk.turnAt': '{time}: page {page}',
+  'sync.title': 'Sync between devices',
+  'sync.hint': 'Choose a folder in iCloud Drive, OneDrive or Google Drive. Scores, notes, setlists and mixes stay the same on every iPad using that folder.',
+  'sync.choose': 'Choose folder …',
+  'sync.change': 'Change folder …',
+  'sync.stop': 'Stop syncing',
+  'sync.now': 'Sync now',
+  'sync.folder': 'Syncing with the folder "{name}".',
+  'sync.done': 'Synced: {sent} changes sent, {received} received.',
   'pdf.openFailed': 'Could not open PDF: {e}',
 }
 

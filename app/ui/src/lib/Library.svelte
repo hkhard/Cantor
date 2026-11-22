@@ -45,7 +45,15 @@
     reload()
     // Files dropped in through the Files app arrive while Cantor is in the
     // background: look again when it comes back.
-    const onVis = () => document.visibilityState === 'visible' && onrefresh().then(reload)
+    // DATA-02: sync with the chosen folder on launch and when coming back.
+    const syncThenRefresh = async () => {
+      const r = await api.syncNow().catch(() => null)
+      if (r?.folder && r.changed) notice = t('sync.done', { sent: r.sent, received: r.received })
+      await onrefresh()
+      await reload()
+    }
+    syncThenRefresh()
+    const onVis = () => document.visibilityState === 'visible' && syncThenRefresh()
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
   })

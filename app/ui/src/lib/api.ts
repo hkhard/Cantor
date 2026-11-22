@@ -144,6 +144,12 @@ export const api = {
   removeTrack: (file: string) => invoke<void>('remove_track', { file }),
   setTrackInfo: (file: string, offsetSec: number, markers: [number, number][]) =>
     invoke<void>('set_track_info', { file, offsetSec, markers }),
+  /** DATA-02: folder sync (iCloud Drive, OneDrive, Google Drive …). */
+  syncNow: () =>
+    invoke<{ folder: string | null; sent: number; received: number; changed: number; pending: number }>('sync_now'),
+  chooseSyncFolder: (path?: string) => invoke<string | null>('choose_sync_folder', { path: path ?? null }),
+  forgetSyncFolder: () => invoke<void>('forget_sync_folder'),
+  syncFolderName: () => invoke<string | null>('sync_folder_name'),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),
