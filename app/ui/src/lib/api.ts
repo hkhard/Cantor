@@ -114,6 +114,9 @@ export const api = {
   restoreLibrary: async (f: File) => invoke<number>('restore_library', new Uint8Array(await f.arrayBuffer())),
   pendingBackups: () => invoke<string[]>('pending_backups'),
   restorePending: (name: string, discard = false) => invoke<number>('restore_pending', { name, discard }),
+  /** NFR-03/04 probe: log a timing plus the app's memory footprint. */
+  perfMark: (name: string, ms: number) =>
+    invoke<{ name: string; ms: number; memory_mb: number }>('perf_mark', { name, ms }),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),

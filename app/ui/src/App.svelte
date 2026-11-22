@@ -250,6 +250,7 @@
   }
 
   async function open(entry: ScoreEntry, choir?: string, set?: { list: Setlist; index: number }) {
+    const tOpen = globalThis.performance.now()
     error = ''
     loading = t('read.opening', { title: entry.title })
     try {
@@ -301,11 +302,15 @@
       // In PDF view the notation pane is not mounted: size from the window.
       const w = scoreEl?.clientWidth ?? Math.max(600, window.innerWidth - (mixerOpen ? 320 : 0))
       const h = scoreEl?.clientHeight ?? Math.max(600, window.innerHeight - 140)
+      const tEngrave = globalThis.performance.now()
       engraved = await engrave(notationXml(), w, h)
+      api.perfMark(`engrave ${entry.title} (${engraved.pages} pages, ${opened.measures.length} bars)`, globalThis.performance.now() - tEngrave).catch(() => {})
       lastSize = `${w}x${h}`
       page = 1
       currentMeasure = -1
       svg = engraved.render(1)
+      await tick()
+      api.perfMark(`first page ${entry.title}`, globalThis.performance.now() - tOpen).catch(() => {})
       if (opened.channels.length) startPolling()
     } catch (e) {
       error = String(e)

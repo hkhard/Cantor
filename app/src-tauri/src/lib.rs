@@ -633,6 +633,64 @@ fn restore_pending(name: String, discard: bool, paths: State<'_, Paths>) -> Resu
     Ok(r.files)
 }
 
+/// NFR-03/04 probe: the UI reports a timing; the backend adds the process
+/// memory footprint and writes both to the log (Console / devicectl).
+#[tauri::command]
+fn perf_mark(name: String, ms: f64) -> serde_json::Value {
+    let mem = resident_mb();
+    log::info!("perf {name}: {ms:.0} ms, memory {mem:.0} MB");
+    serde_json::json!({ "name": name, "ms": ms, "memory_mb": mem })
+}
+
+/// Physical memory footprint of this process in MB (what iOS uses for its
+/// memory limit), via the Mach task_info call.
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn resident_mb() -> f64 {
+    #[repr(C)]
+    #[derive(Default)]
+    struct TaskVmInfo {
+        virtual_size: u64,
+        region_count: i32,
+        page_size: i32,
+        resident_size: u64,
+        resident_size_peak: u64,
+        device: u64,
+        device_peak: u64,
+        internal: u64,
+        internal_peak: u64,
+        external: u64,
+        external_peak: u64,
+        reusable: u64,
+        reusable_peak: u64,
+        purgeable_volatile_pmap: u64,
+        purgeable_volatile_resident: u64,
+        purgeable_volatile_virtual: u64,
+        compressed: u64,
+        compressed_peak: u64,
+        compressed_lifetime: u64,
+        phys_footprint: u64,
+    }
+    extern "C" {
+        fn mach_task_self() -> u32;
+        fn task_info(task: u32, flavor: i32, info: *mut TaskVmInfo, count: *mut u32) -> i32;
+    }
+    const TASK_VM_INFO: i32 = 22;
+    let mut info = TaskVmInfo::default();
+    let mut count = (std::mem::size_of::<TaskVmInfo>() / 4) as u32;
+    // SAFETY: task_info writes at most `count` 32-bit words into `info`.
+    let r = unsafe { task_info(mach_task_self(), TASK_VM_INFO, &mut info, &mut count) };
+    if r == 0 {
+        info.phys_footprint as f64 / 1_048_576.0
+    } else {
+        0.0
+    }
+}
+
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn resident_mb() -> f64 {
+    0.0
+}
+
 /// Open the share sheet for files (on the UI thread, as UIKit requires).
 fn share_on_main(app: &tauri::AppHandle, files: Vec<PathBuf>) -> Result<(), String> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1269,7 +1327,8 @@ pub fn run() {
             backup_library,
             restore_library,
             pending_backups,
-            restore_pending
+            restore_pending,
+            perf_mark
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")
