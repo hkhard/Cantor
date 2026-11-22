@@ -265,6 +265,7 @@ tests (NFR-11: 100% of P0 criteria automated).
 | S1: Verovio WASM first page > 1.5 s on iPad | Pre-engrave pages in a worker on import and cache SVG; fallback OSMD |
 | S4: WebView ink > 20 ms | Native PencilKit overlay plugin (Q6) |
 | S2: Swedish unusable | Ship English only for sung lyrics in beta; Swedish UI still ships |
+| SoulX-Singer has no Swedish phonemes (confirmed 2026-11-22, `docs/spikes/soulx-singer.md`) | Evaluate (a) Swedish-to-ARPAbet approximation on SoulX, (b) NNSVS / DiffSinger with a Swedish voice, (c) fine-tuning SoulX on Swedish choir recordings. Decide in S2 before M5b |
 | S5: forScore format encrypted/opaque | Import embedded PDF + metadata only, warn about annotations |
 | OMR quality too low on real choir scans | Ship correction UI (WP-3.13) before playback for PDFs; try a second engine (oemer, or a cloud OMR) behind `OmrEngine`; ask users for born-digital PDFs or MusicXML from the publisher |
 | Audiveris (AGPL-3.0) licence | Run as a separate process/server, never linked; legal review in M0 alongside Verovio |
@@ -283,4 +284,6 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [x] S6 OMR: `cantor-omr` turns PDF/.4sc/.4ss into MusicXML + MIDI (Audiveris + scan cleanup); 10 of 12 sample scores converted
 - [x] MXL container, ties, tempo, measure lengths, MIDI programs in `cantor-score`; timemap and SMF writer in `cantor-timeline`
 - [x] Repeat/volta/D.C./D.S./Coda/Fine unfolding (WP-1.5, 15 PLAY-02 tests), MusicXML writer, page-by-page OMR fallback, Swedish OCR for lyrics: 11 of 12 sample scores produce MIDI (Supa klockan still fails)
-- [ ] Next: lyrics into the model (VOX-01), tempo from metronome marks, Rust port of scan cleanup, OMR ground truth for 3 pieces, correction UI design
+- [x] Lyrics (VOX-01): `<lyric>` verse/syllabic/extend in the model and writer; `cantor-lyrics::extract` gives timed phrases per part/voice/verse (melismas, ties, repeats sing the next verse); runs on the OCR'd sample scores
+- [x] SoulX-Singer spike (`docs/spikes/soulx-singer.md`): fits English score mode; no Swedish; CUDA server. `cantor-vocal::soulx` serialises phrases to its target metadata (contract tests)
+- [ ] Next: VocalProvider trait + render cache (VOX-06/07), CMUdict-based English phonemizer, Swedish engine decision (S2), SoulX server template, tempo from metronome marks

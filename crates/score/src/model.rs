@@ -22,6 +22,22 @@ pub struct Part {
     pub measures: Vec<Measure>,
 }
 
+impl Part {
+    /// Verse numbers that have at least one lyric, sorted.
+    pub fn verses(&self) -> Vec<u32> {
+        let mut v: Vec<u32> = self
+            .measures
+            .iter()
+            .flat_map(|m| &m.events)
+            .flat_map(|e| &e.lyrics)
+            .map(|l| l.verse)
+            .collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Measure {
     /// The `number` attribute, kept as text (MusicXML allows "1a", "X1", ...).
@@ -78,6 +94,55 @@ pub struct Event {
     pub tie_start: bool,
     /// `<tie type="stop">`: this note continues the previous one, no new attack.
     pub tie_stop: bool,
+    /// Lyrics on this note, one per verse (VOX-01).
+    pub lyrics: Vec<Lyric>,
+}
+
+/// MusicXML `<syllabic>`: where a syllable sits in its word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Syllabic {
+    #[default]
+    Single,
+    Begin,
+    Middle,
+    End,
+}
+
+impl Syllabic {
+    pub fn parse(s: &str) -> Syllabic {
+        match s.trim() {
+            "begin" => Syllabic::Begin,
+            "middle" => Syllabic::Middle,
+            "end" => Syllabic::End,
+            _ => Syllabic::Single,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Syllabic::Single => "single",
+            Syllabic::Begin => "begin",
+            Syllabic::Middle => "middle",
+            Syllabic::End => "end",
+        }
+    }
+
+    /// True if another syllable of the same word follows.
+    pub fn continues_word(self) -> bool {
+        matches!(self, Syllabic::Begin | Syllabic::Middle)
+    }
+}
+
+/// One lyric syllable attached to a note.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lyric {
+    /// Verse number, 1-based (`number` attribute, else the next free one).
+    pub verse: u32,
+    /// Syllable text; empty for an extender-only lyric (melisma continuation).
+    pub text: String,
+    pub syllabic: Syllabic,
+    /// `<extend>` present: the syllable is held over following notes.
+    pub extend: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

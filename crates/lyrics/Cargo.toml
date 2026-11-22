@@ -6,3 +6,5 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+cantor-score.workspace = true
+cantor-timeline.workspace = true

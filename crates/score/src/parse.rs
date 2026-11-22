@@ -1,7 +1,9 @@
 //! `score-partwise` parser and MXL container (LIB-01). Timewise follows in WP-1.2.
 
 use crate::dom::{self, DomError, Element};
-use crate::model::{Event, EventKind, Measure, Navigation, Part, Pitch, Score, Step, Tick, PPQ};
+use crate::model::{
+    Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Syllabic, Tick, PPQ,
+};
 use std::io::Read;
 
 #[derive(Debug, thiserror::Error)]
@@ -321,6 +323,7 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                         kind,
                         tie_start: tie("start"),
                         tie_stop: tie("stop"),
+                        lyrics: parse_lyrics(child),
                     });
                     if !is_chord && !is_grace {
                         last_onset = cursor;
@@ -387,6 +390,39 @@ fn parse_ending_numbers(s: &str) -> Vec<u32> {
         } else if let Ok(n) = tok.parse() {
             out.push(n);
         }
+    }
+    out
+}
+
+/// `<lyric>` children of a note. Text from several `<text>` elements (elided
+/// syllables) is joined with a space.
+fn parse_lyrics(note: &Element) -> Vec<Lyric> {
+    let mut out: Vec<Lyric> = Vec::new();
+    for l in note.children("lyric") {
+        let text = l
+            .children("text")
+            .map(|t| t.text.trim())
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let extend = l.child("extend").is_some();
+        if text.is_empty() && !extend {
+            continue;
+        }
+        let verse = l
+            .attr("number")
+            .and_then(|n| n.trim().parse::<u32>().ok())
+            .filter(|n| *n > 0)
+            .unwrap_or_else(|| out.iter().map(|x| x.verse).max().unwrap_or(0) + 1);
+        out.push(Lyric {
+            verse,
+            text,
+            syllabic: l
+                .child_text("syllabic")
+                .map(Syllabic::parse)
+                .unwrap_or_default(),
+            extend,
+        });
     }
     out
 }

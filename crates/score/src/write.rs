@@ -175,7 +175,23 @@ fn write_measure(x: &mut String, m: &Measure, first: bool, last_time: &mut Optio
                 );
             }
         }
-        let _ = write!(x, "<staff>{}</staff></note>", e.staff);
+        let _ = write!(x, "<staff>{}</staff>", e.staff);
+        for l in &e.lyrics {
+            let _ = write!(x, "<lyric number=\"{}\">", l.verse);
+            if !l.text.is_empty() {
+                let _ = write!(
+                    x,
+                    "<syllabic>{}</syllabic><text>{}</text>",
+                    l.syllabic.as_str(),
+                    esc(&l.text)
+                );
+            }
+            if l.extend {
+                x.push_str("<extend/>");
+            }
+            x.push_str("</lyric>");
+        }
+        x.push_str("</note>");
         if !is_chord {
             cursor = e.offset + e.duration;
             prev = Some((e.offset, e.duration, e.voice, e.staff, is_note));
