@@ -19,23 +19,42 @@ export interface Engraved {
   render(page: number): string
 }
 
-export async function engrave(musicxml: string, width: number, height: number): Promise<Engraved> {
+/** Verovio scale for a pane width in CSS pixels. Verovio's page units are
+ *  1/10 mm at scale 100, so a smaller scale fits more music per line.
+ *  Tuned on a choir score (2 systems x 2 staves, lyrics): about 5 bars per
+ *  line on an iPad mini in portrait (744 px) and 6 on an 11-13" iPad, with
+ *  noteheads still about 2 mm on the glass. */
+export function scaleFor(width: number): number {
+  if (width < 560) return 28
+  if (width < 820) return 34
+  if (width < 1100) return 40
+  return 45
+}
+
+export async function engrave(
+  musicxml: string,
+  width: number,
+  height: number,
+  zoom = 1,
+): Promise<Engraved> {
   const tk = await toolkit()
-  // Verovio units: page size in 1/10 mm at scale 100. A scale around 45
-  // gives readable staves on an 11-13" iPad.
-  const scale = 45
+  const scale = Math.round(scaleFor(width) * zoom)
   tk.setOptions({
     pageWidth: Math.round((width * 100) / scale),
     pageHeight: Math.round((height * 100) / scale),
     scale,
     adjustPageHeight: false,
-    breaks: 'auto',
+    // Fill each line by measure width rather than keeping the publisher's
+    // line breaks (made for paper, often 2-4 bars per line).
+    breaks: 'smart',
+    spacingLinear: 0.2,
+    spacingNonLinear: 0.55,
     header: 'none',
     footer: 'none',
-    pageMarginTop: 40,
-    pageMarginBottom: 40,
-    pageMarginLeft: 40,
-    pageMarginRight: 40,
+    pageMarginTop: 30,
+    pageMarginBottom: 30,
+    pageMarginLeft: 30,
+    pageMarginRight: 30,
     svgViewBox: true,
     svgHtml5: true,
   })

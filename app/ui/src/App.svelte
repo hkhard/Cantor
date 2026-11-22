@@ -21,7 +21,9 @@
   let strips: Strip[] = $state([])
   let mine: number | null = $state(null)
   let follow = $state(true)
-  let mixerOpen = $state(true)
+  // On narrow screens (iPad mini portrait) the mixer starts closed so the
+  // music gets the full width.
+  let mixerOpen = $state(window.innerWidth >= 1000)
   let appearanceOpen = $state(false)
   /** 'pdf' = the original page, 'notation' = engraved from MusicXML. */
   let view: 'pdf' | 'notation' = $state('notation')
@@ -71,6 +73,7 @@
       const w = scoreEl?.clientWidth ?? Math.max(600, window.innerWidth - (mixerOpen ? 320 : 0))
       const h = scoreEl?.clientHeight ?? Math.max(600, window.innerHeight - 140)
       engraved = await engrave(opened.musicxml, w, h)
+      lastSize = `${w}x${h}`
       page = 1
       currentMeasure = -1
       svg = engraved.render(1)
@@ -264,6 +267,36 @@
     currentMeasure = -1
     updateCursor()
   }
+
+  /** Re-engrave for the current pane size (rotation, mixer shown/hidden),
+   *  keeping the playing measure in view. */
+  let relayoutTimer: number | undefined
+  let lastSize = ''
+  function scheduleRelayout() {
+    clearTimeout(relayoutTimer)
+    relayoutTimer = setTimeout(relayout, 150) as unknown as number
+  }
+  async function relayout() {
+    if (!opened || !scoreEl || view !== 'notation') return
+    const w = scoreEl.clientWidth
+    const h = scoreEl.clientHeight
+    const key = `${w}x${h}`
+    if (key === lastSize || w < 200) return
+    lastSize = key
+    engraved = await engrave(opened.musicxml, w, h)
+    const loc = engraved.measurePage.get(currentMeasure >= 0 ? currentMeasure : 0)
+    page = loc?.page ?? 1
+    svg = engraved.render(page)
+    await tick()
+    if (loc && currentMeasure >= 0) highlight(loc.id)
+  }
+
+  $effect(() => {
+    if (!scoreEl) return
+    const ro = new ResizeObserver(scheduleRelayout)
+    ro.observe(scoreEl)
+    return () => ro.disconnect()
+  })
 
   async function switchView(v: 'pdf' | 'notation') {
     view = v
