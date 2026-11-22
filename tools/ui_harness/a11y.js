@@ -94,7 +94,7 @@ const SCREENS = [
           localStorage.setItem('cantor.skin', skin)
           localStorage.setItem('cantor.lang', lang)
         }, [skin, lang])
-        await page.goto('http://localhost:5173/')
+        await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
         await page.waitForSelector('ul.scores > li')
         try {
           await go(page)
@@ -152,7 +152,7 @@ const SCREENS = [
     const ctx = await browser.newContext({ viewport: { width: W, height: H } })
     const page = await ctx.newPage()
     await require('./mock.js').setup(page, DIR)
-    await page.goto('http://localhost:5173/')
+    await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
     await page.waitForSelector('ul.scores > li')
     const seen = []
     for (let i = 0; i < 25; i++) {
@@ -196,7 +196,7 @@ const SCREENS = [
     const page = await ctx.newPage()
     await require('./mock.js').setup(page, DIR)
     await page.addInitScript(() => localStorage.setItem('cantor.textScale', '2'))
-    await page.goto('http://localhost:5173/')
+    await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
     await page.waitForSelector('ul.scores > li')
     for (const screen of ['library', 'reader']) {
       if (screen === 'reader') {
@@ -228,7 +228,7 @@ const SCREENS = [
     const ctx = await browser.newContext({ viewport: { width: W, height: H }, reducedMotion: 'reduce' })
     const page = await ctx.newPage()
     await require('./mock.js').setup(page, DIR)
-    await page.goto('http://localhost:5173/')
+    await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
     await page.waitForSelector('ul.scores > li')
     const moving = await page.evaluate(() => {
       const out = []

@@ -25,7 +25,9 @@ if [ ! -d node_modules/playwright ] || [ ! -d node_modules/axe-core ]; then
 fi
 cd "$ROOT/app/ui"
 [ -d node_modules ] || npm ci
-PORT=5173
+# A free port per run: CI and local runs share the machine.
+PORT="${PORT:-$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1])')}"
+export CANTOR_UI_URL="http://localhost:$PORT/"
 npx vite --port $PORT --strictPort >"$OUT/vite.log" 2>&1 &
 VITE=$!
 trap 'kill $VITE 2>/dev/null' EXIT

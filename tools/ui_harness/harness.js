@@ -36,7 +36,7 @@ const H = Number(process.env.H || 1133)
     }
   }
 
-  await page.goto('http://localhost:5173/')
+  await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
   await page.waitForSelector('text=Glimmande Nymf')
   await shot('01-library')
 
