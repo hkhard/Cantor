@@ -371,6 +371,21 @@ tests (NFR-11: 100% of P0 criteria automated).
   - Real VoiceOver on the iPad. axe checks the markup WKWebView exposes, not how VoiceOver reads it.
   - Dynamic Type at the largest accessibility sizes on the device.
   - Pencil drawing on the notation on the device.
+- [x] Measured checks for timing, load and coverage (PERF-03, PLAY-06/07/08, NFR-01/02/11, LIB-02, 2026-11-22).
+  - **PERF-03 metronome jitter:** `crates/audio/tests/perf_03_nfr_02_clock.rs`. A recording synth at 48 kHz with random block sizes (64 to 1024 frames). The score is 3/4 at 97 bpm, then 131 bpm from bar 9, so beats fall between frames. All 48 clicks land on exactly the frame computed from the beat time: 0 frames of jitter (< 1 ms is 48 frames). This holds for 4 block-size seeds and at tempo scale 0.73.
+  - **PLAY-06 tempo change mid-playback:** 15 cases (5 change points × 3 tempo pairs). The change points are mid-beat, on a beat frame, ±1 frame and in the faster section. No click is lost or doubled, the accent pattern is kept, and clicks after the change are spaced at the new tempo.
+  - **PLAY-07 loop wrap:** a loop over bars 3 to 10 that crosses the tempo change, with random blocks. Each pass starts exactly `round(B − A)` frames after the last. Every beat keeps its offset across 5 passes: 0 frames of jitter.
+  - **NFR-02:** `position()` equals rendered frames / sample rate × tempo (to 1e-9 s) after random render sizes. It does not move with wall time. Note-on frames are the same for any block size.
+  - **NFR-01:** `crates/audio/tests/nfr_01_sixty_four_parts.rs`. A generated 64-part score (eighth notes in every part) plays through the real `SoundFontSynth` (GeneralUser GS) for 10 s in 128-frame blocks (budget 2.67 ms). Release on this Mac, 3 runs: mean 0.08 to 0.10 ms per block, p99 0.12 to 0.27 ms, realtime factor 28 to 32×. Under heavy machine load it was 14 to 17× with a few preempted blocks up to 12 ms. Release asserts realtime factor ≥ 2, p99 < half the budget, and ≤ 1% of blocks over half the budget. Debug: about 1.9× realtime, with only a loose ≥ 0.25× bound. The iPad A14 check is still manual.
+  - **PLAY-08 (core side):** `crates/timeline/tests/play_08_cursor.rs`. The score has a pickup, a repeat, voltas, meter and tempo changes, and 2 parts. Looking up each note onset (in seconds) in the measure start times gives the written measure the note belongs to. The cursor moves on exactly at each barline.
+  - **LIB-02:** `crates/library/tests/lib_02_large_pdf.rs`. A generated, structurally valid 500-page PDF (9.7 MB) is imported and listed in 4 to 48 ms (limit 3 s). Thumbnails are lazy and not timed.
+  - **NFR-11 line coverage:** `cargo llvm-cov --workspace`, debug, all tests including the new ones.
+    - Total: 87.5% lines.
+    - Per crate: audio 94.6%, timeline 94.4%, vocal 94.9%, library 90.3% (this includes `backup.rs`, which was in progress), score 89.4%, lyrics 89.3%.
+    - **Under 85%:**
+      - annotations 82.9% (`pdf.rs` 80.7%)
+      - omr 65.2% (71.6% without the `main.rs` CLI, which is 0%; the Audiveris-driven paths only run with `CANTOR_AUDIVERIS`)
+    - Files under 85% inside crates that pass: `score/write.rs` 80.5%, `score/dom.rs` 81.7%, `library/import.rs` 80.9%.
 
 ## 8. Future features (parked)
 
