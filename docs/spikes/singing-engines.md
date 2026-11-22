@@ -18,17 +18,17 @@ about the same as DiffSinger on CPU, with 13 cents median pitch error:
 | 16 steps, no cfg | 17 s | 2.5 | 22 cents | `_soulx_steps16_cfg0.wav` |
 | **8 steps, no cfg** | **8 s** | **1.1** | 13 cents | `_soulx_steps8_cfg0.wav` |
 
-Next: pick the lowest setting that still sounds right by ear (listen to the
-five clips), then answer where it runs:
+**Chosen by ear (2026-11-22): 16 steps, no cfg** (`_soulx_steps16_cfg0.wav`),
+the best compromise between sound and speed. Default in
+`cantor_vocal::soulx::RenderSettings`. Where it runs:
 
 1. **Mac / iPad with M-series**: PyTorch MPS works today; for the app, convert
    to Core ML (fp16, about 1.4 GB). Feasible on iPads with 8 GB or more.
 2. **iPhone and Android**: 1.4 GB at fp16 is heavy; options are int8 (~0.7 GB,
    quality to verify by ear), a user-run server, or rendering on the Mac/iPad
    and syncing the stems.
-3. **Swedish**: still unsolved; SoulX has no Swedish phonemes. Options:
-   ARPAbet approximation (quick test), or fine-tune SoulX on Swedish choir
-   recordings.
+3. **Swedish**: out of scope (decision 2026-11-22). Sung lyrics are English
+   only; the app says so (`cantor_vocal::SUNG_LYRICS_NOTICE`).
 
 ### Note on the "DiffSinger + ONNX Runtime Mobile" research (2026-11-22)
 

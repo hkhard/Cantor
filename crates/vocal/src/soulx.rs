@@ -13,6 +13,32 @@ use cantor_lyrics::{NoteKind, Phrase};
 use serde::Serialize;
 use std::collections::HashMap;
 
+/// Inference settings passed to SoulX-Singer (`model.infer`).
+///
+/// Defaults chosen by ear on 2026-11-22 from a sweep on an Apple M2:
+/// 16 flow-matching steps without classifier-free guidance renders at about
+/// 2.5x the phrase length on the GPU with ~22 cents median pitch error, versus
+/// 5.5x for the shipped default of 32 steps with guidance 3.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RenderSettings {
+    pub n_steps: u32,
+    pub cfg: f32,
+    pub control: &'static str,
+    /// Shift the score into the voice prompt's range (whole semitones).
+    pub auto_shift: bool,
+}
+
+impl Default for RenderSettings {
+    fn default() -> Self {
+        Self {
+            n_steps: 16,
+            cfg: 0.0,
+            control: "score",
+            auto_shift: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
     English,

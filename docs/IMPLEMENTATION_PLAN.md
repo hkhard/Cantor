@@ -73,7 +73,7 @@ Each WP lists: tests written first (red), then the build, then done criteria.
 | WP-0.4 Oracle | Oracle script is deterministic (run twice, identical output) | `tools/oracle`: Verovio (Python bindings) -> `*.timemap.json`, `*.events.json` (from Verovio MIDI) normalised to our schema | Expected outputs checked in |
 | WP-0.5 First red test | `lib_01_parses_hello_world_musicxml` | Minimal parser for that file | Green |
 | S1 Verovio WASM in Tauri on iPad | Measure first-page time on a 20-page score | Throwaway Tauri iOS app | Report: first page time, memory, LGPL plan |
-| S2 Singing quality | Pitch/onset metric script (pYIN) on 3 English + 3 Swedish pieces | Scripts in `tools/spikes/s2` | **Engine chosen by ear (2026-11-22, `docs/spikes/singing-engines.md`): SoulX-Singer.** 8 steps without CFG renders at RTF 1.1 on M2. Remaining: pick steps by ear, Swedish (ARPAbet approximation test, then fine-tune) |
+| S2 Singing quality | Pitch/onset metric script (pYIN) on 3 English + 3 Swedish pieces | Scripts in `tools/spikes/s2` | **Engine chosen by ear (2026-11-22, `docs/spikes/singing-engines.md`): SoulX-Singer, 16 steps, no CFG (RTF 2.5 on M2 GPU).** Sung lyrics are English only (decision 2026-11-22) |
 | S3 ElevenLabs STS on sung guide | Same metric before and after STS | Script | Report: cents error delta; keep or drop hybrid |
 | S4 Pencil ink latency in WebView | High-speed video or `PointerEvent` timestamps vs display | Throwaway app | Report answers Q6 (native overlay needed?) |
 | S5 forScore formats | Parse each example file without unknown-byte loss (round-trip of container) | Format notes `docs/formats/forscore.md`, prototype parser in `crates/library` | Documented structure of .4SC/.4SS/.4SB |
@@ -265,9 +265,9 @@ tests (NFR-11: 100% of P0 criteria automated).
 | --- | --- |
 | S1: Verovio WASM first page > 1.5 s on iPad | Pre-engrave pages in a worker on import and cache SVG; fallback OSMD |
 | S4: WebView ink > 20 ms | Native PencilKit overlay plugin (Q6) |
-| S2: Swedish unusable | Ship English only for sung lyrics in beta; Swedish UI still ships |
-| SoulX-Singer has no Swedish phonemes | Test Swedish-to-ARPAbet approximation by ear; if poor, fine-tune SoulX on Swedish choir recordings (needs GPU and data budget, Q3) |
-| SoulX is 704 M params (2.8 GB fp32) | Core ML fp16 (~1.4 GB) on M-series iPad/Mac; int8 or server/sync for phones; 8 steps without CFG measured at RTF 1.1 on M2 |
+| S2: Swedish unusable | **Decided 2026-11-22: sung lyrics are English only** for v1; the app shows `cantor_vocal::SUNG_LYRICS_NOTICE` wherever singing is offered and plays non-English parts with instruments. Swedish UI and Swedish lyric display/OCR still ship |
+| SoulX-Singer has no Swedish phonemes | Out of scope for v1 (see above). Revisit only if a Swedish-capable engine appears or fine-tuning is funded |
+| SoulX is 704 M params (2.8 GB fp32) | Core ML fp16 (~1.4 GB) on M-series iPad/Mac; int8 or server/sync for phones; default 16 steps without CFG measured at RTF 2.5 on M2 |
 | S5: forScore format encrypted/opaque | Import embedded PDF + metadata only, warn about annotations |
 | OMR quality too low on real choir scans | Ship correction UI (WP-3.13) before playback for PDFs; try a second engine (oemer, or a cloud OMR) behind `OmrEngine`; ask users for born-digital PDFs or MusicXML from the publisher |
 | Audiveris (AGPL-3.0) licence | Run as a separate process/server, never linked; legal review in M0 alongside Verovio |
@@ -289,4 +289,5 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [x] Lyrics (VOX-01): `<lyric>` verse/syllabic/extend in the model and writer; `cantor-lyrics::extract` gives timed phrases per part/voice/verse (melismas, ties, repeats sing the next verse); runs on the OCR'd sample scores
 - [x] SoulX-Singer spike (`docs/spikes/soulx-singer.md`): fits English score mode; no Swedish; CUDA server. `cantor-vocal::soulx` serialises phrases to its target metadata (contract tests)
 - [x] Engine choice (`docs/spikes/singing-engines.md`): SoulX-Singer by ear; measured RTF 1.1 on M2 at 8 steps without CFG (13 cents); DiffSinger kept as fallback; NNSVS dropped
-- [ ] Next: pick SoulX steps by ear, run a real Cantor phrase through SoulX end to end (extractor -> serialiser -> render), Core ML conversion spike, Swedish ARPAbet test, VocalProvider trait + render cache (VOX-06/07)
+- [x] Render defaults by ear: 16 steps, no CFG (`cantor_vocal::soulx::RenderSettings`); sung lyrics English only with in-app notice (`cantor_vocal::SUNG_LYRICS_NOTICE`)
+- [ ] Next: run a real Cantor phrase through SoulX end to end (extractor -> serialiser -> render), English phonemizer (CMUdict), Core ML conversion spike, VocalProvider trait + render cache (VOX-06/07)

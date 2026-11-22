@@ -98,3 +98,23 @@ fn vox_03_swedish_is_rejected_for_soulx() {
         to_target_metadata(&extract(&s, &tm, 0, None, 1), Language::Swedish, &dict()).unwrap_err();
     assert!(err.to_string().contains("Swedish"), "{err}");
 }
+
+/// Product decision 2026-11-22: 16 flow-matching steps without classifier-free
+/// guidance (chosen by ear; RTF 2.5 on an M2 GPU).
+#[test]
+fn vox_03_soulx_default_render_settings() {
+    let s = cantor_vocal::soulx::RenderSettings::default();
+    assert_eq!(s.n_steps, 16);
+    assert_eq!(s.cfg, 0.0);
+    assert_eq!(s.control, "score");
+    assert!(s.auto_shift);
+}
+
+/// Sung lyrics are English only; the app shows this note wherever singing is offered.
+#[test]
+fn vox_03_english_only_notice() {
+    let note = cantor_vocal::SUNG_LYRICS_NOTICE;
+    assert!(note.contains("English"));
+    assert!(cantor_vocal::sung_language_supported("en"));
+    assert!(!cantor_vocal::sung_language_supported("sv"));
+}
