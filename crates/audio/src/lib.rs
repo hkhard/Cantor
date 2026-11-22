@@ -115,6 +115,10 @@ pub struct Engine<S: Synth> {
     loop_range: Option<(f64, f64)>,
     /// Start second of each written measure's first play, and its end.
     measure_spans: Vec<Option<(f64, f64)>>,
+    /// Output frames rendered in total (runs while paused, for the pitch pipe).
+    out_frames: u64,
+    /// Pitch-pipe notes to release: (output frame, midi channel, key).
+    pipe: Vec<(u64, u8, u8)>,
 }
 
 impl<S: Synth> Engine<S> {
@@ -179,6 +183,8 @@ impl<S: Synth> Engine<S> {
             pre_frames: 0,
             loop_range: None,
             measure_spans,
+            out_frames: 0,
+            pipe: Vec::new(),
         };
         e.init_channels();
         e
@@ -340,6 +346,52 @@ impl<S: Synth> Engine<S> {
         self.tempo_scale
     }
 
+    /// PERF-03: per channel, the pitch sounding at score second `sec`, or the
+    /// next one to come (the note to give the singers before they start).
+    pub fn starting_pitches(&self, sec: f64) -> Vec<Option<u8>> {
+        let mut out = vec![None; self.programs.len()];
+        // Notes sounding at `sec`: on at or before, off after.
+        let mut sounding: Vec<Option<(f64, u8)>> = vec![None; out.len()];
+        for ev in &self.events {
+            if ev.sec > sec + 1e-9 {
+                break;
+            }
+            if ev.on == 1 {
+                sounding[ev.channel] = Some((ev.sec, ev.key));
+            } else if sounding[ev.channel].is_some_and(|(_, k)| k == ev.key) {
+                sounding[ev.channel] = None;
+            }
+        }
+        for (i, s) in sounding.iter().enumerate() {
+            out[i] = s.map(|(_, k)| k);
+        }
+        for ev in &self.events {
+            if ev.on == 1 && ev.sec > sec + 1e-9 && out[ev.channel].is_none() {
+                out[ev.channel] = Some(ev.key);
+            }
+        }
+        out
+    }
+
+    /// PERF-03: sound the starting pitch of `channel` (or every channel as a
+    /// chord) for `seconds`, from the current position, without moving the
+    /// transport. Works while paused.
+    pub fn pitch_pipe(&mut self, channel: Option<usize>, seconds: f64) {
+        let pitches = self.starting_pitches(self.position());
+        let until = self.out_frames + (seconds * self.sample_rate as f64) as u64;
+        for (i, p) in pitches.iter().enumerate() {
+            if channel.is_some_and(|c| c != i) {
+                continue;
+            }
+            if let Some(key) = *p {
+                let ch = midi_channel(i);
+                self.synth.message(ch, 0x80, key, 0);
+                self.synth.message(ch, 0x90, key, 90);
+                self.pipe.push((until, ch, key));
+            }
+        }
+    }
+
     fn release_all(&mut self) {
         for (ch, key) in std::mem::take(&mut self.held) {
             self.synth.message(ch, 0x80, key, 0);
@@ -362,14 +414,28 @@ impl<S: Synth> Engine<S> {
                     run = run.min(due.saturating_sub(self.frame) as usize);
                 }
             }
+            if let Some(&(f, _, _)) = self.pipe.iter().min_by_key(|p| p.0) {
+                run = run.min(f.saturating_sub(self.out_frames) as usize);
+            }
             if run > 0 {
                 self.synth
                     .render(&mut left[done..done + run], &mut right[done..done + run]);
+                self.out_frames += run as u64;
                 if self.playing {
                     self.frame += run as u64;
                 }
                 done += run;
             }
+            let now = self.out_frames;
+            let synth = &mut self.synth;
+            self.pipe.retain(|&(f, ch, key)| {
+                if f <= now {
+                    synth.message(ch, 0x80, key, 0);
+                    false
+                } else {
+                    true
+                }
+            });
             if self.playing {
                 self.fire_due();
                 if self.loop_range.is_none()

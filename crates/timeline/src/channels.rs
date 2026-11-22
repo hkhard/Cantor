@@ -54,7 +54,7 @@ impl Role {
         }
     }
 
-    fn is_vocal(self) -> bool {
+    pub fn is_vocal(self) -> bool {
         matches!(
             self,
             Role::Soprano | Role::Alto | Role::Tenor | Role::Bass | Role::Voice

@@ -287,7 +287,10 @@ impl Document {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// Edit commands. Serialised with a `"op"` tag so the UI can send them as
+/// JSON, e.g. `{"op":"Add","layer":0,"anchor":{...},"item":{...}}`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "op")]
 pub enum Command {
     Add {
         layer: usize,
