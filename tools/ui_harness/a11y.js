@@ -109,8 +109,6 @@ const SCREENS = [
         const res = await page.evaluate(async () => {
           const r = await window.axe.run(document, {
             runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
-            // The PDF canvas / engraved SVG are images of the music itself.
-            exclude: [['.pdfhost canvas']],
           })
           return r.violations.map((v) => ({
             id: v.id,

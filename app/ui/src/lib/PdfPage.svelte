@@ -4,6 +4,7 @@
   import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
   import type { MeasureBox } from './pdf'
   import AnnotLayer from './AnnotLayer.svelte'
+  import { t } from './i18n.svelte'
   import type { AnnDoc, AnnCommand, Tool } from './annot'
 
   interface Props {
@@ -95,7 +96,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="sheet" bind:this={el} style="width:{size.w}px;height:{size.h}px;{clip ? `clip-path:${clip}` : ''}" onclick={tap}>
-  <canvas bind:this={canvas}></canvas>
+  <canvas bind:this={canvas} role="img" aria-label={t('a11y.page', { n })}></canvas>
   {#each loopBoxes as b}
     <div class="loopbox" style="left:{b.x * size.w}px;top:{b.y * size.h}px;width:{b.w * size.w}px;height:{b.h * size.h}px"></div>
   {/each}

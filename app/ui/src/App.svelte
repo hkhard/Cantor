@@ -858,7 +858,7 @@
           />
         </div>
       {:else}
-      <div class="score" bind:this={scoreEl} onclick={tapScore}>
+      <div class="score" bind:this={scoreEl} onclick={tapScore} role="region" aria-label={t('a11y.notation', { n: page, of: engraved?.pages ?? 1 })}>
         {#if loading}<p class="loading">{loading}</p>{/if}
         {#if error}<p class="error">{error}</p>{/if}
         {@html svg}
