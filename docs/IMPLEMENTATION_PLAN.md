@@ -411,6 +411,45 @@ tests (NFR-11: 100% of P0 criteria automated).
   - **Not verified on the device:** backup and restore through the real share sheet and the Files app, 60 fps scrolling (not measured), NFR-01 on an A14 iPad (only the Mac and the A17 Pro were available), and a run with the network off.
   - **Product owner check on the iPad mini (2026-11-22):** "all checks works". That covers backup and restore, the share sheet and the network-off run.
 
+- [x] Remaining P1/P2 features (2026-11-22).
+  - **VIEW-05 transposing instruments and concert pitch:**
+    - `<transpose>` (chromatic, octave-change, double) is parsed, carried to later bars and written back, and the part plays at concert pitch.
+    - "Klingande tonhöjd" in "•••" shows the written notes at concert pitch. It is offered only for scores with transposing parts and remembered per score.
+    - Tests: `view_05_*` (score + timeline, 5 new).
+    - None of the sample scores has a transposing part, so on real files this is unverified beyond the fixtures.
+  - **PLAY-11 M4A:**
+    - Practice tracks export as AAC .m4a (256 kbit/s via AudioToolbox, about a fifth of the WAV size) or WAV; the choice is in the Export menu.
+    - A 3 s render encodes to an MPEG-4 file of 3.000 s (afinfo; limit ±10 ms).
+    - The app crate's tests now run in CI.
+  - **LIB-06 correcting scanner mistakes:**
+    - "Rätta noter" in the notation of your own scores. Tap a note (nearest note head within 28 px), then move it up or down a step in the key, or make it a rest.
+    - `edit_note` changes only that `<note>`. The first version is kept in Documents/.originals.
+    - Tests: `lib_06_correct` (4) and a harness scenario.
+    - Bug found: the play cursor caught taps on the notes of the current bar.
+    - Not yet possible: changing rhythms, adding or removing notes, or changing lyrics.
+  - **PERF-04 backing tracks** (core by a worker: symphonia decode, sinc resampling, WSOLA stretch, markers on the exact frame, 17 tests):
+    - In "•••": add a recording (M4A/MP3/WAV/FLAC/AIFF) to any score.
+    - It plays as its own mixer channel with the score, or alone for PDF-only scores.
+    - An offset lines it up, and "Vänd till sida N här" adds a page turn at the current time. Turns move the PDF or notation page during playback.
+    - Exports include the recording.
+    - Not verified: MP3 (there is no encoder here to make a test file), and how WSOLA sounds on real voices at 70% tempo.
+  - **DATA-02 sync:**
+    - `cantor-sync` (by a worker): each device appends to its own log in the shared folder, and score files are stored once by their sha256.
+    - Merge rules:
+      - files: last writer wins per path
+      - library.json: last writer wins per key (a concurrent title edit and tag edit on the same score do not merge field by field)
+      - annotations: an observed-remove set with global ids
+    - 15 `data_02_*` tests, including a property test over 24 seeds and concurrent syncs from two threads.
+    - In the app: About → "Synka mellan enheter" → choose a folder with the Files folder picker (kept as a security-scoped bookmark). Sync runs on launch, when returning to the app, and with "Synka nu".
+    - An app test syncs two libraries through one folder and gets the same library hash.
+    - Not verified: iCloud Drive's delayed download of other devices' files on a real iPad (the "pending" count covers files that have not arrived yet), and two real devices.
+  - **Quality checks:**
+    - 272 tests pass.
+    - Accessibility audit: 0 findings.
+    - All UI scenarios pass.
+    - Coverage per crate: 87.7% to 94.9%.
+    - Only the parked singing P0s are without tests.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.
