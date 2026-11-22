@@ -386,6 +386,28 @@ tests (NFR-11: 100% of P0 criteria automated).
       - annotations 82.9% (`pdf.rs` 80.7%)
       - omr 65.2% (71.6% without the `main.rs` CLI, which is 0%; the Audiveris-driven paths only run with `CANTOR_AUDIVERIS`)
     - Files under 85% inside crates that pass: `score/write.rs` 80.5%, `score/dom.rs` 81.7%, `library/import.rs` 80.9%.
+    - **Update, same day:** with `ann_05_pdf_kinds` (every item kind, all four rotations, inherited page boxes) and `lib_06_process` (Audiveris, the cleaner and the `cantor-omr` CLI driven by stand-in scripts), every core crate is at least 89%: annotations 91.8%, audio 94.6%, library 90.3%, lyrics 89.3%, omr 89.6%, score 89.4%, timeline 94.5%, vocal 94.9%. Workspace total 91.5%. CI now fails if any core crate drops under 85% (`tools/coverage.sh`).
+- [x] Closing P0 gaps (2026-11-22).
+  - **DATA-03 backup and restore:**
+    - **The file:** `cantor_library::backup` writes one `.cantorbackup` file with the whole library: scores, PDFs, measure maps, `library.json` (metadata, setlists, settings, mixes), annotations and the kept forScore originals. Exports, the inbox and waiting backups are left out.
+    - **Integrity:** a sha256 manifest and a library hash.
+    - **Restore:** checks every file before changing anything, then moves the current library into `.before-restore-<time>/` (nothing is deleted).
+    - **Tests:** `data_03_backup` (5 tests) covers the identical hash after restore, exports excluded, the old library kept, tampered or corrupt files rejected with the library untouched, and paths that cannot escape the library.
+    - **In the app:** About has "Säkerhetskopiera nu" (share sheet) and "Återställ från fil". A `.cantorbackup` received through Files, AirDrop or "Open in" waits in Documents/Backups, and the library screen asks before restoring it. `.cantorbackup` is registered as Cantor's own file type.
+  - **DATA-01 / NFR-05 offline, NFR-07 no network:** the UI harness blocks every request that is not the local app and fails if any is made. All feature scenarios pass with nothing leaving the device. Cantor's own Rust code makes no network calls. Tauri itself links an HTTP library (reqwest) for features Cantor does not use. A check with the network off on the iPad is still to do.
+  - **Traceability:** `tools/trace.sh` now also counts the UI acceptance steps, which are named by requirement (`perf_01 …`, `view_02 …`). New PRD-named checks:
+    - PERF-01: performance mode hides the ink tools, a stroke adds nothing, and the turn zones are at least a third of the width and turn the page.
+    - PERF-02: a pedal key set to "Inget" no longer turns pages, and the mapping is saved.
+    - SET-02 and LIB-09: sharing a setlist.
+    - VIEW-01: a golden engraving of a public fixture (`fixtures/musicxml/satb_chorale_24.musicxml`), checked by structure and by a PNG compared within 0.5% of pixels.
+    - VIEW-03: at phone width (390 px) every system shows 6 to 9 bars.
+    - VIEW-06: the dark and sepia themes have no contrast violations.
+    - PLAY-12: status is polled while playing, which feeds the lock-screen card.
+    - Tests renamed to their ids: `lib_09_…` and `set_02_…`.
+    - Result: every P0 has an automated test except the three parked singing requirements (VOX-02, VOX-06, VOX-07).
+  - **forScore extras:** what Cantor still needs and why is in `docs/forscore-samples-needed.md`: text and stamp annotations, bookmarks, links, attachments, metadata, setlist placeholders and start pages, and `.4sb` backups. Imported `.4sc` and `.4ss` files are now kept unchanged in a hidden `.forscore/` folder, so a later version can import those fields without the user exporting again (`lib_07_original_forscore_file_kept_next_to_the_pdf`).
+  - **Bug found:** the annotation toolbar covered the "•••" menu, so "Framförande" could not be tapped while annotating. Fixed.
+  - **Not verified on the device:** backup and restore through the real share sheet, and the Files app. NFR-01 on an A14 iPad and NFR-03/04 (60 fps, first page < 1.5 s, memory ≤ 400 MB) still need measuring on the iPad.
 
 ## 8. Future features (parked)
 
