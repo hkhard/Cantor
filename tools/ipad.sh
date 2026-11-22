@@ -30,7 +30,7 @@ case "${1:-sim}" in
     xcrun simctl boot "$SIM" 2>/dev/null || true
     open -a Simulator
     xcrun simctl install "$SIM" "$BUNDLE"
-    xcrun simctl launch "$SIM" se.hkh.cantor
+    xcrun simctl launch "$SIM" se.nikielhard.cantor
     ;;
   device)
     cargo tauri ios build --target aarch64 --export-method debugging
@@ -42,7 +42,7 @@ case "${1:-sim}" in
       exit 1
     fi
     xcrun devicectl device install app --device "$DEV" "$IPA"
-    xcrun devicectl device process launch --device "$DEV" se.hkh.cantor
+    xcrun devicectl device process launch --device "$DEV" se.nikielhard.cantor
     ;;
   *)
     echo "usage: $0 sim|device [UDID]" >&2

@@ -1,6 +1,6 @@
 name: cantor-app
 options:
-  bundleIdPrefix: se.hkh.cantor
+  bundleIdPrefix: se.nikielhard.cantor
   deploymentTarget:
     iOS: 16.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Cantor
-      PRODUCT_BUNDLE_IDENTIFIER: se.hkh.cantor
+      PRODUCT_BUNDLE_IDENTIFIER: se.nikielhard.cantor
       DEVELOPMENT_TEAM: 33ZQ6Q226L
 targetTemplates:
   app:
