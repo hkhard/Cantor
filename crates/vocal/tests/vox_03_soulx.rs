@@ -107,7 +107,10 @@ fn vox_03_soulx_default_render_settings() {
     assert_eq!(s.n_steps, 16);
     assert_eq!(s.cfg, 0.0);
     assert_eq!(s.control, "score");
-    assert!(s.auto_shift);
+    // Rehearsal must sound the written pitch: SoulX's auto_shift transposes the
+    // whole part to the voice prompt's median (+2 semitones in the sweep).
+    assert!(!s.auto_shift);
+    assert_eq!(s.pitch_shift, 0);
 }
 
 /// Sung lyrics are English only; the app shows this note wherever singing is offered.

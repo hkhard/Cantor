@@ -195,3 +195,66 @@ fn vox_01_repeats_sing_each_pass_with_its_verse() {
         "pass 2 of a repeat sings verse 2"
     );
 }
+
+fn ly_n(num: u32, syl: &str, text: &str) -> String {
+    format!(r#"<lyric number="{num}"><syllabic>{syl}</syllabic><text>{text}</text></lyric>"#)
+}
+
+/// OCR spreads one through-composed text over lyric lines 1 and 2 (it numbers
+/// lines by height). Merged mode sings line 1 where present, else any line.
+#[test]
+fn vox_01_merged_verses_take_any_line_when_requested_one_is_missing() {
+    let body = [
+        n("C", 1, &ly_n(1, "single", "Snow")),
+        n("D", 1, &ly_n(2, "single", "falls")),
+        n(
+            "E",
+            1,
+            &(ly_n(1, "single", "on") + &ly_n(2, "single", "xx")),
+        ),
+        n("F", 1, ""),
+    ]
+    .concat();
+    let s = score(&body);
+    let tm = build_timemap(&s);
+    let p = cantor_lyrics::extract_merged(&s, &tm, 0, None);
+    let got: Vec<_> = p[0]
+        .notes
+        .iter()
+        .map(|x| (x.kind, x.text.as_str()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            (NoteKind::Syllable, "Snow"),
+            (NoteKind::Syllable, "falls"),
+            (NoteKind::Syllable, "on"),
+            (NoteKind::Melisma, "on"),
+        ]
+    );
+}
+
+/// Performer cues printed in the lyric line ("Female:", "Children:") are not sung.
+#[test]
+fn vox_01_role_labels_are_not_sung() {
+    let body = [
+        n("C", 1, &ly("single", "Female:")),
+        n("D", 1, &ly("single", "You")),
+        n("E", 1, &ly("single", "say:")),
+    ]
+    .concat();
+    let p = phrases(&body);
+    let got: Vec<_> = p[0]
+        .notes
+        .iter()
+        .map(|x| (x.kind, x.text.as_str()))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            (NoteKind::NoLyric, ""),
+            (NoteKind::Syllable, "You"),
+            (NoteKind::Syllable, "say:"),
+        ]
+    );
+}

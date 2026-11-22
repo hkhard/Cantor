@@ -24,8 +24,11 @@ pub struct RenderSettings {
     pub n_steps: u32,
     pub cfg: f32,
     pub control: &'static str,
-    /// Shift the score into the voice prompt's range (whole semitones).
+    /// Shift the score into the voice prompt's range (whole semitones). Off:
+    /// rehearsal must sound the written pitch.
     pub auto_shift: bool,
+    /// Fixed transposition in semitones applied by the engine (0 = as written).
+    pub pitch_shift: i32,
 }
 
 impl Default for RenderSettings {
@@ -34,7 +37,8 @@ impl Default for RenderSettings {
             n_steps: 16,
             cfg: 0.0,
             control: "score",
-            auto_shift: true,
+            auto_shift: false,
+            pitch_shift: 0,
         }
     }
 }

@@ -73,6 +73,57 @@ pub fn extract(
     voice: Option<u32>,
     verse: u32,
 ) -> Vec<Phrase> {
+    extract_with(score, tm, part, voice, verse, false)
+}
+
+/// Like [`extract`] for verse 1, but a note without a verse-1 lyric takes any
+/// lyric it has. For through-composed songs whose OCR spread one text over
+/// several lyric lines (OCR numbers lines by height, not by verse).
+pub fn extract_merged(score: &Score, tm: &Timemap, part: usize, voice: Option<u32>) -> Vec<Phrase> {
+    extract_with(score, tm, part, voice, 1, true)
+}
+
+/// Performer cues printed in the lyric line (`Female:`, `Children:`, `Solo:`).
+fn is_role_label(text: &str) -> bool {
+    let t = text.trim();
+    t.len() > 2
+        && t.ends_with(':')
+        && t[..t.len() - 1]
+            .chars()
+            .next()
+            .is_some_and(char::is_uppercase)
+        && matches!(
+            t[..t.len() - 1].to_lowercase().as_str(),
+            "female"
+                | "male"
+                | "children"
+                | "solo"
+                | "all"
+                | "men"
+                | "women"
+                | "tutti"
+                | "choir"
+                | "chorus"
+                | "soprano"
+                | "alto"
+                | "tenor"
+                | "bass"
+                | "baritone"
+                | "unison"
+                | "descant"
+                | "girls"
+                | "boys"
+        )
+}
+
+fn extract_with(
+    score: &Score,
+    tm: &Timemap,
+    part: usize,
+    voice: Option<u32>,
+    verse: u32,
+    merged: bool,
+) -> Vec<Phrase> {
     let Some(p) = score.parts.get(part) else {
         return Vec::new();
     };
@@ -103,8 +154,26 @@ pub fn extract(
             let lyric = e
                 .lyrics
                 .iter()
+                .filter(|l| !is_role_label(&l.text))
                 .find(|l| l.verse == wanted)
-                .or_else(|| e.lyrics.iter().find(|l| l.verse == verse))
+                .or_else(|| {
+                    e.lyrics
+                        .iter()
+                        .find(|l| l.verse == verse && !is_role_label(&l.text))
+                })
+                .or_else(|| {
+                    merged
+                        .then(|| {
+                            let mut ls: Vec<_> = e
+                                .lyrics
+                                .iter()
+                                .filter(|l| !is_role_label(&l.text))
+                                .collect();
+                            ls.sort_by_key(|l| l.verse);
+                            ls.first().copied()
+                        })
+                        .flatten()
+                })
                 .map(|l| (l.text.clone(), l.syllabic, l.extend));
             by_onset
                 .entry(tm.measure_starts[visit] + e.offset)

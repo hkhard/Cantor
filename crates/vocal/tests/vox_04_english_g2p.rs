@@ -77,3 +77,24 @@ fn vox_04_g2p_bundled_cmudict_covers_common_words() {
         assert!(g.phonemes(w).is_some(), "{w}");
     }
 }
+
+/// Common OCR confusions in lyric text (rn/m, in/m, ri/n, i/r, r/t) are
+/// repaired when exactly one dictionary word results.
+#[test]
+fn vox_04_ocr_typos_repaired_to_dictionary_words() {
+    use cantor_vocal::english::EnglishPhonemizer;
+    use cantor_vocal::soulx::Phonemizer;
+    let g = EnglishPhonemizer::bundled();
+    for (typo, word) in [
+        ("smg", "sing"),
+        ("Chnst", "christ"),
+        ("lrght", "light"),
+        ("merty", "merry"),
+    ] {
+        assert_eq!(g.phonemes(typo), g.phonemes(word), "{typo} -> {word}");
+        assert!(g.phonemes(word).is_some());
+    }
+    assert_eq!(g.repaired("smg").as_deref(), Some("sing"));
+    assert_eq!(g.repaired("sing"), None, "known words are not touched");
+    assert!(g.phonemes("doyouaecwhal").is_none(), "no wild guesses");
+}

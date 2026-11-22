@@ -2,7 +2,8 @@
 //! target metadata JSON, plus the render settings and a word report.
 //!
 //! Usage: sing_prepare <score.mxl|.musicxml> <part-index> <verse> <out.json> [voice]
-//! `voice` is a MusicXML voice number; omitted = top line.
+//! `verse` 0 = merged: any lyric line where line 1 is missing (OCR'd
+//! through-composed songs). `voice` is a MusicXML voice number; omitted = top line.
 use cantor_vocal::english::EnglishPhonemizer;
 use cantor_vocal::soulx::{to_json, to_target_metadata_lenient, Language, RenderSettings};
 
@@ -18,7 +19,11 @@ fn main() {
     let verse: u32 = a[3].parse().expect("verse");
     let voice: Option<u32> = a.get(5).map(|v| v.parse().expect("voice"));
     let tm = cantor_timeline::build_timemap(&score);
-    let phrases = cantor_lyrics::extract(&score, &tm, part, voice, verse);
+    let phrases = if verse == 0 {
+        cantor_lyrics::extract_merged(&score, &tm, part, voice)
+    } else {
+        cantor_lyrics::extract(&score, &tm, part, voice, verse)
+    };
     let g2p = EnglishPhonemizer::bundled();
     let (segs, unknown) =
         to_target_metadata_lenient(&phrases, Language::English, &g2p).expect("English only");

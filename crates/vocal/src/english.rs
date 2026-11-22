@@ -78,6 +78,68 @@ impl EnglishPhonemizer {
             .cloned()
     }
 
+    /// OCR misreads in lyric text: one confusion (rn/m, n/ri, r/i, ...) that
+    /// turns an unknown word into a dictionary word. Confusions are tried in
+    /// tiers, most common first; a tier is used only when it gives exactly
+    /// one word. Returns the repaired spelling.
+    pub fn repaired(&self, word: &str) -> Option<String> {
+        let w = normalise_word(word).replace('\'', "");
+        if w.chars().count() < 3 || self.lookup(&w).is_some() {
+            return None;
+        }
+        const TIERS: &[&[(&str, &str)]] = &[
+            &[
+                ("rn", "m"),
+                ("m", "rn"),
+                ("m", "in"),
+                ("m", "ni"),
+                ("n", "ri"),
+                ("ri", "n"),
+                ("li", "h"),
+                ("cl", "d"),
+                ("vv", "w"),
+            ],
+            &[
+                ("r", "i"),
+                ("i", "r"),
+                ("t", "r"),
+                ("r", "t"),
+                ("l", "i"),
+                ("i", "l"),
+                ("1", "l"),
+                ("u", "n"),
+                ("n", "u"),
+                ("h", "b"),
+                ("b", "h"),
+            ],
+            &[
+                ("c", "e"),
+                ("e", "c"),
+                ("a", "e"),
+                ("e", "a"),
+                ("o", "a"),
+                ("a", "o"),
+            ],
+        ];
+        for tier in TIERS {
+            let mut hits: Vec<String> = Vec::new();
+            for (from, to) in *tier {
+                for (i, _) in w.match_indices(from) {
+                    let cand = format!("{}{to}{}", &w[..i], &w[i + from.len()..]);
+                    if self.dict.contains_key(&cand) && !hits.contains(&cand) {
+                        hits.push(cand);
+                    }
+                }
+            }
+            match hits.len() {
+                0 => continue,
+                1 => return hits.pop(),
+                _ => return None, // ambiguous: do not guess
+            }
+        }
+        None
+    }
+
     /// Split into the fewest dictionary words (each at least 2 letters).
     fn compound(&self, w: &str) -> Option<Vec<String>> {
         let chars: Vec<char> = w.chars().collect();
@@ -131,6 +193,7 @@ impl Phonemizer for EnglishPhonemizer {
         self.elision(&w)
             .or_else(|| self.lookup(&w))
             .or_else(|| self.lookup(&w.replace('\'', "")))
+            .or_else(|| self.repaired(&w).and_then(|r| self.lookup(&r)))
             .or_else(|| self.compound(&w.replace('\'', "")))
     }
 }
