@@ -4,6 +4,7 @@
 //! cursor, MIDI export and sung lyrics all read note times from it.
 //! Repeats, voltas and D.C./D.S./Coda/Fine are unfolded first (PLAY-02).
 
+pub mod channels;
 pub mod smf;
 mod unfold;
 
