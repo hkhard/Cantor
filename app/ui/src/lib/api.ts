@@ -106,6 +106,9 @@ export const api = {
   saveScoreSettings: (id: string, settings: ScoreSettings) =>
     invoke<void>('save_score_settings', { id, settings }),
   /** PERF-03: starting note of one part, or every part as a chord. */
+  /** Share: 'pdf' annotated PDF, '4sc' forScore score (id = score);
+   *  'setlist' Cantor bundle, '4ss' forScore setlist (id = setlist). */
+  exportItem: (kind: 'pdf' | '4sc' | 'setlist' | '4ss', id: string) => invoke<string>('export_item', { kind, id }),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),

@@ -47,6 +47,18 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Cantor Setlist</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>se.nikielhard.cantor.setlist</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>PDF</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
@@ -108,6 +120,27 @@
 	</array>
 	<key>UISupportsDocumentBrowser</key>
 	<false/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Cantor Setlist</string>
+			<key>UTTypeIdentifier</key>
+			<string>se.nikielhard.cantor.setlist</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cantorset</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>

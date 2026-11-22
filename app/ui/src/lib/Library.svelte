@@ -132,6 +132,14 @@
     await reload()
   }
 
+  async function share(kind: 'setlist' | '4ss', id: string) {
+    try {
+      notice = t('share.done', { name: await api.exportItem(kind, id) })
+    } catch (e) {
+      notice = t('share.failed', { e: String(e) })
+    }
+  }
+
   function openItem(sl: Setlist, i: number) {
     const it = sl.items[i]
     if (it.kind !== 'score') return
@@ -171,7 +179,7 @@
         bind:this={fileInput}
         type="file"
         multiple
-        accept=".mxl,.musicxml,.xml,.pdf,.4sc,.4ss,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
+        accept=".mxl,.musicxml,.xml,.pdf,.4sc,.4ss,.cantorset,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
         style="display:none"
         onchange={importPicked}
       />
@@ -214,9 +222,12 @@
   {:else}
     <div class="libbar">
       <h2 class="setname">{current.name}</h2>
+      {#if notice}<span class="notice">{notice}</span>{/if}
       {#if current.items.length}
         <button class="chip on" onclick={() => openItem(current!, current!.items.findIndex((i) => i.kind === 'score'))}>{t('set.playlist')}</button>
       {/if}
+      <button class="chip" onclick={() => share('setlist', current!.id)}>{t('share.title')}: Cantor</button>
+      <button class="chip" onclick={() => share('4ss', current!.id)}>forScore</button>
       <button class="chip" onclick={() => deleteList(current!)}>{t('common.delete')}</button>
     </div>
     <ol class="scores setlist">

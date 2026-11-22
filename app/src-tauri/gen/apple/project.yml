@@ -81,6 +81,10 @@ targets:
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes: [com.forScore.4ss]
+          - CFBundleTypeName: Cantor Setlist
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes: [se.nikielhard.cantor.setlist]
           - CFBundleTypeName: PDF
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
@@ -110,6 +114,12 @@ targets:
             UTTypeConformsTo: [public.data]
             UTTypeTagSpecification:
               public.filename-extension: [4ss, 4SS]
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: se.nikielhard.cantor.setlist
+            UTTypeDescription: Cantor Setlist
+            UTTypeConformsTo: [public.data, public.zip-archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [cantorset]
         UIRequiresFullScreen: false
         ITSAppUsesNonExemptEncryption: false
     entitlements:

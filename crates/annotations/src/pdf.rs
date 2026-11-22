@@ -258,6 +258,19 @@ fn annotate_page(
                     let _ = writeln!(s, "/{GS_HIGHLIGHT} gs");
                 }
                 let _ = writeln!(s, "{} {} {} RG", f(r), f(g), f(b));
+                if ink.tool == InkTool::Highlighter && ink.points.len() > 1 {
+                    // One path: stroking each translucent segment on its own
+                    // darkens every joint where segments overlap.
+                    let avg = ink.points.iter().map(|p| p.pressure).sum::<f32>()
+                        / ink.points.len() as f32;
+                    let _ = write!(s, "{} w", f(ink.width * dh * avg));
+                    for (i, p) in ink.points.iter().enumerate() {
+                        let (x, y) = pt(ax + p.x, ay + p.y);
+                        let _ = write!(s, " {} {} {}", f(x), f(y), if i == 0 { "m" } else { "l" });
+                    }
+                    s.push_str(" S\nQ\n");
+                    continue;
+                }
                 for seg in ink.points.windows(2) {
                     let w = ink.width * dh * (seg[0].pressure + seg[1].pressure) / 2.0;
                     let (x0, y0) = pt(ax + seg[0].x, ay + seg[0].y);

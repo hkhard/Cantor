@@ -122,6 +122,13 @@ const sv = {
   'about.licences': 'Licenser',
   'about.language': 'Språk',
   'pdf.noMap': 'Takterna på sidan är inte kopplade till ljudet för det här stycket, så markören visas inte.',
+  'share.title': 'Dela',
+  'share.pdf': 'PDF med anteckningar',
+  'share.4sc': 'forScore (.4sc)',
+  'share.setlist': 'Cantor-lista med noter, anteckningar och mixar',
+  'share.4ss': 'forScore-lista (.4ss)',
+  'share.done': 'Delad: {name}',
+  'share.failed': 'Kunde inte dela: {e}',
   'pdf.openFailed': 'Kunde inte öppna PDF: {e}',
 } as const
 
@@ -246,6 +253,13 @@ const en: Record<Key, string> = {
   'about.licences': 'Licences',
   'about.language': 'Language',
   'pdf.noMap': "This page's bars are not linked to the audio for this piece, so the cursor is not shown.",
+  'share.title': 'Share',
+  'share.pdf': 'PDF with annotations',
+  'share.4sc': 'forScore (.4sc)',
+  'share.setlist': 'Cantor setlist with scores, annotations and mixes',
+  'share.4ss': 'forScore setlist (.4ss)',
+  'share.done': 'Shared: {name}',
+  'share.failed': 'Could not share: {e}',
   'pdf.openFailed': 'Could not open PDF: {e}',
 }
 

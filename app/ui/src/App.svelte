@@ -509,6 +509,17 @@
     setTimeout(() => (exporting = ''), 6000)
   }
 
+  async function shareItem(kind: 'pdf' | '4sc') {
+    exportOpen = false
+    if (!currentEntry) return
+    try {
+      exporting = t('share.done', { name: await api.exportItem(kind, currentEntry.file) })
+    } catch (e) {
+      exporting = t('share.failed', { e: String(e) })
+    }
+    setTimeout(() => (exporting = ''), 6000)
+  }
+
   async function toggleMetronome() {
     metronome = !metronome
     await api.setClick({ metronome })
@@ -857,7 +868,14 @@
     </div>
 
     {#if !opened.channels.length}
-      <footer class="transport glass silent">{t('read.pdfOnly')}</footer>
+      <footer class="transport glass silent">
+        <span>{t('read.pdfOnly')}</span>
+        {#if opened.pdf_url && currentEntry}
+          <button class="chip" onclick={() => shareItem('pdf')}>{t('share.pdf')}</button>
+          <button class="chip" onclick={() => shareItem('4sc')}>{t('share.4sc')}</button>
+        {/if}
+        {#if exporting}<span class="exporting">{exporting}</span>{/if}
+      </footer>
     {:else}
     <footer class="transport glass">
       <button class="icon" onclick={toStart} aria-label={t('tr.start')}><Icon name="start" /></button>
@@ -888,6 +906,10 @@
           <span class="menu glass" role="menu">
             <button role="menuitem" onclick={() => exportAudio('mix')}>{t('tr.exportMix')}</button>
             <button role="menuitem" onclick={() => exportAudio('parts')}>{t('tr.exportParts')}</button>
+            {#if opened.pdf_url && currentEntry}
+              <button role="menuitem" onclick={() => shareItem('pdf')}>{t('share.pdf')}</button>
+              <button role="menuitem" onclick={() => shareItem('4sc')}>{t('share.4sc')}</button>
+            {/if}
           </span>
         {/if}
       </span>

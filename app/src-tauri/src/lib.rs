@@ -58,8 +58,11 @@ fn sweep_incoming(paths: &Paths) -> Vec<String> {
     if let Ok(rd) = std::fs::read_dir(&paths.user) {
         candidates.extend(rd.flatten().map(|e| e.path()).filter(|p| {
             p.is_file()
-                && p.extension()
-                    .is_some_and(|x| x.eq_ignore_ascii_case("4sc") || x.eq_ignore_ascii_case("4ss"))
+                && p.extension().is_some_and(|x| {
+                    x.eq_ignore_ascii_case("4sc")
+                        || x.eq_ignore_ascii_case("4ss")
+                        || x.eq_ignore_ascii_case(cantor_library::bundle::BUNDLE_EXT)
+                })
         }));
     }
     for path in candidates {
@@ -74,6 +77,33 @@ fn sweep_incoming(paths: &Paths) -> Vec<String> {
 
 /// Import one file into the user library; returns the new score ids.
 fn import_path(paths: &Paths, path: &std::path::Path) -> Vec<String> {
+    if path
+        .extension()
+        .is_some_and(|x| x.eq_ignore_ascii_case(cantor_library::bundle::BUNDLE_EXT))
+    {
+        // SET-02: a shared setlist bundle (scores, annotations, mixes).
+        let Ok(bytes) = std::fs::read(path) else {
+            return Vec::new();
+        };
+        let mut st = store(paths);
+        return match cantor_library::bundle::import_bundle(
+            &paths.user,
+            &mut st,
+            &paths.user.join("Annotations"),
+            &bytes,
+        ) {
+            Ok(b) => {
+                if let Err(e) = st.save() {
+                    log::warn!("bundle store save: {e:?}");
+                }
+                b.score_ids
+            }
+            Err(e) => {
+                log::warn!("bundle import: {e}");
+                Vec::new()
+            }
+        };
+    }
     let ids = import_path_inner(paths, path);
     if path
         .extension()
@@ -372,6 +402,22 @@ fn import_bytes(
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
         return Err("expected raw file bytes".into());
     };
+    let lower = name.to_lowercase();
+    if lower.ends_with(".4ss")
+        || lower.ends_with(&format!(".{}", cantor_library::bundle::BUNDLE_EXT))
+    {
+        // Setlists (forScore .4ss, Cantor bundles) also create a setlist.
+        let tmp = paths.user.join(".incoming");
+        std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+        let path = tmp.join(file_safe(&name));
+        std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+        let ids = import_path(&paths, &path);
+        let _ = std::fs::remove_file(&path);
+        if ids.is_empty() {
+            return Err(format!("{name}: kunde inte läsas"));
+        }
+        return Ok(ids);
+    }
     let items = cantor_library::import::import_file(&paths.user, &name, bytes)?;
     Ok(items.into_iter().map(|i| format!("1:{}", i.stem)).collect())
 }
@@ -465,13 +511,138 @@ async fn export_audio(what: String, app: tauri::AppHandle) -> Result<Vec<String>
     .await
     .map_err(|e| e.to_string())??;
     let files: Vec<PathBuf> = names.iter().map(|n| out_dir.join(n)).collect();
+    share_on_main(&app, files)?;
+    Ok(names)
+}
+
+/// Open the share sheet for files (on the UI thread, as UIKit requires).
+fn share_on_main(app: &tauri::AppHandle, files: Vec<PathBuf>) -> Result<(), String> {
     let (tx, rx) = std::sync::mpsc::channel();
     app.run_on_main_thread(move || {
         let _ = tx.send(share::share_files(&files));
     })
     .map_err(|e| e.to_string())?;
-    rx.recv().map_err(|e| e.to_string())??;
-    Ok(names)
+    rx.recv().map_err(|e| e.to_string())?
+}
+
+fn file_safe(s: &str) -> String {
+    s.chars()
+        .map(|c| if "/\\:*?\"<>|".contains(c) { '_' } else { c })
+        .collect()
+}
+
+fn read_annotations(paths: &Paths, id: &str) -> Option<cantor_annotations::Document> {
+    std::fs::read_to_string(annotations_path(paths, id))
+        .ok()
+        .and_then(|s| cantor_annotations::Document::from_json(&s).ok())
+}
+
+/// The PDF of a score with its annotations drawn in (ANN-05), or the plain
+/// PDF when there are none.
+fn annotated_pdf(paths: &Paths, id: &str) -> Result<Option<Vec<u8>>, String> {
+    let e = paths.entry(id)?;
+    let Some(pdf) = &e.pdf_file else {
+        return Ok(None);
+    };
+    let bytes = std::fs::read(e.dir.join(pdf)).map_err(|e| e.to_string())?;
+    Ok(Some(match read_annotations(paths, id) {
+        Some(doc) if !doc.items.is_empty() => cantor_annotations::annotate_pdf(&bytes, &doc)?,
+        _ => bytes,
+    }))
+}
+
+/// Export and share: `"pdf"` the annotated PDF (ANN-05), `"4sc"` a forScore
+/// score (LIB-09) of the score `id`; `"setlist"` a Cantor bundle with scores,
+/// annotations and mixes (SET-02) or `"4ss"` a forScore setlist (LIB-09) of
+/// the setlist `id`. Files go to Documents/Export. Returns the file name.
+#[tauri::command]
+async fn export_item(kind: String, id: String, app: tauri::AppHandle) -> Result<String, String> {
+    let paths = app.state::<Paths>();
+    let out_dir = paths.user.join("Export");
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    let title_of = |sid: &str| -> String {
+        let st = store(&paths);
+        st.metadata(sid)
+            .map(|m| m.title.clone())
+            .filter(|t| !t.is_empty())
+            .or_else(|| paths.entry(sid).ok().map(|e| e.title))
+            .unwrap_or_else(|| sid.to_string())
+    };
+    let (name, bytes) = match kind.as_str() {
+        "pdf" | "4sc" => {
+            let pdf = annotated_pdf(&paths, &id)?.ok_or("stycket har ingen PDF")?;
+            let title = title_of(&id);
+            if kind == "pdf" {
+                (format!("{}.pdf", file_safe(&title)), pdf)
+            } else {
+                (
+                    format!("{}.4sc", file_safe(&title)),
+                    cantor_library::forscore::write_4sc(&title, &pdf),
+                )
+            }
+        }
+        "setlist" | "4ss" => {
+            let st = store(&paths);
+            let sl = st.setlist(&id).ok_or("listan finns inte")?.clone();
+            let ids: Vec<String> = sl
+                .items
+                .iter()
+                .filter_map(|it| match it {
+                    cantor_library::store::SetItem::Score { score, .. } => Some(score.clone()),
+                    _ => None,
+                })
+                .collect();
+            if kind == "4ss" {
+                let mut items = Vec::new();
+                for sid in &ids {
+                    if let Some(pdf) = annotated_pdf(&paths, sid)? {
+                        items.push((title_of(sid), pdf));
+                    }
+                }
+                (
+                    format!("{}.4ss", file_safe(&sl.name)),
+                    cantor_library::forscore::write_4ss(&sl.name, &items),
+                )
+            } else {
+                let mut scores = Vec::new();
+                for sid in &ids {
+                    let Ok(e) = paths.entry(sid) else { continue };
+                    let mut files = Vec::new();
+                    let measures = format!("{}.measures.json", e.stem);
+                    for f in [e.score_file.clone(), e.pdf_file.clone(), Some(measures)]
+                        .into_iter()
+                        .flatten()
+                    {
+                        if let Ok(b) = std::fs::read(e.dir.join(&f)) {
+                            files.push((f, b));
+                        }
+                    }
+                    scores.push(cantor_library::bundle::BundleScore {
+                        id: sid.clone(),
+                        title: title_of(sid),
+                        files,
+                        annotations_json: std::fs::read_to_string(annotations_path(&paths, sid))
+                            .ok(),
+                        metadata: st.metadata(sid).cloned(),
+                        settings: st.settings(sid).cloned(),
+                    });
+                }
+                (
+                    format!(
+                        "{}.{}",
+                        file_safe(&sl.name),
+                        cantor_library::bundle::BUNDLE_EXT
+                    ),
+                    cantor_library::bundle::export_bundle(&sl, &scores)?,
+                )
+            }
+        }
+        _ => return Err(format!("unknown export {kind}")),
+    };
+    let path = out_dir.join(&name);
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    share_on_main(&app, vec![path])?;
+    Ok(name)
 }
 
 /// Annotations of the open score (ANN-01..04), edited through the crate's
@@ -946,7 +1117,8 @@ pub fn run() {
             delete_setlist,
             score_settings,
             save_score_settings,
-            pitch_pipe
+            pitch_pipe,
+            export_item
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")
