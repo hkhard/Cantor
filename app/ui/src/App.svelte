@@ -1077,8 +1077,9 @@
             <span class="fmt" role="group" aria-label={t('tr.format')}>
               {#each ['m4a', 'wav'] as const as f}
                 <button
+                  role="menuitemradio"
                   class:on={audioFormat === f}
-                  aria-pressed={audioFormat === f}
+                  aria-checked={audioFormat === f}
                   onclick={() => {
                     audioFormat = f
                     localStorage.setItem('cantor.audioFormat', f)

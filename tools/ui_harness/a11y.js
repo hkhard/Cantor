@@ -66,7 +66,7 @@ const SCREENS = [
     await p.waitForSelector('.score svg g.measure', { timeout: 20000 })
   }],
   ['reader-pdfonly', async (p) => {
-    await p.locator('ul.scores > li').last().locator('button.open').click()
+    await p.locator('ul.scores > li', { hasText: 'Min egen' }).locator('button.open').click()
     await p.waitForSelector('.transport.silent')
   }],
   ['performance', async (p) => {
