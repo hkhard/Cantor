@@ -78,6 +78,8 @@ No sample yet. LIB-08 backup import stays open until one is provided.
 
 ## Open points for more samples
 
+What to send and why, for the product owner: `docs/forscore-samples-needed.md`.
+
 1. A `.4sc` with text and stamp annotations, plus bookmarks and links (ink: done).
 2. A `.4sc` with an audio track or MIDI attachment.
 3. A `.4ss` with a placeholder and a per-item start page.

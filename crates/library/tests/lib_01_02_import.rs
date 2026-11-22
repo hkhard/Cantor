@@ -108,3 +108,22 @@ fn lib_01_library_merges_dirs_and_pairs_pdf_with_score() {
     assert_eq!(lib[1].score_file.as_deref(), Some("Olaf.mxl"));
     assert_eq!(lib[1].pdf_file.as_deref(), Some("Olaf.pdf"));
 }
+
+#[test]
+fn lib_07_original_forscore_file_kept_next_to_the_pdf() {
+    // Fields Cantor cannot read yet (text/stamp annotations, bookmarks,
+    // links, attachments) must survive so a later version can import them
+    // without the user exporting again.
+    let d = tmp("keep4sc");
+    let bytes = cantor_library::forscore::testing::fake_4sc("Holst.pdf", "Bleak", b"%PDF-1.4\n");
+    let got = import_file(&d, "Bleak.4sc", &bytes).unwrap();
+    let stem = &got[0].stem;
+    let kept = std::fs::read(
+        d.join(cantor_library::import::ORIGINALS_DIR)
+            .join(format!("{stem}.4sc")),
+    )
+    .expect("original .4sc kept");
+    assert_eq!(kept, bytes);
+    // Still one library entry (the kept original is not a second score).
+    assert_eq!(list_library(&[d.as_path()]).len(), 1);
+}

@@ -115,6 +115,11 @@ fn import_path(paths: &Paths, path: &std::path::Path) -> Vec<String> {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
             setlist_from_4ss(paths, &name, &bytes, &ids);
+            // Keep the original for fields not imported yet (see
+            // docs/forscore-samples-needed.md).
+            let keep = paths.user.join(cantor_library::import::ORIGINALS_DIR);
+            let _ = std::fs::create_dir_all(&keep);
+            let _ = std::fs::write(keep.join(format!("{}.4ss", file_safe(&name))), &bytes);
         }
     }
     ids
@@ -756,6 +761,12 @@ fn delete_score(file: String, paths: State<'_, Paths>) -> Result<(), String> {
     {
         let _ = std::fs::remove_file(e.dir.join(f));
     }
+    let _ = std::fs::remove_file(
+        e.dir
+            .join(cantor_library::import::ORIGINALS_DIR)
+            .join(format!("{}.4sc", e.stem)),
+    );
+    let _ = std::fs::remove_file(annotations_path(&paths, &file));
     // Setlists keep a placeholder with the title (SET-01).
     let mut st = store(&paths);
     st.remove_score(&file, &e.title);

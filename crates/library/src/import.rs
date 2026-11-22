@@ -27,6 +27,9 @@ pub struct LibraryEntry {
     pub pdf_file: Option<String>,
 }
 
+/// Folder (inside a library dir) holding the original forScore files.
+pub const ORIGINALS_DIR: &str = ".forscore";
+
 const SCORE_EXT: &[&str] = &["mxl", "musicxml", "xml"];
 
 /// File-name-safe stem: path components and reserved characters removed.
@@ -114,6 +117,12 @@ pub fn import_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<Vec<Imported>
             let title = s.title.clone().unwrap_or_else(|| safe_stem(name));
             let stem = free_stem(dir, &safe_stem(&format!("{title}.pdf")));
             write(&stem, "pdf", &s.pdf)?;
+            // Keep the original: fields not imported yet (text and stamp
+            // annotations, bookmarks, links, attachments) stay available.
+            // In a hidden folder so the app's import sweep does not see it as new.
+            let keep = dir.join(ORIGINALS_DIR);
+            std::fs::create_dir_all(&keep).map_err(|e| e.to_string())?;
+            std::fs::write(keep.join(format!("{stem}.4sc")), bytes).map_err(|e| e.to_string())?;
             Ok(vec![Imported {
                 stem,
                 playable: false,
