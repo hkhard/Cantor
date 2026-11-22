@@ -1,0 +1,15 @@
+[package]
+name = "cantor-sync"
+description = "Folder sync between devices (DATA-02): per-device append-only op logs and CRDT merge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cantor-annotations = { path = "../annotations" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.11"
+
+[dev-dependencies]
+cantor-library = { path = "../library" }

@@ -168,6 +168,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cantor-sync"
+version = "0.1.0"
+dependencies = [
+ "cantor-annotations",
+ "cantor-library",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "cantor-timeline"
 version = "0.1.0"
 dependencies = [
