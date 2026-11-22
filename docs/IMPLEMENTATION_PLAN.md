@@ -328,7 +328,8 @@ tests (NFR-11: 100% of P0 criteria automated).
   - `tools/ui_harness/run.sh` runs the real UI in WebKit at iPad mini size (744x1133) with the Rust backend mocked. 13 scenarios pass with no page errors: search, metadata, setlists, setlist navigation, pitch pipe, custom mix, four page modes, annotate (stroke, stamp, undo, layer hide), transpose, hide part, settings restored on reopen, performance mode and Swedish.
   - The backend commands were checked with the iOS build (simulator and device targets compile and link).
   - An annotated real PDF was rendered with macOS's PDF engine (Preview's): ink, highlighter, Swedish text and stamps are visible.
-- Not verified:
+- Product owner tried the build on the iPad mini (2026-11-22): "all works as expected". That covers the features in normal use; the specific items below were not checked one by one.
+- Not verified separately:
   - Apple Pencil feel and latency on the iPad.
   - Lock-screen controls and AirPods on a device.
   - The share sheets on a device.
