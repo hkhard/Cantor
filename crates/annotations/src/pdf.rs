@@ -3,9 +3,9 @@
 //! [`annotate_pdf`] burns the visible annotations of a [`Document`] into the page
 //! content of a PDF so they show up in any viewer (Preview, Acrobat...).
 //!
-//! * Only page-anchored items ([`Anchor::Page`]) are drawn. Measure-anchored items
-//!   need a live score layout to resolve and are skipped here; resolve them to page
-//!   anchors (see [`crate::resolve`]) before exporting if they should be included.
+//! * Page-anchored items ([`Anchor::Page`]) are always drawn. Measure-anchored
+//!   items are drawn by [`annotate_pdf_with_layout`] where the measure's box on the
+//!   PDF is known (measure map), and skipped by [`annotate_pdf`].
 //! * Items on hidden layers are not drawn.
 //! * Existing page content is wrapped in `q`/`Q` so the annotation stream starts
 //!   with a clean graphics state. Coordinates honour the CropBox (else MediaBox) and
@@ -28,11 +28,34 @@ const GS_HIGHLIGHT: &str = "CantorGSHi";
 /// onto their pages (`Anchor::Page::page` is 1-based). Pages without items are left
 /// untouched.
 pub fn annotate_pdf(pdf: &[u8], doc: &Document) -> Result<Vec<u8>, String> {
+    annotate_pdf_with_layout(pdf, doc, &|_| None)
+}
+
+/// Like [`annotate_pdf`], also drawing measure-anchored items where `layout`
+/// knows the measure's box on this PDF (the PDF measure map, LIB-05).
+pub fn annotate_pdf_with_layout(
+    pdf: &[u8],
+    doc: &Document,
+    layout: &dyn Fn(usize) -> Option<crate::Rect>,
+) -> Result<Vec<u8>, String> {
     let mut pdoc = lopdf::Document::load_mem(pdf).map_err(|e| format!("cannot load PDF: {e}"))?;
     let pages = pdoc.get_pages();
+    // Everything as page-anchored items in page units.
+    let placed: Vec<crate::Annotation> = doc
+        .visible_items()
+        .filter_map(|a| {
+            let (page, x, y, item) = crate::placed_on_page(a, layout)?;
+            Some(crate::Annotation {
+                id: a.id,
+                layer: a.layer,
+                anchor: Anchor::Page { page, x, y },
+                item,
+            })
+        })
+        .collect();
     for (&num, &page_id) in &pages {
-        let items: Vec<_> = doc
-            .visible_items()
+        let items: Vec<_> = placed
+            .iter()
             .filter(|a| match (&a.item, a.anchor) {
                 (Item::Raster(r), _) => r.page == num,
                 (_, Anchor::Page { page, .. }) => page == num,

@@ -17,7 +17,7 @@
 //!   PDF export (ANN-05).
 
 pub mod pdf;
-pub use pdf::annotate_pdf;
+pub use pdf::{annotate_pdf, annotate_pdf_with_layout};
 
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
@@ -86,6 +86,61 @@ pub fn resolve(anchor: &Anchor, layout: &dyn Fn(usize) -> Option<Rect>) -> Optio
         } => {
             let r = layout(measure)?;
             Some((r.page, r.x + dx * r.w, r.y + dy * r.h))
+        }
+    }
+}
+
+/// Place an annotation on a page: its page, origin (page fractions) and the
+/// item with all offsets and sizes in page fractions.
+///
+/// Page-anchored items are already in page units. For measure-anchored items
+/// the offsets are in units of the measure box (x by its width, y and sizes by
+/// its height), so ink stretches with its bar when the layout changes or when
+/// the same annotation is shown on another view (notation, PDF).
+pub fn placed_on_page(
+    a: &Annotation,
+    layout: &dyn Fn(usize) -> Option<Rect>,
+) -> Option<(u32, f32, f32, Item)> {
+    match a.anchor {
+        Anchor::Page { page, x, y } => Some((page, x, y, a.item.clone())),
+        Anchor::Measure {
+            measure, dx, dy, ..
+        } => {
+            let r = layout(measure)?;
+            let (sx, sy) = (r.w, r.h);
+            let item = match &a.item {
+                Item::Ink(ink) => Item::Ink(Ink {
+                    points: ink
+                        .points
+                        .iter()
+                        .map(|p| InkPoint {
+                            x: p.x * sx,
+                            y: p.y * sy,
+                            pressure: p.pressure,
+                        })
+                        .collect(),
+                    color: ink.color.clone(),
+                    width: ink.width * sy,
+                    tool: ink.tool,
+                }),
+                Item::Text(t) => Item::Text(TextNote {
+                    text: t.text.clone(),
+                    size: t.size * sy,
+                    color: t.color.clone(),
+                }),
+                Item::Stamp(st) => Item::Stamp(Stamp {
+                    kind: st.kind.clone(),
+                    scale: st.scale * sy,
+                }),
+                Item::Shape(sh) => Item::Shape(Shape {
+                    kind: sh.kind,
+                    w: sh.w * sx,
+                    h: sh.h * sy,
+                    color: sh.color.clone(),
+                }),
+                Item::Raster(r) => Item::Raster(r.clone()),
+            };
+            Some((r.page, r.x + dx * sx, r.y + dy * sy, item))
         }
     }
 }
@@ -303,6 +358,11 @@ pub enum Command {
     Remove {
         id: u64,
     },
+    /// Remove several items as one undo step (e.g. an eraser stroke that hit
+    /// measure-anchored ink, resolved by the view). Unknown ids are ignored.
+    RemoveMany {
+        ids: Vec<u64>,
+    },
     Move {
         id: u64,
         anchor: Anchor,
@@ -410,6 +470,13 @@ impl Editor {
                     .find(|a| a.id == id)
                     .ok_or(EditError::NoSuchItem(id))?;
                 a.anchor = anchor;
+                None
+            }
+            Command::RemoveMany { ids } => {
+                d.items.retain(|a| !ids.contains(&a.id));
+                if d.items.len() == before.items.len() {
+                    return Ok(None);
+                }
                 None
             }
             Command::Erase {

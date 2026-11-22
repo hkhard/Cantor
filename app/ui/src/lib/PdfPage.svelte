@@ -102,7 +102,7 @@
   {#if cur && cur.page === n}
     <div class="cursor" style="left:{cur.x * size.w}px;top:{cur.y * size.h}px;width:{cur.w * size.w}px;height:{cur.h * size.h}px"></div>
   {/if}
-  <AnnotLayer doc={ann} page={n} w={size.w} h={size.h} {tool} color={inkColor} {layer} {stamp} {onedit} />
+  <AnnotLayer doc={ann} page={n} w={size.w} h={size.h} {tool} color={inkColor} {layer} {stamp} {onedit} {boxes} />
 </div>
 
 <style>

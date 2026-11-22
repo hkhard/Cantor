@@ -545,8 +545,31 @@ fn annotated_pdf(paths: &Paths, id: &str) -> Result<Option<Vec<u8>>, String> {
         return Ok(None);
     };
     let bytes = std::fs::read(e.dir.join(pdf)).map_err(|e| e.to_string())?;
+    // Bar-anchored notes (drawn on the notation or the page) go where the
+    // PDF measure map puts their bar (ANN-04/05).
+    let map: Vec<cantor_annotations::Rect> =
+        std::fs::read(e.dir.join(format!("{}.measures.json", e.stem)))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Vec<serde_json::Value>>(&b).ok())
+            .map(|v| {
+                v.iter()
+                    .map(|b| {
+                        let g = |k: &str| b.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
+                        cantor_annotations::Rect {
+                            page: g("page") as u32,
+                            x: g("x"),
+                            y: g("y"),
+                            w: g("w"),
+                            h: g("h"),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
     Ok(Some(match read_annotations(paths, id) {
-        Some(doc) if !doc.items.is_empty() => cantor_annotations::annotate_pdf(&bytes, &doc)?,
+        Some(doc) if !doc.items.is_empty() => {
+            cantor_annotations::annotate_pdf_with_layout(&bytes, &doc, &|m| map.get(m).copied())?
+        }
         _ => bytes,
     }))
 }

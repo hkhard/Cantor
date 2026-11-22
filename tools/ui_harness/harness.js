@@ -116,7 +116,15 @@ const H = Number(process.env.H || 1133)
             if (command.op === 'AddLayer') d.layers.push({ name: command.name, visible: true })
             if (command.op === 'SetLayerVisible') d.layers[command.layer].visible = command.visible
             if (command.op === 'Erase') d.items = d.items.filter((a) => !('Ink' in a.item))
-          } else if (action === 'undo') d.items.pop()
+            if (command.op === 'RemoveMany') {
+              d._removed = d._removed ?? []
+              d._removed.push(d.items.filter((a) => command.ids.includes(a.id)))
+              d.items = d.items.filter((a) => !command.ids.includes(a.id))
+            }
+          } else if (action === 'undo') {
+            if (d._removed?.length) d.items.push(...d._removed.pop())
+            else d.items.pop()
+          }
           return JSON.parse(JSON.stringify(d))
         },
       }
@@ -290,11 +298,96 @@ const H = Number(process.env.H || 1133)
     await page.waitForTimeout(300)
     d = await page.evaluate(() => window.__store.ann)
     if (d.layers.length !== 2) throw new Error('layer')
+    if (!(await page.locator('.layers').count())) await page.click('.annbar button:has-text("Layer")')
     await page.locator('.layers input[type=checkbox]').first().uncheck()
     await page.waitForTimeout(300)
     const after = await page.locator('svg.annot line').count()
     if (after !== 0) throw new Error('hidden layer still drawn ' + after)
+    await page.locator('.layers input[type=checkbox]').first().check()
+    if (await page.locator('.layers').count()) await page.click('.annbar button:has-text("Layer")')
     await page.click('.top button:has-text("Done")')
+  })
+
+  await step('ANN-04 ink on PDF bar is bar-anchored and shows in notation', async () => {
+    // The pen stroke drawn on the PDF earlier landed on a bar (measure map).
+    let d = await page.evaluate(() => window.__store.ann)
+    const ink = d.items.find((a) => 'Ink' in a.item)
+    if (!ink || !('Measure' in ink.anchor)) throw new Error('PDF stroke not bar-anchored: ' + JSON.stringify(ink?.anchor))
+  })
+
+  await step('ANN-04 draw on notation, survives reflow', async () => {
+    await page.click('.seg button:has-text("Notation")')
+    await page.waitForSelector('.score svg g.measure', { timeout: 20000 })
+    await page.waitForTimeout(800)
+    await page.click('.top button:has-text("Annotate")')
+    await page.waitForSelector('.annbar')
+    await page.click('.annbar button:has-text("Pen")')
+    // Draw across the middle of the 3rd bar on the page.
+    const bar = page.locator('.score svg g.measure').nth(2)
+    const bb = await bar.boundingBox()
+    const y = bb.y + bb.height * 0.5
+    await page.mouse.move(bb.x + bb.width * 0.2, y)
+    await page.mouse.down()
+    for (let i = 1; i <= 8; i++) await page.mouse.move(bb.x + bb.width * (0.2 + i * 0.075), y + (i % 2) * 4)
+    await page.mouse.up()
+    await page.waitForTimeout(300)
+    let d = await page.evaluate(() => window.__store.ann)
+    const it = d.items[d.items.length - 1]
+    if (!('Measure' in it.anchor)) throw new Error('not bar-anchored ' + JSON.stringify(it.anchor))
+    const m = it.anchor.Measure.measure
+    const check = async (label) => {
+      // Stroke bbox vs. its bar's bbox on screen.
+      const res = await page.evaluate((id) => {
+        const lines = document.querySelectorAll(`.score svg.annot g[data-ann="${id}"] line`)
+        if (!lines.length) return { err: 'no ink drawn' }
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+        for (const l of lines) {
+          const r = l.getBoundingClientRect()
+          x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); y1 = Math.max(y1, r.bottom)
+        }
+        const bars = document.querySelectorAll('.score svg g.measure')
+        return { x0, x1, y0, y1, bars: [...bars].map((b) => { const r = b.getBoundingClientRect(); return [r.left, r.right, r.top, r.bottom] }) }
+      }, it.id)
+      if (res.err) throw new Error(label + ': ' + res.err)
+      const cx = (res.x0 + res.x1) / 2, cy = (res.y0 + res.y1) / 2
+      const inBar = res.bars.findIndex(([l, r, t, b]) => cx >= l && cx <= r && cy >= t && cy <= b)
+      return { cx, cy, inBar, w: res.x1 - res.x0 }
+    }
+    const before = await check('before')
+    await shot('12-notation-ink')
+    // Reflow: open the mixer (narrower pane), notation is engraved again.
+    await page.click('.top button:has-text("Mixer")')
+    await page.waitForTimeout(2500)
+    const after = await check('after')
+    await shot('13-notation-ink-reflowed')
+    const barIdAfter = await page.evaluate((m) => {
+      const bars = [...document.querySelectorAll('.score svg g.measure')]
+      return bars.map((b) => b.getAttribute('data-id'))
+    }, m)
+    if (after.inBar < 0) throw new Error('stroke left its bar after reflow ' + JSON.stringify(after))
+    if (before.inBar !== 2) throw new Error('stroke not on bar 3 before: ' + before.inBar)
+    console.log('     stroke centre in bar', before.inBar, '->', after.inBar, 'width', Math.round(before.w), '->', Math.round(after.w))
+    await page.click('.top button:has-text("Hide mixer")')
+    await page.waitForTimeout(1500)
+    // Erase it on the notation.
+    await page.click('.annbar button:has-text("Eraser")')
+    const bb2 = await page.locator('.score svg g.measure').nth(2).boundingBox()
+    await page.mouse.move(bb2.x + bb2.width * 0.2, bb2.y + bb2.height * 0.5)
+    await page.mouse.down()
+    for (let i = 1; i <= 10; i++) await page.mouse.move(bb2.x + bb2.width * (0.2 + i * 0.07), bb2.y + bb2.height * 0.5)
+    await page.mouse.up()
+    await page.waitForTimeout(300)
+    d = await page.evaluate(() => window.__store.ann)
+    if (d.items.some((a) => a.id === it.id)) throw new Error('eraser missed bar-anchored ink')
+    await page.click('.annbar button[aria-label="Undo"]')
+    await page.waitForTimeout(300)
+    d = await page.evaluate(() => window.__store.ann)
+    if (!d.items.some((a) => a.id === it.id)) throw new Error('undo of erase failed')
+    // The same stroke on the original page (measure map).
+    await page.click('.top button:has-text("Done")')
+    await page.click('.seg button:has-text("Original")')
+    await page.waitForTimeout(1500)
+    await shot('14-notation-ink-on-pdf')
   })
 
   await step('transpose + hide part (notation)', async () => {

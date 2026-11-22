@@ -31,9 +31,48 @@ export interface AnnDoc {
 export type AnnCommand =
   | { op: 'Add'; layer: number; anchor: Anchor; item: AnnItem }
   | { op: 'Remove'; id: number }
+  | { op: 'RemoveMany'; ids: number[] }
   | { op: 'Erase'; page: number; points: [number, number][]; radius: number }
   | { op: 'AddLayer'; name: string }
   | { op: 'SetLayerVisible'; layer: number; visible: boolean }
+
+/** A measure's box on a page, in page fractions (pages 1-based). */
+export interface Box {
+  page: number
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** Mirror of `cantor_annotations::placed_on_page`: the page, origin and the
+ *  item in page units. Measure-anchored items are stored in units of their
+ *  bar's box (x by width, y and sizes by height), so they follow the bar. */
+export function placeOnPage(
+  a: Annotation,
+  boxes: (Box | null)[] | null | undefined,
+): { page: number; x: number; y: number; item: AnnItem } | null {
+  if ('Page' in a.anchor) return { ...a.anchor.Page, item: a.item }
+  const m = a.anchor.Measure
+  const b = boxes?.[m.measure]
+  if (!b) return null
+  const sx = b.w
+  const sy = b.h
+  const it = a.item
+  let item: AnnItem = it
+  if ('Ink' in it)
+    item = {
+      Ink: {
+        ...it.Ink,
+        points: it.Ink.points.map((p) => ({ x: p.x * sx, y: p.y * sy, pressure: p.pressure })),
+        width: it.Ink.width * sy,
+      },
+    }
+  else if ('Text' in it) item = { Text: { ...it.Text, size: it.Text.size * sy } }
+  else if ('Stamp' in it) item = { Stamp: { ...it.Stamp, scale: it.Stamp.scale * sy } }
+  else if ('Shape' in it) item = { Shape: { ...it.Shape, w: it.Shape.w * sx, h: it.Shape.h * sy } }
+  return { page: b.page, x: b.x + m.dx * sx, y: b.y + m.dy * sy, item }
+}
 
 export const STAMPS: { id: string; label: string }[] = [
   { id: 'Breath', label: '∨' },

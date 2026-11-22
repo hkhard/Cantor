@@ -728,3 +728,10 @@ select {
 .strip .s {
   grid-column: 4;
 }
+/* The layer menu sits in the top toolbar: open downwards. */
+.annbar .exportwrap .menu {
+  bottom: auto;
+  top: calc(100% + 6px);
+  left: 0;
+  right: auto;
+}

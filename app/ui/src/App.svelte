@@ -11,7 +11,8 @@
   import Dialog from './lib/Dialog.svelte'
   import Icon from './lib/Icon.svelte'
   import { listen } from '@tauri-apps/api/event'
-  import { openAnnotations, editAnnotations, STAMPS, type AnnDoc, type AnnCommand, type Tool } from './lib/annot'
+  import { openAnnotations, editAnnotations, STAMPS, type AnnDoc, type AnnCommand, type Tool, type Box } from './lib/annot'
+  import AnnotLayer from './lib/AnnotLayer.svelte'
 
   let scores: ScoreEntry[] = $state([])
   let notice = $state('')
@@ -172,6 +173,47 @@
   }
 
   let scoreEl: HTMLDivElement | undefined = $state()
+  /** ANN-04: bars of the engraved page as boxes in fractions of the score
+   *  pane (page = notation page), so notes drawn on the notation are anchored
+   *  to bars and follow them through re-layout. */
+  let notationBoxes: (Box | null)[] = $state([])
+  let paneSize = $state({ w: 0, h: 0 })
+  function measureNotation() {
+    if (!scoreEl || !engraved) return
+    const host = scoreEl.getBoundingClientRect()
+    paneSize = { w: host.width, h: host.height }
+    const out: (Box | null)[] = []
+    for (const [i, loc] of engraved.measurePage) {
+      out[i] = null
+      if (loc.page !== page) continue
+      const g = scoreEl.querySelector(`g.measure[data-id="${CSS.escape(loc.id)}"]`) as SVGGElement | null
+      if (!g) continue
+      // Staff lines span the whole bar; notes and lyrics can stick out.
+      const staves = g.querySelectorAll('g.staff')
+      let r = g.getBoundingClientRect()
+      if (staves.length) {
+        const rs = [...staves].map((st) => st.getBoundingClientRect())
+        const top = Math.min(...rs.map((q) => q.top))
+        const bottom = Math.max(...rs.map((q) => q.bottom))
+        r = new DOMRect(r.left, top, r.width, bottom - top)
+      }
+      if (r.width < 1 || r.height < 1) continue
+      out[i] = {
+        page,
+        x: (r.left - host.left) / host.width,
+        y: (r.top - host.top) / host.height,
+        w: r.width / host.width,
+        h: r.height / host.height,
+      }
+    }
+    notationBoxes = out
+  }
+  $effect(() => {
+    // Re-measure whenever a page is rendered.
+    void svg
+    void page
+    tick().then(() => requestAnimationFrame(measureNotation))
+  })
   let currentMeasure = -1
   let poll: number | undefined
 
@@ -663,7 +705,7 @@
           <button class:on={view === 'notation'} onclick={() => switchView('notation')}>{t('read.notation')}</button>
         </div>
       {/if}
-      {#if view === 'pdf' && opened.pdf_url && ann}
+      {#if ann && (view === 'pdf' ? !!opened.pdf_url : !!engraved)}
         <button class="icon" class:active={annotating} onclick={() => (annotating = !annotating)}
           >{annotating ? t('common.done') : t('read.annotate')}</button
         >
@@ -745,7 +787,7 @@
       {/if}
     </nav>
 
-    {#if annotating && view === 'pdf' && ann}
+    {#if annotating && ann}
       <div class="annbar glass" role="toolbar">
         <div class="seg" role="group">
           <button class:on={tool === 'pen'} onclick={() => (tool = 'pen')}>{t('ann.pen')}</button>
@@ -784,10 +826,10 @@
                     onchange={() => annEdit({ op: 'SetLayerVisible', layer: i, visible: !l.visible })}
                     aria-label={l.name}
                   />
-                  <button class:on={annLayer === i} onclick={() => (annLayer = i)}>{l.name}</button>
+                  <button class:on={annLayer === i} onclick={() => { annLayer = i; layersOpen = false }}>{l.name}</button>
                 </span>
               {/each}
-              <button onclick={addLayer}>{t('ann.newLayer')}</button>
+              <button onclick={() => { layersOpen = false; addLayer() }}>{t('ann.newLayer')}</button>
             </span>
           {/if}
         </span>
@@ -820,7 +862,22 @@
         {#if loading}<p class="loading">{loading}</p>{/if}
         {#if error}<p class="error">{error}</p>{/if}
         {@html svg}
-        {#if engraved && engraved.pages > 1}
+        {#if engraved && paneSize.w > 0}
+          <AnnotLayer
+            doc={ann}
+            {page}
+            w={paneSize.w}
+            h={paneSize.h}
+            tool={annotating && !performance ? tool : null}
+            color={inkColor}
+            layer={annLayer}
+            {stamp}
+            onedit={annEdit}
+            boxes={notationBoxes}
+            measureOnly
+          />
+        {/if}
+        {#if engraved && engraved.pages > 1 && !(annotating && !performance)}
           <button class="pageturn left" onclick={(e) => { e.stopPropagation(); turn(-1) }} aria-label={t('read.prev')}></button>
           <button class="pageturn right" onclick={(e) => { e.stopPropagation(); turn(1) }} aria-label={t('read.next')}></button>
         {/if}
