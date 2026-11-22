@@ -54,9 +54,9 @@ pub fn write_musicxml(score: &Score) -> String {
 
     for p in &score.parts {
         let _ = writeln!(x, "  <part id=\"{}\">", esc(&p.id));
-        let mut last_time: Option<(u32, u32)> = None;
+        let mut last = (None, None);
         for (i, m) in p.measures.iter().enumerate() {
-            write_measure(&mut x, m, i == 0, &mut last_time);
+            write_measure(&mut x, m, i == 0, &mut last);
         }
         x.push_str("  </part>\n");
     }
@@ -64,7 +64,10 @@ pub fn write_musicxml(score: &Score) -> String {
     x
 }
 
-fn write_measure(x: &mut String, m: &Measure, first: bool, last_time: &mut Option<(u32, u32)>) {
+/// Last written (time signature, key fifths).
+type LastAttrs = (Option<(u32, u32)>, Option<i32>);
+
+fn write_measure(x: &mut String, m: &Measure, first: bool, last: &mut LastAttrs) {
     let _ = write!(x, "    <measure number=\"{}\"", esc(&m.number));
     if m.implicit {
         x.push_str(" implicit=\"yes\"");
@@ -82,8 +85,11 @@ fn write_measure(x: &mut String, m: &Measure, first: bool, last_time: &mut Optio
         }
         x.push_str("</barline>");
     }
-    if first || m.time_signature != *last_time {
+    if first || (m.time_signature, m.key_fifths) != *last {
         let _ = write!(x, "<attributes><divisions>{PPQ}</divisions>");
+        if let Some(f) = m.key_fifths {
+            let _ = write!(x, "<key><fifths>{f}</fifths></key>");
+        }
         if let Some((b, bt)) = m.time_signature {
             let _ = write!(
                 x,
@@ -91,7 +97,7 @@ fn write_measure(x: &mut String, m: &Measure, first: bool, last_time: &mut Optio
             );
         }
         x.push_str("</attributes>");
-        *last_time = m.time_signature;
+        *last = (m.time_signature, m.key_fifths);
     }
     write_sound_nav(x, nav);
     for &(off, bpm) in &m.tempos {
@@ -333,6 +339,7 @@ impl Score {
                         duration: m.duration,
                         implicit: m.implicit,
                         time_signature: m.time_signature,
+                        key_fifths: m.key_fifths,
                         ..Measure::default()
                     })
                     .unwrap_or_default()

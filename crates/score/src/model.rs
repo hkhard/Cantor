@@ -51,6 +51,9 @@ pub struct Measure {
     pub implicit: bool,
     /// Time signature in effect (carried over from earlier measures).
     pub time_signature: Option<(u32, u32)>,
+    /// Key signature in effect as `<key><fifths>` (sharps positive, flats
+    /// negative), carried over from earlier measures.
+    pub key_fifths: Option<i32>,
     /// Tempo changes `(offset in measure, quarter notes per minute)`.
     pub tempos: Vec<(Tick, f64)>,
     /// Repeats, endings and jumps (PLAY-02).
