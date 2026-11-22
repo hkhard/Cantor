@@ -106,6 +106,19 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('.top h2 >> text=Glimmande Nymf')
   })
 
+  await step('page turn by tap and key while paused (follow must not snap back)', async () => {
+    await page.waitForFunction(() => !/\/0$/.test(document.querySelector('.pageno')?.textContent ?? '/0'))
+    const before = await page.locator('.pageno').textContent()
+    await page.click('.pageturn.right')
+    await page.waitForTimeout(500)
+    const a = await page.locator('.pageno').textContent()
+    if (parseInt(a) !== parseInt(before) + 1) throw new Error(`tap: ${before} -> ${a}`)
+    await page.keyboard.press('ArrowLeft')
+    await page.waitForTimeout(500)
+    const k = await page.locator('.pageno').textContent()
+    if (parseInt(k) !== parseInt(before)) throw new Error(`key: ${a} -> ${k}`)
+  })
+
   await step('pitch pipe all + one', async () => {
     await page.click('text=♪ Pitch')
     await page.click('.top button:has-text("Mixer")')

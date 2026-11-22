@@ -4,7 +4,7 @@
   // (ANN-01..03) and page modes (VIEW-02): single page, two pages side by
   // side, half-page turns (the bottom of this page stays while the top of
   // the next one appears, as on a music stand), and continuous scroll.
-  import { onDestroy, tick } from 'svelte'
+  import { onDestroy, tick, untrack } from 'svelte'
   import type { PDFDocumentProxy } from 'pdfjs-dist'
   import { openPdf, type MeasureBox, type PageMode } from './pdf'
   import PdfPage from './PdfPage.svelte'
@@ -125,8 +125,16 @@
     show(page + d * step)
   }
 
-  // Follow the playing measure onto its page.
+  // Follow the playing measure onto its page. Only when the playing bar
+  // changes: reading `page` here would snap manual page turns straight back.
+  let followed = -1
   $effect(() => {
+    const m = measure
+    if (m === followed) return
+    followed = m
+    untrack(() => followTo(m))
+  })
+  function followTo(measure: number) {
     const b = boxes && measure >= 0 ? boxes[measure] : null
     if (!follow || !b || b.page > pages) return
     if (mode === 'scroll') {
@@ -148,7 +156,7 @@
     }
     const visible = twoUp ? b.page === page || b.page === page + 1 : b.page === page
     if (!visible) show(b.page)
-  })
+  }
 
   let common = $derived({ boxes, measure, loop, ann, tool, inkColor, layer, stamp, onedit, onseek })
 </script>
