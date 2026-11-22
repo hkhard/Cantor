@@ -30,7 +30,7 @@ pub struct LibraryEntry {
 const SCORE_EXT: &[&str] = &["mxl", "musicxml", "xml"];
 
 /// File-name-safe stem: path components and reserved characters removed.
-fn safe_stem(name: &str) -> String {
+pub(crate) fn safe_stem(name: &str) -> String {
     let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
     let stem = match base.rsplit_once('.') {
         Some((s, _)) if !s.is_empty() => s,
@@ -55,7 +55,7 @@ fn safe_stem(name: &str) -> String {
 }
 
 /// First stem not used by any file in `dir`: "Que", "Que (2)", ...
-fn free_stem(dir: &Path, stem: &str) -> String {
+pub(crate) fn free_stem(dir: &Path, stem: &str) -> String {
     let taken = |s: &str| {
         std::fs::read_dir(dir)
             .map(|rd| {

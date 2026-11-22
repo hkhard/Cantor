@@ -370,9 +370,159 @@ pub fn parse_4ss(bytes: &[u8]) -> Result<ForscoreSetlist, ForscoreError> {
     Ok(ForscoreSetlist { items })
 }
 
+fn gzip_plist(v: &Value) -> Vec<u8> {
+    use flate2::{write::GzEncoder, Compression};
+    use std::io::Write;
+    let mut raw = Vec::new();
+    v.to_writer_binary(&mut raw).expect("plist to Vec");
+    let mut gz = GzEncoder::new(Vec::new(), Compression::default());
+    gz.write_all(&raw).expect("gzip to Vec");
+    gz.finish().expect("gzip to Vec")
+}
+
+fn file_name_for(title: &str) -> String {
+    let t: String = title
+        .chars()
+        .map(|c| {
+            if c == '/' || c == '|' || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let t = t.trim();
+    format!("{}.pdf", if t.is_empty() { "Score" } else { t })
+}
+
+fn score_dict(file: &str, title: &str, pdf: &[u8]) -> Dictionary {
+    let mut d = Dictionary::new();
+    d.insert("pdfData".into(), Value::Data(pdf.to_vec()));
+    d.insert(format!("{file}|title"), title.into());
+    d
+}
+
+/// Write a `.4sc` (LIB-09): gzip(binary plist `{pdfData, "<title>.pdf|title"}`),
+/// the structure [`parse_4sc`] reads.
+///
+/// Only verified against this crate's own reader; whether forScore itself
+/// accepts it is unverified. Annotations are not carried: pass the ANN-05
+/// flattened PDF as `pdf` to keep ink visible.
+pub fn write_4sc(title: &str, pdf: &[u8]) -> Vec<u8> {
+    gzip_plist(&Value::Dictionary(score_dict(
+        &file_name_for(title),
+        title,
+        pdf,
+    )))
+}
+
+/// Write a `.4ss` setlist (LIB-09): an NSKeyedArchiver archive with `$top.files`
+/// (`.4sc`-shaped dictionaries) and `$top.setlist` (`Title`/`FilePath`/
+/// `Identifier` items), the structure [`parse_4ss`] reads. `name` is stored
+/// as `$top.title`.
+///
+/// Only verified against this crate's own reader; whether forScore itself
+/// accepts it is unverified. Annotations are not carried: pass ANN-05
+/// flattened PDFs to keep ink visible. Duplicate titles get distinct file names.
+pub fn write_4ss(name: &str, items: &[(String, Vec<u8>)]) -> Vec<u8> {
+    use plist::Uid;
+    let mut objects: Vec<Value> = vec!["$null".into()];
+    let push = |objects: &mut Vec<Value>, v: Value| {
+        objects.push(v);
+        Value::Uid(Uid::new(objects.len() as u64 - 1))
+    };
+    let class = |objects: &mut Vec<Value>, name: &str| {
+        let mut c = Dictionary::new();
+        c.insert("$classname".into(), name.into());
+        c.insert(
+            "$classes".into(),
+            Value::Array(vec![name.into(), "NSObject".into()]),
+        );
+        objects.push(Value::Dictionary(c));
+        Value::Uid(Uid::new(objects.len() as u64 - 1))
+    };
+    let dict_cls = class(&mut objects, "NSDictionary");
+    let arr_cls = class(&mut objects, "NSArray");
+    let archive_dict = |objects: &mut Vec<Value>, d: Dictionary| {
+        let (mut ks, mut vs) = (Vec::new(), Vec::new());
+        for (k, v) in d {
+            ks.push(push(objects, k.into()));
+            vs.push(push(objects, v));
+        }
+        let mut o = Dictionary::new();
+        o.insert("$class".into(), dict_cls.clone());
+        o.insert("NS.keys".into(), Value::Array(ks));
+        o.insert("NS.objects".into(), Value::Array(vs));
+        push(objects, Value::Dictionary(o))
+    };
+    let mut used = std::collections::BTreeSet::new();
+    let (mut files, mut set) = (Vec::new(), Vec::new());
+    for (i, (title, pdf)) in items.iter().enumerate() {
+        let base = file_name_for(title);
+        let stem = base.trim_end_matches(".pdf").to_string();
+        let file = std::iter::once(base)
+            .chain((2..).map(|k| format!("{stem} ({k}).pdf")))
+            .find(|f| !used.contains(f))
+            .expect("unbounded");
+        used.insert(file.clone());
+        files.push(archive_dict(&mut objects, score_dict(&file, title, pdf)));
+        let mut it = Dictionary::new();
+        it.insert("Title".into(), title.as_str().into());
+        it.insert("FilePath".into(), file.into());
+        it.insert("Identifier".into(), format!("cantor-{i}").into());
+        set.push(archive_dict(&mut objects, it));
+    }
+    let array = |objects: &mut Vec<Value>, xs: Vec<Value>| {
+        let mut o = Dictionary::new();
+        o.insert("$class".into(), arr_cls.clone());
+        o.insert("NS.objects".into(), Value::Array(xs));
+        push(objects, Value::Dictionary(o))
+    };
+    let files = array(&mut objects, files);
+    let set = array(&mut objects, set);
+    let title = push(&mut objects, name.into());
+    let mut top = Dictionary::new();
+    top.insert("files".into(), files);
+    top.insert("setlist".into(), set);
+    top.insert("title".into(), title);
+    let mut root = Dictionary::new();
+    root.insert("$archiver".into(), "NSKeyedArchiver".into());
+    root.insert("$version".into(), Value::Integer(100000.into()));
+    root.insert("$top".into(), Value::Dictionary(top));
+    root.insert("$objects".into(), Value::Array(objects));
+    gzip_plist(&Value::Dictionary(root))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lib09_write_4sc_round_trips() {
+        let s = parse_4sc(&write_4sc("Que sera", b"%PDF-1.4 x")).unwrap();
+        assert_eq!(s.title.as_deref(), Some("Que sera"));
+        assert_eq!(s.file_name, "Que sera.pdf");
+        assert_eq!(s.pdf, b"%PDF-1.4 x");
+    }
+
+    #[test]
+    fn lib09_write_4ss_round_trips() {
+        let items = vec![
+            ("Ave".to_string(), b"%PDF a".to_vec()),
+            ("Que".to_string(), b"%PDF q".to_vec()),
+            ("Ave".to_string(), b"%PDF a2".to_vec()),
+        ];
+        let set = parse_4ss(&write_4ss("Concert", &items)).unwrap();
+        assert_eq!(set.items.len(), 3);
+        for (it, (title, pdf)) in set.items.iter().zip(&items) {
+            assert_eq!(&it.title, title);
+            match &it.entry {
+                SetlistEntry::Score(s) => assert_eq!(&s.pdf, pdf),
+                SetlistEntry::Placeholder => panic!("placeholder"),
+            }
+        }
+        assert_ne!(set.items[0].file_path, set.items[2].file_path);
+    }
 
     #[test]
     fn geometry_strings_parse() {
