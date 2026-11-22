@@ -110,11 +110,11 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     flex: 1;
   }
   input {
-    font-size: 16px;
+    font-size: 1rem;
     padding: 7px 9px;
     border-radius: 9px;
     border: 1px solid rgba(0, 0, 0, 0.15);
@@ -129,15 +129,16 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
   .stars button {
     background: none;
     border: none;
-    font-size: 20px;
-    color: #c9c4bc;
-    padding: 2px 3px;
-    min-width: 0;
+    font-size: 1.25rem;
+    color: #8a847c;
+    padding: 4px 6px;
+    min-width: 32px;
+    min-height: 32px;
   }
   .stars button.on {
     color: var(--accent, #b8562b);

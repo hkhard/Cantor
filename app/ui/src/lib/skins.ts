@@ -45,9 +45,11 @@ const light: Skin = {
     'bg-gradient': 'radial-gradient(120% 80% at 0% 0%, #FFFFFF 0%, #F3F0EA 55%, #E9E3D8 100%)',
     surface: '#FFFFFF',
     ink: '#14213D',
-    'ink-muted': '#6B6F7B',
+    // WCAG 2.2 AA (NFR-08): muted text >= 4.5:1 on the background, white on
+    // the accent >= 4.5:1 (was #6B6F7B / #C77A12 at 4.4 / 3.4).
+    'ink-muted': '#5D616C',
     line: 'rgba(20, 33, 61, 0.12)',
-    accent: '#C77A12',
+    accent: '#A9620A',
     'accent-ink': '#FFFFFF',
     'accent-soft': 'rgba(199, 122, 18, 0.14)',
     brand: brand.navy,
@@ -131,7 +133,7 @@ const sepia: Skin = {
     'bg-gradient': 'radial-gradient(120% 80% at 0% 0%, #F8F1E3 0%, #EFE6D4 55%, #E4D8C0 100%)',
     surface: '#FAF4E8',
     ink: '#3B2F22',
-    'ink-muted': '#7D6E5C',
+    'ink-muted': '#6A5C4B',
     line: 'rgba(59, 47, 34, 0.14)',
     'glass-bg': 'rgba(250, 244, 232, 0.66)',
     'glass-bg-strong': 'rgba(250, 244, 232, 0.86)',

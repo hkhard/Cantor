@@ -1,6 +1,6 @@
 <script lang="ts">
   // NFR-09: About, with the licences of what Cantor is built on.
-  import { t, i18n, setLang } from './i18n.svelte'
+  import { t, i18n, setLang, textSize, setTextScale } from './i18n.svelte'
 
   let { onclose }: { onclose: () => void } = $props()
 
@@ -26,6 +26,16 @@
     <select value={i18n.lang} onchange={(e) => setLang((e.target as HTMLSelectElement).value as 'sv' | 'en')}>
       <option value="sv">Svenska</option>
       <option value="en">English</option>
+    </select>
+  </label>
+  <label class="lang"
+    >{t('about.textSize')}
+    <select value={String(textSize.scale)} onchange={(e) => setTextScale(Number((e.target as HTMLSelectElement).value))}>
+      <option value="0.9">90 %</option>
+      <option value="1">100 %</option>
+      <option value="1.25">125 %</option>
+      <option value="1.5">150 %</option>
+      <option value="2">200 %</option>
     </select>
   </label>
   <h4>{t('about.licences')}</h4>
@@ -70,7 +80,7 @@
   ul {
     margin: 0;
     padding-left: 18px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.5;
   }
   .lic {
@@ -78,7 +88,7 @@
   }
   .url {
     color: #77716a;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
   .lang {
     display: flex;

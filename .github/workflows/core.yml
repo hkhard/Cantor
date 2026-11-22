@@ -32,5 +32,25 @@ jobs:
       - name: Traceability (NFR-11)
         run: bash tools/trace.sh
 
+  ui:
+    name: UI acceptance + accessibility (WebKit, iPad mini size)
+    runs-on: [self-hosted, macOS, ARM64, cantor]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Toolchain on PATH
+        run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+      - name: Private sample scores (git-ignored, on the runner only)
+        run: ln -sfn /Users/hkh/dev/musicMaker/scores scores
+      - run: npm ci
+        working-directory: app/ui
+      - run: npx svelte-check --threshold error || true
+        working-directory: app/ui
+      - run: npm run build
+        working-directory: app/ui
+      - name: Feature scenarios and NFR-08 audit
+        run: OUT="$RUNNER_TEMP/cantor-ui" bash tools/ui_harness/run.sh all
+      # Screenshots stay on the runner ($RUNNER_TEMP/cantor-ui/shots): they show
+      # private scores, so they are not uploaded as artifacts.
+
   # Linux / Windows / iOS simulator / Android emulator jobs (WP-0.2) are added
   # when a runner for them exists or when hosted minutes are wanted again.

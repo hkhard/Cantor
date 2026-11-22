@@ -52,6 +52,7 @@ const sv = {
   'read.original': 'Original',
   'read.notation': 'Notbild',
   'read.annotate': 'Anteckna',
+  'read.more': 'Mer',
   'read.perform': 'Framförande',
   'read.performExit': 'Avsluta framförande',
   'read.pedal': 'Pedal',
@@ -83,6 +84,8 @@ const sv = {
   'mix.presetName': 'Namn på mixen',
   'mix.volume': 'Volym {label}',
   'mix.pipe': 'Ton',
+  'mix.mute': 'Tysta',
+  'mix.solo': 'Solo',
   'tr.start': 'Till början',
   'tr.play': 'Spela',
   'tr.pause': 'Paus',
@@ -121,6 +124,7 @@ const sv = {
     'Cantor visar dina noter och spelar varje stämma med eget instrument, så att du kan öva din stämma.',
   'about.licences': 'Licenser',
   'about.language': 'Språk',
+  'about.textSize': 'Textstorlek',
   'pdf.noMap': 'Takterna på sidan är inte kopplade till ljudet för det här stycket, så markören visas inte.',
   'share.title': 'Dela',
   'share.pdf': 'PDF med anteckningar',
@@ -184,6 +188,7 @@ const en: Record<Key, string> = {
   'read.original': 'Original',
   'read.notation': 'Notation',
   'read.annotate': 'Annotate',
+  'read.more': 'More',
   'read.perform': 'Perform',
   'read.performExit': 'Exit performance',
   'read.pedal': 'Pedal',
@@ -215,6 +220,8 @@ const en: Record<Key, string> = {
   'mix.presetName': 'Mix name',
   'mix.volume': 'Volume {label}',
   'mix.pipe': 'Note',
+  'mix.mute': 'Mute',
+  'mix.solo': 'Solo',
   'tr.start': 'To start',
   'tr.play': 'Play',
   'tr.pause': 'Pause',
@@ -252,6 +259,7 @@ const en: Record<Key, string> = {
   'about.body': 'Cantor shows your scores and plays every part with its own instrument, so you can rehearse your line.',
   'about.licences': 'Licences',
   'about.language': 'Language',
+  'about.textSize': 'Text size',
   'pdf.noMap': "This page's bars are not linked to the audio for this piece, so the cursor is not shown.",
   'share.title': 'Share',
   'share.pdf': 'PDF with annotations',
@@ -285,4 +293,31 @@ export function t(key: Key, vars?: Record<string, string | number>): string {
   let s = dicts[i18n.lang][key] ?? sv[key] ?? key
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v))
   return s
+}
+
+/** NFR-08 text size: the iOS system text size (Dynamic Type, read through the
+ *  -apple-system-body font) times the user's own choice in About. */
+export const textSize = $state({ scale: Number(localStorage.getItem('cantor.textScale') ?? '1') || 1 })
+
+export function applyTextSize() {
+  const probe = document.createElement('span')
+  probe.style.font = '-apple-system-body'
+  probe.style.position = 'absolute'
+  probe.style.visibility = 'hidden'
+  document.body.appendChild(probe)
+  const sys = parseFloat(getComputedStyle(probe).fontSize)
+  probe.remove()
+  // iOS reports 17px for -apple-system-body at the default text size (Large)
+  // and more or less as the user changes Dynamic Type; keep the UI's 16px
+  // base at the default. Elsewhere (desktop WebKit says 13px) use 16px.
+  const ios = /iPad|iPhone/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+  const base = ios && sys && Number.isFinite(sys) ? Math.max(12, Math.min(32, (sys / 17) * 16)) : 16
+  document.documentElement.style.setProperty('--system-text', `${base}px`)
+  document.documentElement.style.setProperty('--text-scale', String(textSize.scale))
+}
+
+export function setTextScale(s: number) {
+  textSize.scale = s
+  localStorage.setItem('cantor.textScale', String(s))
+  applyTextSize()
 }

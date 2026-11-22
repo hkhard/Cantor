@@ -61,10 +61,10 @@
   }
   p {
     margin: 0;
-    font-size: 16px;
+    font-size: 1rem;
   }
   input {
-    font-size: 17px;
+    font-size: 1.0625rem;
     padding: 8px 10px;
     border-radius: 10px;
     border: 1px solid rgba(0, 0, 0, 0.15);

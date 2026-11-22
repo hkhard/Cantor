@@ -1,6 +1,13 @@
 /* Cantor UI. All colours/shapes come from skin tokens (src/lib/skins.ts),
    applied as CSS custom properties on <html>. Never use raw colours here. */
 
+/* Text size (NFR-08 Dynamic Type): UI text is in rem. On iOS the root size
+   follows the system text size (-apple-system-body); the user can also pick
+   a size in About (sets --text-scale on <html>). */
+html {
+  font-size: calc(var(--system-text, 16px) * var(--text-scale, 1));
+}
+
 :root {
   font-family: var(--font-ui);
   color: var(--ink);
@@ -103,7 +110,7 @@ select {
   border-radius: var(--radius-pill);
   background: transparent;
   padding: 6px 14px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--ink-muted);
 }
 .segmented button.on {
@@ -131,6 +138,7 @@ select {
 }
 .library header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
   margin-bottom: 24px;
@@ -144,7 +152,7 @@ select {
 }
 .library h1 {
   font-family: var(--font-display);
-  font-size: 44px;
+  font-size: 2.75rem;
   margin: 0;
   line-height: 1;
 }
@@ -165,7 +173,7 @@ select {
   min-height: 84px;
   justify-content: flex-start;
   text-align: left;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-family: var(--font-display);
   border-radius: var(--radius-m);
   padding: 14px 18px;
@@ -179,7 +187,7 @@ select {
 }
 .note {
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   margin-top: 24px;
 }
 
@@ -204,7 +212,7 @@ select {
 .top h2 {
   flex: 1;
   margin: 0 6px;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-family: var(--font-display);
   white-space: nowrap;
   overflow: hidden;
@@ -212,7 +220,7 @@ select {
 }
 .choir {
   color: var(--ink-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .choir select {
   margin-left: 4px;
@@ -299,7 +307,7 @@ select {
 .presets button {
   flex: 1;
   padding: 8px 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .strip {
   display: grid;
@@ -350,7 +358,7 @@ select {
   font-weight: 600;
 }
 .strip .inst {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--ink-muted);
 }
 .strip input[type='range'] {
@@ -375,7 +383,7 @@ select {
 }
 .hint {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .transport {
@@ -400,11 +408,11 @@ select {
 .page {
   font-variant-numeric: tabular-nums;
   color: var(--ink-muted);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .tempo,
 .follow {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--ink-muted);
   display: flex;
   align-items: center;
@@ -429,11 +437,11 @@ select {
   border-radius: 0;
   padding: 6px 12px;
   background: transparent;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .seg button.on {
   background: var(--accent);
-  color: white;
+  color: var(--accent-ink);
 }
 .score.pdf {
   background: transparent;
@@ -445,13 +453,13 @@ select {
   align-items: center;
   gap: 4px;
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   border-radius: 999px;
   white-space: nowrap;
 }
 .chip.on {
   background: var(--accent);
-  color: white;
+  color: var(--accent-ink);
   border-color: transparent;
 }
 .score g.measure.inloop > g.staff > path,
@@ -468,7 +476,7 @@ select {
 }
 .libbar .notice {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .scores li {
   position: relative;
@@ -486,7 +494,7 @@ select {
   font-family: -apple-system, system-ui, sans-serif;
 }
 .badge {
-  font-size: 11px;
+  font-size: 0.6875rem;
   padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid var(--line);
@@ -507,14 +515,14 @@ select {
   flex: none;
   padding: 0;
   border-radius: 50%;
-  font-size: 16px;
+  font-size: 1rem;
   line-height: 1;
   color: var(--muted);
 }
 
 .transport.silent {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 0.875rem;
   justify-content: center;
 }
 
@@ -554,7 +562,7 @@ select {
   border: none;
 }
 .exporting {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 
@@ -586,7 +594,7 @@ select {
   left: 50%;
   transform: translateX(-50%);
   z-index: 31;
-  font-size: 13px;
+  font-size: 0.8125rem;
   opacity: 0.6;
 }
 .popover.pedals {
@@ -599,7 +607,7 @@ select {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* ANN-01..03 annotation toolbar */
@@ -665,13 +673,13 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .popover.more .col {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .popover.more .check {
   display: flex;
@@ -693,7 +701,7 @@ select {
   outline: 2px solid var(--accent, #b8562b);
 }
 .top .setpos {
-  font-size: 13px;
+  font-size: 0.8125rem;
   opacity: 0.6;
   font-family: -apple-system, system-ui, sans-serif;
 }
@@ -734,4 +742,32 @@ select {
   top: calc(100% + 6px);
   left: 0;
   right: auto;
+}
+
+/* NFR-08 keyboard focus: always visible, also on glass and accent fills. */
+:focus-visible {
+  outline: 3px solid var(--brand, #1e3a7b);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--focus-halo, rgba(255, 255, 255, 0.85));
+}
+[data-scheme='dark'] :focus-visible {
+  outline-color: var(--accent);
+  --focus-halo: rgba(0, 0, 0, 0.6);
+}
+
+/* NFR-08 reduced motion: no transitions, no page/scroll animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Menus float over the score: solid enough for text contrast in every skin. */
+.exportwrap .menu,
+.popover {
+  background: var(--glass-bg-strong);
 }

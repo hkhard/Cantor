@@ -161,13 +161,15 @@
   {#if error}<p class="error">{error}</p>{/if}
   {#if loading}<p class="loading">{loading}</p>{/if}
 
-  <div class="tabs" role="tablist">
+  <div class="tabs">
+    <div class="tablist" role="tablist" aria-label={t('lib.setlists')}>
     <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
     {#each setlists as sl (sl.id)}
       <button role="tab" class="chip" class:on={tab === sl.id} aria-selected={tab === sl.id} onclick={() => (tab = sl.id)}
         >{sl.name}</button
       >
     {/each}
+    </div>
     <button class="chip" onclick={newSetlist}>{t('lib.newSetlist')}</button>
   </div>
 
@@ -276,6 +278,9 @@
 {#if aboutOpen}<About onclose={() => (aboutOpen = false)} />{/if}
 
 <style>
+  .tablist {
+    display: contents;
+  }
   .tabs {
     display: flex;
     flex-wrap: wrap;
@@ -285,7 +290,7 @@
   .search {
     flex: 1;
     min-width: 200px;
-    font-size: 16px;
+    font-size: 1rem;
     padding: 8px 12px;
     border-radius: 12px;
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -304,7 +309,7 @@
     min-width: 0;
   }
   .meta {
-    font-size: 12px;
+    font-size: 0.75rem;
     opacity: 0.65;
   }
   .scores :global(.side) {
@@ -315,7 +320,7 @@
     height: 28px;
     min-height: 0;
     padding: 0 10px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-family: -apple-system, system-ui, sans-serif;
     border-radius: 14px;
   }
@@ -354,7 +359,7 @@
   }
   .addmenu :global(button) {
     min-height: 40px;
-    font-size: 15px;
+    font-size: 0.9375rem;
     padding: 8px 14px;
   }
   .addmenu {
@@ -371,7 +376,7 @@
   .setname {
     flex: 1;
     margin: 0;
-    font-size: 20px;
+    font-size: 1.25rem;
   }
   .num {
     display: inline-block;

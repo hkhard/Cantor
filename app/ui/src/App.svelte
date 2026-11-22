@@ -701,18 +701,18 @@
       {/if}
       {#if opened.pdf_url && opened.musicxml}
         <div class="seg" role="group" aria-label={t('read.pageMode')}>
-          <button class:on={view === 'pdf'} onclick={() => switchView('pdf')}>{t('read.original')}</button>
-          <button class:on={view === 'notation'} onclick={() => switchView('notation')}>{t('read.notation')}</button>
+          <button class:on={view === 'pdf'} aria-pressed={view === 'pdf'} onclick={() => switchView('pdf')}>{t('read.original')}</button>
+          <button class:on={view === 'notation'} aria-pressed={view === 'notation'} onclick={() => switchView('notation')}>{t('read.notation')}</button>
         </div>
       {/if}
       {#if ann && (view === 'pdf' ? !!opened.pdf_url : !!engraved)}
-        <button class="icon" class:active={annotating} onclick={() => (annotating = !annotating)}
+        <button class="icon annotate" class:active={annotating} aria-pressed={annotating} onclick={() => (annotating = !annotating)}
           >{annotating ? t('common.done') : t('read.annotate')}</button
         >
       {/if}
-      <button class="icon" class:active={moreOpen} onclick={() => { moreOpen = !moreOpen; pedalsOpen = false; appearanceOpen = false }} aria-haspopup="dialog">•••</button>
+      <button class="icon" class:active={moreOpen} onclick={() => { moreOpen = !moreOpen; pedalsOpen = false; appearanceOpen = false }} aria-haspopup="dialog" aria-expanded={moreOpen} aria-label={t('read.more')}>•••</button>
       {#if opened.channels.length}
-        <button class="icon" class:active={mixerOpen} onclick={() => (mixerOpen = !mixerOpen)}
+        <button class="icon" class:active={mixerOpen} onclick={() => (mixerOpen = !mixerOpen)} aria-label={mixerOpen ? t('read.hideMixer') : t('read.mixer')} aria-pressed={mixerOpen}
           ><Icon name="sliders" /> <span class="wide">{mixerOpen ? t('read.hideMixer') : t('read.mixer')}</span></button
         >
       {/if}
@@ -790,23 +790,23 @@
     {#if annotating && ann}
       <div class="annbar glass" role="toolbar">
         <div class="seg" role="group">
-          <button class:on={tool === 'pen'} onclick={() => (tool = 'pen')}>{t('ann.pen')}</button>
-          <button class:on={tool === 'highlighter'} onclick={() => (tool = 'highlighter')}>{t('ann.highlighter')}</button>
-          <button class:on={tool === 'eraser'} onclick={() => (tool = 'eraser')}>{t('ann.eraser')}</button>
-          <button class:on={tool === 'text'} onclick={() => (tool = 'text')}>{t('ann.text')}</button>
-          <button class:on={tool === 'stamp'} onclick={() => (tool = 'stamp')}>{t('ann.stamp')}</button>
+          <button class:on={tool === 'pen'} aria-pressed={tool === 'pen'} onclick={() => (tool = 'pen')}>{t('ann.pen')}</button>
+          <button class:on={tool === 'highlighter'} aria-pressed={tool === 'highlighter'} onclick={() => (tool = 'highlighter')}>{t('ann.highlighter')}</button>
+          <button class:on={tool === 'eraser'} aria-pressed={tool === 'eraser'} onclick={() => (tool = 'eraser')}>{t('ann.eraser')}</button>
+          <button class:on={tool === 'text'} aria-pressed={tool === 'text'} onclick={() => (tool = 'text')}>{t('ann.text')}</button>
+          <button class:on={tool === 'stamp'} aria-pressed={tool === 'stamp'} onclick={() => (tool = 'stamp')}>{t('ann.stamp')}</button>
         </div>
         {#if tool === 'pen' || tool === 'text'}
           <span class="colors" role="group" aria-label={t('ann.color')}>
             {#each inkColors as c}
-              <button class="swatch" class:on={inkColor === c} style="background:{c}" onclick={() => (inkColor = c)} aria-label="{t('ann.color')} {c}"></button>
+              <button class="swatch" class:on={inkColor === c} aria-pressed={inkColor === c} style="background:{c}" onclick={() => (inkColor = c)} aria-label="{t('ann.color')} {c}"></button>
             {/each}
           </span>
         {/if}
         {#if tool === 'stamp'}
           <span class="stamps" role="group" aria-label={t('ann.stamp')}>
             {#each STAMPS as st}
-              <button class:on={stamp === st.id} onclick={() => (stamp = st.id)}>{st.label}</button>
+              <button class:on={stamp === st.id} aria-pressed={stamp === st.id} aria-label={st.name} onclick={() => (stamp = st.id)}>{st.label}</button>
             {/each}
           </span>
         {/if}
@@ -901,7 +901,7 @@
           </div>
           {#each opened.channels as c, i (i)}
             <div class="strip {roleClass(c)}" class:mine={mine === i}>
-              <button class="name" onclick={() => { mine = mine === i ? null : i; persist() }} title={t('mix.hint')}>
+              <button class="name" aria-pressed={mine === i} onclick={() => { mine = mine === i ? null : i; persist() }} title={t('mix.hint')}>
                 <span class="label">{c.label}</span>
                 <span class="inst">{c.instrument}</span>
               </button>
@@ -914,8 +914,8 @@
                 oninput={(e) => setVolume(i, e)}
                 aria-label={t('mix.volume', { label: c.label })}
               />
-              <button class="m" class:on={strips[i].mute} onclick={() => setMute(i)}>M</button>
-              <button class="s" class:on={strips[i].solo} onclick={() => setSolo(i)}>S</button>
+              <button class="m" class:on={strips[i].mute} aria-pressed={strips[i].mute} aria-label="{t('mix.mute')} {c.label}" onclick={() => setMute(i)}>M</button>
+              <button class="s" class:on={strips[i].solo} aria-pressed={strips[i].solo} aria-label="{t('mix.solo')} {c.label}" onclick={() => setSolo(i)}>S</button>
               <button class="pipe" onclick={() => api.pitchPipe(i)} aria-label="{t('mix.pipe')} {c.label}">♪</button>
             </div>
           {/each}
@@ -948,17 +948,18 @@
       <button
         class="chip"
         class:on={loopPick !== 'off' || loopB !== null}
+        aria-pressed={loopPick !== 'off' || loopB !== null}
         onclick={toggleLoop}
         aria-label={t('tr.loop')}
         ><Icon name="loop" size={18} />
         {#if loopPick === 'a'}{t('tr.loopA')}{:else if loopPick === 'b'}{t('tr.loopB')}{:else if loopA !== null && loopB !== null}{t('tr.bars', { a: loopA + 1, b: loopB + 1 })}{:else}{t('tr.loop')}{/if}</button
       >
-      <button class="chip" class:on={metronome} onclick={toggleMetronome} aria-label={t('tr.click')}
+      <button class="chip" class:on={metronome} aria-pressed={metronome} onclick={toggleMetronome} aria-label={t('tr.click')}
         ><Icon name="metronome" size={18} /> {t('tr.click')}</button
       >
-      <button class="chip" class:on={countIn} onclick={toggleCountIn}>{t('tr.countIn')}</button>
+      <button class="chip" class:on={countIn} aria-pressed={countIn} onclick={toggleCountIn}>{t('tr.countIn')}</button>
       <span class="exportwrap">
-        <button class="chip" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu">{t('tr.export')}</button>
+        <button class="chip" onclick={() => (exportOpen = !exportOpen)} aria-haspopup="menu" aria-expanded={exportOpen}>{t('tr.export')}</button>
         {#if exportOpen}
           <span class="menu glass" role="menu">
             <button role="menuitem" onclick={() => exportAudio('mix')}>{t('tr.exportMix')}</button>

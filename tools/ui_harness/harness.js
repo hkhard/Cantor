@@ -7,9 +7,6 @@ const fs = require('fs')
 const path = require('path')
 
 const DIR = __dirname
-const xml = fs.readFileSync(path.join(DIR, 'Glimmande Nymf.musicxml'), 'utf8')
-const pdf = fs.readFileSync(path.join(DIR, 'Glimmande Nymf.pdf'))
-const boxes = JSON.parse(fs.readFileSync(path.join(DIR, 'Glimmande Nymf.measures.json'), 'utf8'))
 const out = path.join(DIR, 'shots')
 fs.mkdirSync(out, { recursive: true })
 
@@ -25,139 +22,15 @@ const H = Number(process.env.H || 1133)
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push('console: ' + m.text())
   })
-  await page.route('http://cantor.localhost/**', (r) => r.fulfill({ body: pdf, contentType: 'application/pdf' }))
-  await page.exposeBinding('__node', () => null)
-  await page.addInitScript(
-    ({ xml, boxes }) => {
-      const calls = []
-      window.__calls = calls
-      const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [] }
-      window.__store = store
-      const scores = [
-        { file: '0:Glimmande Nymf', title: 'Glimmande Nymf', playable: true, pdf: true, user: false },
-        { file: '0:Christmas', title: 'Christmas Day', playable: true, pdf: false, user: false },
-        { file: '1:Mine', title: 'Min egen', playable: false, pdf: true, user: true },
-      ]
-      const defSettings = () => ({ my_part: null, strips: [], tempo_percent: 100, view: 'pdf', choir: 'auto', presets: [], transpose: 0, hidden_parts: [] })
-      let pos = 0
-      let playing = false
-      const handlers = {
-        list_scores: () => scores.map((s) => ({ ...s, title: store.metadata[s.file]?.title || s.title })),
-        library_data: () => ({ metadata: store.metadata, setlists: store.setlists }),
-        set_metadata: ({ id, metadata }) => {
-          store.metadata[id] = metadata
-        },
-        search_scores: ({ query }) => {
-          const q = query.toLowerCase()
-          return scores
-            .filter((s) => {
-              const m = store.metadata[s.file]
-              return [s.title, m?.composer, ...(m?.tags ?? [])].some((x) => x && x.toLowerCase().includes(q))
-            })
-            .map((s) => s.file)
-        },
-        save_setlist: ({ setlist, name }) => {
-          if (setlist) {
-            store.setlists = store.setlists.map((s) => (s.id === setlist.id ? setlist : s))
-            return setlist.id
-          }
-          const id = 'sl' + (store.setlists.length + 1)
-          store.setlists.push({ id, name, items: [] })
-          return id
-        },
-        delete_setlist: ({ id }) => {
-          store.setlists = store.setlists.filter((s) => s.id !== id)
-        },
-        score_settings: ({ id }) => store.settings[id] ?? defSettings(),
-        save_score_settings: ({ id, settings }) => {
-          store.settings[id] = settings
-        },
-        open_score: ({ file, transpose }) => ({
-          title: file.split(':')[1],
-          musicxml: file === '1:Mine' ? '' : xml,
-          channels:
-            file === '1:Mine'
-              ? []
-              : [
-                  { label: 'Tenor 1', role: 'Tenor', program: 56, instrument: 'Trumpet', pan: -0.4 },
-                  { label: 'Tenor 2', role: 'Tenor', program: 60, instrument: 'French Horn', pan: -0.1 },
-                  { label: 'Bas 1', role: 'Bass', program: 42, instrument: 'Cello', pan: 0.1 },
-                  { label: 'Bas 2', role: 'Bass', program: 70, instrument: 'Bassoon', pan: 0.4 },
-                ],
-          measures: boxes.map((_, i) => [i * 2, i]),
-          duration: boxes.length * 2,
-          choir: 'auto',
-          sample_rate: 48000,
-          pdf_url: file === '0:Christmas' ? null : '0/Glimmande Nymf.pdf',
-          measure_boxes: file === '0:Glimmande Nymf' ? boxes : null,
-          _transpose: transpose,
-        }),
-        status: () => ({ playing, position: pos, duration: 60, tempo: 1 }),
-        play: () => {
-          playing = true
-        },
-        pause: () => {
-          playing = false
-        },
-        seek: ({ seconds }) => {
-          pos = seconds
-        },
-        pitch_pipe: ({ channel }) => {
-          store.pipe.push(channel ?? 'all')
-        },
-        annotations_open: () => {
-          store.ann = store.ann ?? { version: 1, layers: [{ name: 'Default', visible: true }], items: [], next_id: 1 }
-          return store.ann
-        },
-        annotations_edit: ({ action, command }) => {
-          const d = store.ann
-          if (action === 'apply') {
-            if (command.op === 'Add') d.items.push({ id: d.next_id++, layer: command.layer, anchor: command.anchor, item: command.item })
-            if (command.op === 'AddLayer') d.layers.push({ name: command.name, visible: true })
-            if (command.op === 'SetLayerVisible') d.layers[command.layer].visible = command.visible
-            if (command.op === 'Erase') d.items = d.items.filter((a) => !('Ink' in a.item))
-            if (command.op === 'RemoveMany') {
-              d._removed = d._removed ?? []
-              d._removed.push(d.items.filter((a) => command.ids.includes(a.id)))
-              d.items = d.items.filter((a) => !command.ids.includes(a.id))
-            }
-          } else if (action === 'undo') {
-            if (d._removed?.length) d.items.push(...d._removed.pop())
-            else d.items.pop()
-          }
-          return JSON.parse(JSON.stringify(d))
-        },
-      }
-      window.__TAURI_INTERNALS__ = {
-        invoke: async (cmd, args) => {
-          calls.push([cmd, args])
-          const h = handlers[cmd]
-          return h ? JSON.parse(JSON.stringify(h(args ?? {}) ?? null)) : null
-        },
-        transformCallback: (cb) => {
-          const id = Math.random()
-          window['_' + id] = cb
-          return id
-        },
-        unregisterCallback: () => {},
-        convertFileSrc: (p) => p,
-        metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
-      }
-      window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} }
-    },
-    { xml, boxes },
-  )
-  // Force the non-WebKit URL branch in scoreFileUrl (served by the route above).
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux) Harness' })
-  })
-
+  await require('./mock.js').setup(page, DIR)
   const shot = async (n) => page.screenshot({ path: path.join(out, `${n}.png`) })
+  let failed = 0
   const step = async (name, fn) => {
     try {
       await fn()
       console.log('ok  ', name)
     } catch (e) {
+      failed++
       console.log('FAIL', name, '-', e.message.split('\n')[0])
       await shot('fail-' + name.replace(/\W+/g, '_'))
     }
@@ -445,4 +318,5 @@ const H = Number(process.env.H || 1133)
 
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors')
   await browser.close()
+  process.exit(failed || errors.length ? 1 : 0)
 })()

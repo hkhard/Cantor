@@ -74,20 +74,20 @@ export function placeOnPage(
   return { page: b.page, x: b.x + m.dx * sx, y: b.y + m.dy * sy, item }
 }
 
-export const STAMPS: { id: string; label: string }[] = [
-  { id: 'Breath', label: '∨' },
-  { id: 'Fermata', label: '𝄐' },
-  { id: 'Pp', label: 'pp' },
-  { id: 'P', label: 'p' },
-  { id: 'Mp', label: 'mp' },
-  { id: 'Mf', label: 'mf' },
-  { id: 'F', label: 'f' },
-  { id: 'Ff', label: 'ff' },
-  { id: 'Crescendo', label: '<' },
-  { id: 'Diminuendo', label: '>' },
-  { id: '1', label: '1' },
-  { id: '2', label: '2' },
-  { id: '3', label: '3' },
+export const STAMPS: { id: string; label: string; name: string }[] = [
+  { id: 'Breath', label: '∨', name: 'Andning / breath' },
+  { id: 'Fermata', label: '𝄐', name: 'Fermat / fermata' },
+  { id: 'Pp', label: 'pp', name: 'pp, pianissimo' },
+  { id: 'P', label: 'p', name: 'p, piano' },
+  { id: 'Mp', label: 'mp', name: 'mp, mezzo piano' },
+  { id: 'Mf', label: 'mf', name: 'mf, mezzo forte' },
+  { id: 'F', label: 'f', name: 'f, forte' },
+  { id: 'Ff', label: 'ff', name: 'ff, fortissimo' },
+  { id: 'Crescendo', label: '<', name: 'crescendo' },
+  { id: 'Diminuendo', label: '>', name: 'diminuendo' },
+  { id: '1', label: '1', name: '1' },
+  { id: '2', label: '2', name: '2' },
+  { id: '3', label: '3', name: '3' },
 ]
 
 export function glyph(kind: unknown): string {

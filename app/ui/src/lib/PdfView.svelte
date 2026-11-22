@@ -254,16 +254,16 @@
     position: absolute;
     bottom: 6px;
     right: 12px;
-    font-size: 12px;
-    color: #77716a;
+    font-size: 0.75rem;
+    color: #57524c;
   }
   .nomap {
     position: absolute;
     bottom: 6px;
     left: 12px;
     right: 80px;
-    font-size: 12px;
-    color: #77716a;
+    font-size: 0.75rem;
+    color: #57524c;
     margin: 0;
     pointer-events: none;
   }

@@ -1,23 +1,36 @@
 #!/usr/bin/env bash
-# UI acceptance harness: the real Svelte UI in WebKit at iPad mini size
-# (744x1133; W=/H= to change) with the Tauri backend mocked in memory.
+# UI acceptance: the real Svelte UI in WebKit at iPad mini size (744x1133;
+# W=/H= to change) with the Tauri backend mocked in memory.
+#   harness.js  feature scenarios (library, setlists, reader, annotations ...)
+#   a11y.js     NFR-08: axe-core WCAG 2.2 AA on every screen in all skins and
+#               both languages, control names, keyboard, 200% text, reduced motion
 # Needs a private score with PDF + measure map in scores/out (git-ignored).
-#   tools/ui_harness/run.sh            screenshots in $OUT (default /tmp/cantor-ui)
+#   tools/ui_harness/run.sh [harness|a11y|all]   screenshots in $OUT/shots
 set -euo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${OUT:-${TMPDIR:-/tmp}/cantor-ui}"
 SCORE="${SCORE:-Glimmande Nymf}"
-mkdir -p "$OUT"
-cp "$ROOT/tools/ui_harness/harness.js" "$OUT/"
+WHAT="${1:-all}"
+mkdir -p "$OUT/shots"
+cp "$ROOT"/tools/ui_harness/{harness,mock,a11y}.js "$OUT/"
 cp "$ROOT/scores/out/$SCORE.musicxml" "$OUT/Glimmande Nymf.musicxml"
 cp "$ROOT/scores/out/pdf/$SCORE.pdf" "$OUT/Glimmande Nymf.pdf"
 cp "$ROOT/scores/out/pdf/$SCORE.measures.json" "$OUT/Glimmande Nymf.measures.json"
 cd "$OUT"
-[ -d node_modules/playwright ] || { npm init -y >/dev/null; npm i -s playwright@1; npx playwright install webkit; }
+if [ ! -d node_modules/playwright ] || [ ! -d node_modules/axe-core ]; then
+  npm init -y >/dev/null
+  npm i -s playwright@1 axe-core@4
+  npx playwright install webkit
+fi
 cd "$ROOT/app/ui"
-npx vite --port 5173 --strictPort >"$OUT/vite.log" 2>&1 &
+[ -d node_modules ] || npm ci
+PORT=5173
+npx vite --port $PORT --strictPort >"$OUT/vite.log" 2>&1 &
 VITE=$!
-trap 'kill $VITE' EXIT
-sleep 3
-node "$OUT/harness.js"
+trap 'kill $VITE 2>/dev/null' EXIT
+for _ in $(seq 1 40); do curl -sf "http://localhost:$PORT/" >/dev/null && break; sleep 0.5; done
+status=0
+if [ "$WHAT" = all ] || [ "$WHAT" = harness ]; then node "$OUT/harness.js" || status=1; fi
+if [ "$WHAT" = all ] || [ "$WHAT" = a11y ]; then node "$OUT/a11y.js" || status=1; fi
+exit $status
