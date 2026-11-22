@@ -151,6 +151,18 @@ OCR for lyrics and text: Audiveris needs Tesseract `tessdata` (full, not
 `tessdata_fast`, it uses the legacy engine). With `swe+eng`, Å/Ä/Ö are read
 correctly ("Är jag född"); with English only they become A/a/o.
 
+Full run with `swe+eng` OCR (2026-11-22): 11 of 12 convert, 9 MusicXML files
+carry lyrics (30 to 684 syllables each; the two joined page-by-page files have
+none yet because the writer does not model lyrics). Against MuseScore: Calypso,
+Olaf, Stad i ljus, Är jag född, Glimmande Nymf 100%, Island 99.8%, Bacchi 97%.
+Side effects of OCR to handle:
+- Misread text becomes chord symbols (`<harmony>`, 37 in "Jag och min far");
+  MuseScore plays them, Cantor rightly does not. Strip or ignore them on import.
+- Part names become OCR noise (". '1'", "Tent or"): name parts from staff
+  position/clef (S/A/T/B) and let the user rename.
+- Text recognition changes how Audiveris splits systems into parts (kunglilje
+  2 -> 4 parts); the per-part mixer needs a "merge parts" action.
+
 That measures **our MIDI generation** against an independent player. It does
 not measure **OMR accuracy** against the printed page; that needs hand-checked
 ground truth for a few pieces (WP-3.13 fixtures).
