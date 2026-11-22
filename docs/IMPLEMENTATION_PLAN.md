@@ -409,6 +409,7 @@ tests (NFR-11: 100% of P0 criteria automated).
   - **Bug found:** the annotation toolbar covered the "•••" menu, so "Framförande" could not be tapped while annotating. Fixed.
   - **Measured on the iPad mini (A17 Pro, 2026-11-22):** a `perf_mark` probe writes to Documents/.perf.log, which is not backed up. "Do you hear" (13 engraved pages, 139 bars, the largest sample) took 568 ms to engrave and 765 ms from tap to first page (NFR-03 limit 1.5 s). Memory footprint was 109 MB with the score and the 30 MB SoundFont loaded (NFR-04 limit 400 MB). Not a 100-page score: no such sample exists.
   - **Not verified on the device:** backup and restore through the real share sheet and the Files app, 60 fps scrolling (not measured), NFR-01 on an A14 iPad (only the Mac and the A17 Pro were available), and a run with the network off.
+  - **Product owner check on the iPad mini (2026-11-22):** "all checks works". That covers backup and restore, the share sheet and the network-off run.
 
 ## 8. Future features (parked)
 
