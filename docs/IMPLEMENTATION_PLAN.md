@@ -301,6 +301,41 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [x] Original PDF view (LIB-05, 2026-11-22, after product owner feedback that the redrawn OMR notation showed misread notes and text as if they were the score): the app shows the original PDF page (pdf.js) and draws the playing measure as a box from the Audiveris measure map (`cantor_omr::measure_map`: `<stack left right>` per `<system>`, y-range from barline bounds, courtesy stacks skipped, split by movement, page-by-page and cleaned fallbacks). Tap a measure on the page to play from there; Original/Notbild toggle. Map equals the MusicXML measure count on 10 of 13 scores (Bacchi, Christmas Day, Calypso, Glimmande Nymf, Island, Jag och min far, Olaf, Stad i ljus, kunglilje, Är jag född); no box for Do you hear (screenshot spreads), I bröllopsgården (page books split into movements), Supa klockan (not converted): those show the PDF without a cursor and say so. OCR text filter (LIB-06): dynamics, URLs, credits, specks and verse numbers are not lyrics, OCR chord symbols removed, in both singing and the notation view; files from notation programs untouched. Clean MusicXML (MuseScore "Que? Status Quo medley", TTT/TTBB) plays with 6 lines: parts named "T1 T2 B1 B2" with the MuseScore default Piano instrument are now treated as voices, the lead part is labelled "(solo)". Verified in the iPad simulator by screenshot (Olaf PDF page with box on the right bar at 0:16, medley notation with 6 channels); installed and launched on the iPad mini. Not verified on the device: sound, PDF rendering speed
 - [x] Playback features (2026-11-22): PLAY-06 metronome click (GM wood blocks, accent on one, compound meters counted in dotted beats) and one-bar count-in at the current tempo; PLAY-07 A-B loop over written bars, wrapping on the exact sample frame with notes released; PLAY-10 dynamics to velocity per staff (marks and `<sound dynamics>`), staccato 50% / staccatissimo 25% length, accents louder; swing (`<sound><swing>` ratio kept, bare "Swing" = triplet 2:1, "Straight" ends it, 16th swing). App: Slinga (tap first and last bar), Klick, Inräkning. 150 tests
 - [x] Share sheet / Open in (LIB-01/02/07): the iOS app declares MusicXML (`com.recordare.musicxml`, `com.recordare.musicxml.uncompressed`), forScore (`com.forScore.4sc`, `com.forScore.4ss`, identifiers from forScore's developer page) and PDF as viewer document types, so Cantor appears in "Open in…"/share for these files from Files, Mail, AirDrop, forScore and others. Received files land in Documents/Inbox; Cantor imports them into the user library (Documents, also visible in the Files app as "On My iPad > Cantor"; .4sc/.4ss unpacked to their PDFs; names made safe, never overwritten; originals moved to Documents/.imported) and opens a single shared score directly. Importera button uses the system file picker. PDF-only scores (forScore files) are readable without sound. Verified in the iPad mini simulator by handing the app file URLs the way iOS does (`simctl openurl`): a .4sc opened as its PDF page, an .mxl opened ready to play. Not verified: the real share sheet from another app on the device (needs your hands), large .4ss setlists
+- [x] Feature pass towards the full PRD (2026-11-22). Core crates, tested:
+  - `cantor-library::store` (LIB-03 metadata, LIB-04 search over 10,000 items under 100 ms in release, SET-01 setlists with placeholders, PLAY-04 custom presets, per-score settings, LIB-08 setlist from a forScore .4ss; JSON store with atomic save and a backup on corrupt files).
+  - `cantor-library::bundle` (SET-02 `.cantorset`: scores, annotations, metadata and mixes, sha256 content hash identical after a round trip, tampered files rejected).
+  - `forscore::write_4sc/write_4ss` (LIB-09). These round-trip through our own parser only. Whether forScore opens them is not verified.
+  - `cantor-score` transpose (VIEW-05: key respelled, fewer accidentals).
+  - `cantor-annotations` (ANN-01..05: page and measure anchors, ink, highlighter, text, stamps, shapes, raster layers, layers, undo 200, eraser, SVG, annotated PDF via lopdf).
+  - `cantor-audio` pitch pipe (PERF-03: starting note per part or all, also while paused).
+  - 194 tests in total.
+- [x] App wiring, same day:
+  - **Library:** search, a metadata editor ("Info"), setlist tabs (create, add, reorder, remove, delete, "Spela listan", ◀ ▶ between pieces in the reader, missing scores shown as placeholders) and About with licences and a language switch.
+  - **Reader ("•••" menu):** Framförande, choir type, transpose ±12 (sound and notation), parts shown in the notation (VIEW-04, sound unaffected), page modes (VIEW-02: single, two pages in landscape, half-page turn, continuous scroll) and Pedal.
+  - **Remembered per score:** mixer, my part, tempo, view, choir, transposition, hidden parts and saved mixes.
+  - **Annotations on the original page:** pen with Pencil pressure, highlighter, eraser, text, 13 stamps, colours, layers with show/hide, and undo/redo. Saved per score in Documents/Annotations.
+  - **Pitch pipe:** "♪ Tonen" plays all parts as a chord, and ♪ on each mixer strip plays that part.
+  - **Lock screen, Control Centre and AirPods (PLAY-12):** play, pause, toggle, and the title and position on the lock screen (MediaPlayer framework).
+  - **Share:** "Exportera" adds a PDF with annotations and a forScore .4sc. Setlists share as a Cantor bundle or a forScore .4ss. `.cantorset` is registered as Cantor's own file type and is imported from the share sheet, Files or Importera.
+  - **NFR-10:** the whole UI is in Swedish and English and follows the device language.
+  - **NFR-08:** all new controls have labels. Not audited with VoiceOver.
+  - `prompt()`/`confirm()` were replaced by in-app dialogs, because the iOS WebView may not show native ones.
+- Fixes found while testing:
+  - Scanned PDFs (JBIG2 images) showed blank pages because pdf.js could not load its wasm decoders. They are now served and bundled.
+  - Notation for parts without a clef (some converted files) sat on ledger lines. A clef is now chosen from the part's range.
+  - The highlighter in exported PDFs looked beaded. It is now drawn as one path.
+- How it was verified:
+  - `tools/ui_harness/run.sh` runs the real UI in WebKit at iPad mini size (744x1133) with the Rust backend mocked. 13 scenarios pass with no page errors: search, metadata, setlists, setlist navigation, pitch pipe, custom mix, four page modes, annotate (stroke, stamp, undo, layer hide), transpose, hide part, settings restored on reopen, performance mode and Swedish.
+  - The backend commands were checked with the iOS build (simulator and device targets compile and link).
+  - An annotated real PDF was rendered with macOS's PDF engine (Preview's): ink, highlighter, Swedish text and stamps are visible.
+- Not verified:
+  - Apple Pencil feel and latency on the iPad.
+  - Lock-screen controls and AirPods on a device.
+  - The share sheets on a device.
+  - forScore opening our .4sc/.4ss.
+  - VoiceOver.
+  - Two-up page mode in a real landscape rotation (only its layout logic was exercised).
+  - Annotations are page-anchored in the UI. Measure anchors exist in the crate but are not used by the app yet (ANN-04 re-layout applies to notation, which has no ink UI).
 
 ## 8. Future features (parked)
 
