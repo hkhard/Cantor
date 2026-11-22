@@ -258,3 +258,61 @@ fn vox_01_role_labels_are_not_sung() {
         ]
     );
 }
+
+/// OCR puts page text into lyric lines: dynamics, credits, URLs, stray
+/// letters. Those are not sung or shown as lyrics. Real short words stay.
+#[test]
+fn vox_01_ocr_noise_is_not_lyric_text() {
+    use cantor_lyrics::is_lyric_text;
+    for junk in [
+        "PP",
+        "p",
+        "mf",
+        "Mf",
+        "ff",
+        "sfz",
+        "f",
+        "w",
+        "/'",
+        "ISMN",
+        "(www.1i1ypond.org)",
+        "www.studentersangforeningenno",
+        "Studentersangforening,",
+        "+T2 '",
+        "-",
+        "",
+    ] {
+        assert!(!is_lyric_text(junk), "{junk:?} should be dropped");
+    }
+    for word in [
+        "Bre",
+        "de",
+        "Seil",
+        "o",
+        "O",
+        "a",
+        "I",
+        "ö",
+        "i",
+        "y",
+        "Oh,",
+        "It’s",
+        "ev'ry",
+        "Kom",
+        "Dan-mark:",
+        "go-o,",
+        "Tryg",
+    ] {
+        assert!(is_lyric_text(word), "{word:?} should be kept");
+    }
+}
+
+/// Verse numbers printed before the first syllable ("1.", "1.3.") are not sung.
+#[test]
+fn vox_01_verse_number_prefix_is_stripped() {
+    use cantor_lyrics::clean_lyric;
+    assert_eq!(clean_lyric("1.3.want").as_deref(), Some("want"));
+    assert_eq!(clean_lyric("2. Seks").as_deref(), Some("Seks"));
+    assert_eq!(clean_lyric("Bre").as_deref(), Some("Bre"));
+    assert_eq!(clean_lyric("mf"), None);
+}

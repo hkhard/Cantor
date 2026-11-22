@@ -7,6 +7,8 @@
 //! The engine is a trait so tests run without Audiveris and so a server-side
 //! engine can be used on iPad/phone where a Java sidecar is not possible.
 
+pub mod measure_map;
+
 use cantor_library::forscore::{parse_4sc, parse_4ss, SetlistEntry};
 use cantor_score::{parse_score_file, write_musicxml, EventKind};
 use cantor_timeline::{build_timemap, smf::to_smf};

@@ -20,6 +20,14 @@ if compgen -G "$ROOT/scores/out/*.mxl" > /dev/null; then
     [ -e "$ROOT/scores/out/$stem.mxl" ] || cp "$f" "$APP/resources/scores/"
   done
 fi
+# Original PDFs and their measure maps (cantor-omr example export_pdf_maps).
+if compgen -G "$ROOT/scores/out/pdf/*" > /dev/null; then
+  cp "$ROOT"/scores/out/pdf/* "$APP/resources/scores/"
+fi
+# Clean MusicXML/MXL files placed directly in scores/ (no OMR needed).
+for f in "$ROOT"/scores/*.mxl "$ROOT"/scores/*.musicxml; do
+  [ -e "$f" ] && cp "$f" "$APP/resources/scores/"
+done
 
 cd "$APP"
 case "${1:-sim}" in

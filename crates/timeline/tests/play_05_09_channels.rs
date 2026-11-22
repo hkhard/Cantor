@@ -275,3 +275,88 @@ fn play_09_many_lines_of_one_role_still_sound_different() {
     assert_eq!(pl.channels.len(), 8);
     assert_distinct_programs(&pl);
 }
+
+/// MuseScore choir arrangements often keep the default Piano instrument and
+/// put one voice label per line in the part name ("T1\nT2\nB1\nB2"). Those
+/// are sung lines, labelled from the name in staff/voice order.
+#[test]
+fn play_09_piano_program_with_voice_labels_is_a_choir() {
+    let s = parse_musicxml(
+        r#"<?xml version="1.0"?><score-partwise version="4.0"><part-list>
+        <score-part id="P1"><part-name>T1
+T2
+B1
+B2</part-name><midi-instrument id="P1-I1"><midi-program>1</midi-program></midi-instrument></score-part>
+        </part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions><staves>2</staves>
+        <time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+        <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><staff>1</staff></note>
+        <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><staff>1</staff></note>
+        <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><staff>1</staff></note>
+        <note><pitch><step>A</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><staff>1</staff></note>
+        <backup><duration>4</duration></backup>
+        <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><staff>1</staff></note>
+        <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><staff>1</staff></note>
+        <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><staff>1</staff></note>
+        <note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><voice>2</voice><staff>1</staff></note>
+        <backup><duration>4</duration></backup>
+        <note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><voice>5</voice><staff>2</staff></note>
+        <note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><voice>5</voice><staff>2</staff></note>
+        <note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><voice>5</voice><staff>2</staff></note>
+        <note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><voice>5</voice><staff>2</staff></note>
+        <backup><duration>4</duration></backup>
+        <note><pitch><step>F</step><octave>2</octave></pitch><duration>1</duration><voice>6</voice><staff>2</staff></note>
+        <note><pitch><step>F</step><octave>2</octave></pitch><duration>1</duration><voice>6</voice><staff>2</staff></note>
+        <note><pitch><step>F</step><octave>2</octave></pitch><duration>1</duration><voice>6</voice><staff>2</staff></note>
+        <note><pitch><step>F</step><octave>2</octave></pitch><duration>1</duration><voice>6</voice><staff>2</staff></note>
+        </measure></part></score-partwise>"#
+            .as_bytes(),
+    )
+    .unwrap();
+    let tm = build_timemap(&s);
+    let pl = plan_channels(&s, &tm);
+    let labels: Vec<_> = pl.channels.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, ["Tenor 1", "Tenor 2", "Bass 1", "Bass 2"]);
+    assert_distinct_programs(&pl);
+    assert!(pl.channels.iter().all(|c| c.program != 0), "not a piano");
+}
+
+#[test]
+fn play_09_real_piano_part_stays_piano() {
+    // A part named "Piano" (or "Klaver") with piano program is accompaniment.
+    let pl = plan(&[("Piano", Some(1), vec![(1, line(72, 8)), (5, line(48, 8))])]);
+    assert_eq!(pl.channels.len(), 1);
+    assert_eq!(pl.channels[0].role, Role::Piano);
+}
+
+/// Every mixer channel needs a label the singer can tell apart, also when
+/// two parts claim the same voice (a lead "T1" part over a TTBB choir).
+#[test]
+fn play_03_channel_labels_are_unique() {
+    let pl = plan(&[
+        (
+            "T1\nT1\nT2",
+            Some(1),
+            vec![(1, line(76, 8)), (2, line(72, 8))],
+        ),
+        (
+            "T1\nT2\nB1\nB2",
+            Some(1),
+            vec![
+                (1, line(72, 8)),
+                (2, line(67, 8)),
+                (5, line(52, 8)),
+                (6, line(48, 8)),
+            ],
+        ),
+    ]);
+    let labels: Vec<_> = pl.channels.iter().map(|c| c.label.clone()).collect();
+    let mut uniq = labels.clone();
+    uniq.sort();
+    uniq.dedup();
+    assert_eq!(uniq.len(), labels.len(), "{labels:?}");
+    assert_eq!(
+        labels[2..],
+        ["Tenor 1", "Tenor 2", "Bass 1", "Bass 2"],
+        "{labels:?}"
+    );
+}

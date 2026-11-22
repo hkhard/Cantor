@@ -83,6 +83,72 @@ pub fn extract_merged(score: &Score, tm: &Timemap, part: usize, voice: Option<u3
     extract_with(score, tm, part, voice, 1, true)
 }
 
+/// Dynamics and expression marks OCR reads into lyric lines.
+const DYNAMICS: &[&str] = &[
+    "p", "pp", "ppp", "mp", "mf", "f", "ff", "fff", "sf", "sfz", "fz", "fp", "rf", "rfz", "cresc",
+    "dim", "rit", "rall", "accel",
+];
+
+/// Whether OCR'd lyric text is something a singer sings. Rejects dynamics,
+/// URLs, publisher credits (one long capitalised word with trailing
+/// punctuation, all-caps codes) and fragments without letters. Short real
+/// syllables, including single vowels, are kept.
+pub fn is_lyric_text(text: &str) -> bool {
+    let t = text.trim();
+    if t.is_empty() {
+        return false;
+    }
+    let lower = t.to_lowercase();
+    let letters: String = t.chars().filter(|c| c.is_alphabetic()).collect();
+    if letters.is_empty() {
+        return false;
+    }
+    if DYNAMICS.contains(&letters.to_lowercase().as_str())
+        && letters.len() == t.trim_matches(|c: char| !c.is_alphanumeric()).len()
+    {
+        return false;
+    }
+    if lower.contains("www")
+        || lower.contains("http")
+        || lower.contains(".org")
+        || lower.contains(".com")
+    {
+        return false;
+    }
+    // Stray single consonants are OCR specks; single vowels are real syllables.
+    if letters.chars().count() == 1 {
+        let c = letters.to_lowercase().chars().next().unwrap_or(' ');
+        return "aeiouyåäöæøéèü".contains(c);
+    }
+    // All-caps codes of 3+ letters (ISMN, SATB) are not sung.
+    if letters.chars().count() >= 3 && letters.chars().all(|c| c.is_uppercase()) {
+        return false;
+    }
+    // A syllable longer than any sung syllable is a credit line or title.
+    if letters.chars().count() > 14 {
+        return false;
+    }
+    // Text mixing in symbols other than lyric punctuation is noise ("+T2 '").
+    if t.chars()
+        .any(|c| !(c.is_alphanumeric() || " ,.;:!?’'\"-()–".contains(c)))
+    {
+        return false;
+    }
+    true
+}
+
+/// Lyric text as sung: verse numbers ("1.", "1.3.") stripped, noise dropped.
+pub fn clean_lyric(text: &str) -> Option<String> {
+    let t = text.trim();
+    let stripped = t.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ' ');
+    let t = if stripped.len() < t.len() && t.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        stripped
+    } else {
+        t
+    };
+    is_lyric_text(t).then(|| t.to_string())
+}
+
 /// Performer cues printed in the lyric line (`Female:`, `Children:`, `Solo:`).
 fn is_role_label(text: &str) -> bool {
     let t = text.trim();
@@ -174,7 +240,16 @@ fn extract_with(
                         })
                         .flatten()
                 })
-                .map(|l| (l.text.clone(), l.syllabic, l.extend));
+                .and_then(|l| {
+                    // OCR noise becomes "no lyric" (extender-only lyrics stay).
+                    match clean_lyric(&l.text) {
+                        Some(t) => Some((t, l.syllabic, l.extend)),
+                        None if l.text.trim().is_empty() && l.extend => {
+                            Some((String::new(), l.syllabic, l.extend))
+                        }
+                        None => None,
+                    }
+                });
             by_onset
                 .entry(tm.measure_starts[visit] + e.offset)
                 .or_default()
@@ -270,4 +345,77 @@ fn finish(notes: Vec<SungNote>) -> Phrase {
         start_sec,
         end_sec,
     }
+}
+
+/// Clean OMR MusicXML for display: drop `<lyric>` elements whose text is not
+/// sung (dynamics, credits, URLs, specks), strip verse-number prefixes, and
+/// remove `<harmony>` chord symbols (OCR turns stray text into them). Only
+/// applies to files written by an OMR engine (Audiveris); files from notation
+/// programs are returned unchanged. Text-level edit so everything else in the
+/// file (layout, ids) is kept for the engraver.
+pub fn clean_omr_musicxml(xml: &str) -> String {
+    let head = &xml[..xml.len().min(4000)];
+    if !head.contains("<software>Audiveris") {
+        return xml.to_string();
+    }
+    let mut out = String::with_capacity(xml.len());
+    let mut rest = xml;
+    loop {
+        let next_lyric = rest.find("<lyric");
+        let next_harmony = rest.find("<harmony");
+        let (start, is_lyric) = match (next_lyric, next_harmony) {
+            (None, None) => break,
+            (Some(l), Some(h)) if h < l => (h, false),
+            (Some(l), _) => (l, true),
+            (None, Some(h)) => (h, false),
+        };
+        let close = if is_lyric { "</lyric>" } else { "</harmony>" };
+        out.push_str(&rest[..start]);
+        let tail = &rest[start..];
+        // Self-closing elements carry no text: keep them.
+        let tag_end = tail.find('>').map_or(tail.len(), |i| i + 1);
+        if tail[..tag_end].ends_with("/>") {
+            out.push_str(&tail[..tag_end]);
+            rest = &tail[tag_end..];
+            continue;
+        }
+        let Some(end) = tail.find(close).map(|i| i + close.len()) else {
+            out.push_str(tail);
+            rest = "";
+            break;
+        };
+        let element = &tail[..end];
+        if is_lyric {
+            if let Some(cleaned) = clean_lyric_element(element) {
+                out.push_str(&cleaned);
+            }
+        }
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// One `<lyric>…</lyric>` element: cleaned, or `None` to drop it.
+fn clean_lyric_element(el: &str) -> Option<String> {
+    let (Some(a), Some(b)) = (el.find("<text"), el.find("</text>")) else {
+        return Some(el.to_string()); // extender-only lyric
+    };
+    let open_end = a + el[a..].find('>')? + 1;
+    let raw = &el[open_end..b];
+    let text = raw
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&apos;", "'")
+        .replace("&quot;", "\"");
+    let cleaned = clean_lyric(&text)?;
+    if cleaned == text {
+        return Some(el.to_string());
+    }
+    let escaped = cleaned
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    Some(format!("{}{}{}", &el[..open_end], escaped, &el[b..]))
 }

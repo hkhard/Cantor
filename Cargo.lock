@@ -61,7 +61,11 @@ dependencies = [
  "cantor-library",
  "cantor-score",
  "cantor-timeline",
+ "quick-xml 0.37.5",
+ "serde",
+ "serde_json",
  "thiserror",
+ "zip",
 ]
 
 [[package]]

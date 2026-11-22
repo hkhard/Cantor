@@ -210,7 +210,39 @@ fn is_vocal_program(p: Option<u8>) -> bool {
     p.is_none_or(|p| (52..=54).contains(&p))
 }
 
+/// Voice labels when a part name is a list of them, one per line or
+/// separated by commas/slashes ("T1\nT2\nB1\nB2", "S/A", "Tenor 1, Tenor 2").
+/// MuseScore choir arrangements often keep the default Piano instrument and
+/// name the part this way. Returns `(role, divisi number)` per label, or
+/// `None` when any piece is not a voice label.
+fn voice_labels(name: &str) -> Option<Vec<(Role, u8)>> {
+    let pieces: Vec<&str> = name
+        .split(['\n', ',', '/', '&', '+'])
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    if pieces.is_empty() {
+        return None;
+    }
+    pieces
+        .iter()
+        .map(|p| {
+            let role = role_from_name(p)?;
+            let number = p
+                .chars()
+                .filter(char::is_ascii_digit)
+                .collect::<String>()
+                .parse()
+                .unwrap_or(0);
+            Some((role, number))
+        })
+        .collect()
+}
+
 fn instrument_role(name: &str, explicit: Option<u8>) -> Option<(Role, u8)> {
+    if voice_labels(name).is_some() {
+        return None; // sung lines, whatever the instrument says
+    }
     let generic = program_for(name, None);
     let named_instrument = generic != 52;
     if !named_instrument && is_vocal_program(explicit) {
@@ -245,6 +277,8 @@ struct Line {
     pitches: Vec<u8>,
     median: f64,
     hint: Option<Role>,
+    /// Divisi number given by the part name ("T2"), when names say so.
+    number: Option<u8>,
 }
 
 /// Plan mixer channels for a score.
@@ -322,6 +356,7 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
                 pitches: main[0].1.clone(),
                 median: 0.0,
                 hint: role_from_name(&part.name),
+                number: None,
             };
             tmp_line.median = median(&mut tmp_line.pitches.clone());
             slots.push(Slot::Lines(vec![lines.len()]));
@@ -338,6 +373,7 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
                     median: median(&mut p),
                     pitches: v,
                     hint: role_from_name(&part.name),
+                    number: None,
                 }
             })
             .collect();
@@ -358,6 +394,28 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
         }
         // Top line first within a staff group.
         part_lines.sort_by(|a, b| b.median.partial_cmp(&a.median).unwrap());
+        // A name listing one label per line ("T1\nT2\nB1\nB2") labels the
+        // lines top to bottom.
+        // A name may repeat a label ("T1\nT1\nT2"); then its distinct labels
+        // in order are tried.
+        let named = voice_labels(&part.name).and_then(|l| {
+            if l.len() == part_lines.len() {
+                return Some(l);
+            }
+            let mut d: Vec<(Role, u8)> = Vec::new();
+            for x in l {
+                if !d.contains(&x) {
+                    d.push(x);
+                }
+            }
+            (d.len() == part_lines.len()).then_some(d)
+        });
+        if let Some(labels) = named {
+            for (line, (role, number)) in part_lines.iter_mut().zip(labels) {
+                line.hint = Some(role);
+                line.number = (number > 0).then_some(number);
+            }
+        }
         let idx: Vec<usize> = (lines.len()..lines.len() + part_lines.len()).collect();
         lines.extend(part_lines);
         slots.push(Slot::Lines(idx));
@@ -376,7 +434,10 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
         if let Slot::Lines(ix) = slot {
             for &i in ix {
                 let r = roles[i];
-                if totals[&r] > 1 {
+                if let Some(n) = lines[i].number {
+                    numbers[i] = n;
+                    seen.insert(r, n.max(seen.get(&r).copied().unwrap_or(0)));
+                } else if totals[&r] > 1 {
                     let c = seen.entry(r).or_default();
                     *c += 1;
                     numbers[i] = *c;
@@ -421,6 +482,43 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
                 }
             }
         }
+    }
+
+    // Every label must be unique. When two parts claim the same voice (a
+    // lead "T1 T1 T2" part above a "T1 T2 B1 B2" choir), the part with more
+    // lines keeps the plain names and the other is marked as the lead:
+    // "Tenor 1 (solo)".
+    let mut by_label: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (i, c) in plan.channels.iter().enumerate() {
+        by_label.entry(c.label.clone()).or_default().push(i);
+    }
+    let lines_in_part =
+        |p: usize, plan: &ChannelPlan| plan.channels.iter().filter(|c| c.part == p).count();
+    let mut rename: Vec<(usize, String)> = Vec::new();
+    for (label, idx) in &by_label {
+        if idx.len() < 2 {
+            continue;
+        }
+        let keep = *idx
+            .iter()
+            .max_by_key(|&&i| {
+                (
+                    lines_in_part(plan.channels[i].part, &plan),
+                    std::cmp::Reverse(i),
+                )
+            })
+            .expect("non-empty");
+        for (k, &i) in idx.iter().filter(|&&i| i != keep).enumerate() {
+            let suffix = if k == 0 {
+                "solo".to_string()
+            } else {
+                format!("solo {}", k + 1)
+            };
+            rename.push((i, format!("{label} ({suffix})")));
+        }
+    }
+    for (i, l) in rename {
+        plan.channels[i].label = l;
     }
 
     // Every channel must sound different: resolve any clash with the next
