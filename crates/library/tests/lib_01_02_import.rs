@@ -60,8 +60,8 @@ fn lib_01_invalid_musicxml_is_rejected_with_a_message() {
 fn lib_02_pdf_imported_as_readable_score() {
     let d = tmp("pdf");
     let got = import_file(&d, "Psalm.pdf", b"%PDF-1.4\n%fake\n").unwrap();
-    assert_eq!(got[0].pdf, true);
-    assert_eq!(got[0].playable, false);
+    assert!(got[0].pdf);
+    assert!(!got[0].playable);
     let lib = list_library(&[d.as_path()]);
     assert_eq!(lib[0].pdf_file.as_deref(), Some("Psalm.pdf"));
     assert_eq!(lib[0].score_file, None);
