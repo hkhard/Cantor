@@ -339,6 +339,39 @@ tests (NFR-11: 100% of P0 criteria automated).
   - Two-up page mode in a real landscape rotation (only its layout logic was exercised).
   - Annotations are page-anchored in the UI. Measure anchors exist in the crate but are not used by the app yet (ANN-04 re-layout applies to notation, which has no ink UI).
 
+- [x] Notes on the notation that follow their bar (ANN-04, 2026-11-22).
+  - Marks drawn on the notation, and on a PDF page that has a measure map, are anchored to the bar under the pen. They are stored in bar units: x by the bar's width, y and sizes by its height.
+  - When the notation is laid out again (rotation, mixer shown, part hidden, transposed), a mark stays on its bar and stretches with it. The same mark shows on the original page and on the notation. Marks on PDFs without a map stay page-anchored and show only on the PDF.
+  - The eraser works on bar-anchored ink. `RemoveMany` removes them as one undo step.
+  - The exported PDF draws bar-anchored marks through the measure map (`annotate_pdf_with_layout`).
+  - Crate tests: `ann_04_measure_items` (4).
+  - Harness test: draw on bar 3 of the notation, open the mixer so the notation reflows, and the stroke's centre is still inside bar 3 (width 32 to 27 px). Then erase it, undo, and see it on bar 3 of the original page (screenshot checked).
+- [x] Accessibility (NFR-08, 2026-11-22).
+  - `tools/ui_harness/a11y.js` runs axe-core with the WCAG 2.0/2.1/2.2 A and AA rules. It covers 12 screens (library, Info, About, setlist, dialog, PDF reader, "•••", mixer with the export menu, annotation tools, notation, PDF only, performance) in light, dark and sepia, in Swedish and English.
+  - Findings went from 193 to 0.
+  - **Fixes:**
+    - Contrast fixed in the skin tokens:
+      - light accent #C77A12 to #A9620A (white text 4.7:1)
+      - muted text at 4.5:1 or better in light and sepia
+      - text on accent uses the skin's accent ink (dark mode had white on amber at 2:1)
+      - solid menus over the score
+    - Names for icon buttons (mixer, "•••", page image, notation region).
+    - On/off state announced (`aria-pressed`/`aria-expanded`) for tools, view, M/S, loop, click and count-in.
+    - Spoken names for the stamps (∨ is announced as "Andning / breath").
+    - The setlist tabs fixed: the tab list no longer contains a plain button.
+    - Rating stars are 32 px.
+    - Pinch zoom is allowed again.
+    - Keyboard focus is always visible.
+    - Reduced motion turns transitions off.
+  - **Dynamic Type:** UI text is in rem and follows the iOS text size (`-apple-system-body`). About has a text size choice from 90% to 200%. At 200% nothing runs off screen at iPad mini size (checked).
+  - **Keyboard:** Tab reaches the library controls with visible focus, Space plays in the reader, and the arrow keys turn pages.
+  - **CI:** a new `ui` job runs the feature scenarios and the audit on the self-hosted runner. Screenshots stay on the runner because they show private scores.
+- [x] Bug found while checking the maps: turning the PDF page by tap or pedal while paused snapped back to the playing bar's page. The page-following now reacts only when the playing bar changes. A harness scenario fails on the old code and passes on the new.
+- Not verified:
+  - Real VoiceOver on the iPad. axe checks the markup WKWebView exposes, not how VoiceOver reads it.
+  - Dynamic Type at the largest accessibility sizes on the device.
+  - Pencil drawing on the notation on the device.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.
