@@ -9,9 +9,16 @@
 //! The engine is generic over [`Synth`] so the scheduler and mixer are tested
 //! without audio; [`SoundFontSynth`] wraps `rustysynth` for real sound.
 
+pub mod backing;
 mod mixer;
 
+pub use backing::{
+    decode_audio, decode_file, resample, stretch, AudioClip, BackingTrack, Stretcher, TurnMarker,
+};
 pub use mixer::{Mixer, Preset};
+
+/// Mixer label of the backing-track channel (PERF-04).
+pub const BACKING_TRACK_LABEL: &str = "Backing track";
 
 use cantor_timeline::channels::ChannelPlan;
 use cantor_timeline::Timemap;
@@ -119,6 +126,12 @@ pub struct Engine<S: Synth> {
     out_frames: u64,
     /// Pitch-pipe notes to release: (output frame, midi channel, key).
     pipe: Vec<(u64, u8, u8)>,
+    /// Length of the score itself (the engine duration also covers the track).
+    score_duration: f64,
+    /// PERF-04: the loaded backing track, on the last mixer channel.
+    backing: Option<backing::Live>,
+    /// Turn markers fired since the last `take_fired_markers`.
+    fired: Vec<(TurnMarker, f64)>,
 }
 
 impl<S: Synth> Engine<S> {
@@ -185,6 +198,9 @@ impl<S: Synth> Engine<S> {
             measure_spans,
             out_frames: 0,
             pipe: Vec::new(),
+            score_duration: tm.duration_sec,
+            backing: None,
+            fired: Vec::new(),
         };
         e.init_channels();
         e
@@ -296,6 +312,7 @@ impl<S: Synth> Engine<S> {
         self.pre_frames = fr(beat_len * n as f64);
         self.origin = pos;
         self.frame = 0;
+        self.resync_backing();
     }
 
     pub fn pause(&mut self) {
@@ -331,6 +348,10 @@ impl<S: Synth> Engine<S> {
         self.pre_roll.clear();
         self.next = self.events.partition_point(|e| e.sec < self.origin);
         self.next_beat = self.beats.partition_point(|b| b.0 < self.origin - 1e-9);
+        if let Some(b) = &mut self.backing {
+            b.rewind_markers(self.origin);
+        }
+        self.resync_backing();
     }
 
     /// 1.0 = as written, 0.5 = half speed (PLAY-06: 25% to 200%).
@@ -340,6 +361,7 @@ impl<S: Synth> Engine<S> {
         self.pre_frames = 0;
         self.pre_roll.clear();
         self.tempo_scale = s.clamp(0.25, 2.0);
+        self.resync_backing();
     }
 
     pub fn tempo_scale(&self) -> f64 {
@@ -420,6 +442,18 @@ impl<S: Synth> Engine<S> {
             if run > 0 {
                 self.synth
                     .render(&mut left[done..done + run], &mut right[done..done + run]);
+                if self.playing && self.frame >= self.pre_frames {
+                    if let Some(b) = &mut self.backing {
+                        let g = self.mixer.effective_gain(b.channel);
+                        let pan = self.mixer.pan(b.channel);
+                        b.mix(
+                            &mut left[done..done + run],
+                            &mut right[done..done + run],
+                            g,
+                            pan,
+                        );
+                    }
+                }
                 self.out_frames += run as u64;
                 if self.playing {
                     self.frame += run as u64;
@@ -467,6 +501,15 @@ impl<S: Synth> Engine<S> {
         }
         if let Some((_, end)) = self.loop_range {
             take(self.frame_of(end));
+        }
+        // The music (and the backing track) starts after the count-in.
+        if self.frame < self.pre_frames {
+            take(self.pre_frames);
+        }
+        if let Some((_, sec)) = self.backing.as_ref().and_then(|b| b.next_marker_sec()) {
+            if self.loop_range.is_none_or(|(_, end)| sec < end - 1e-9) {
+                take(self.frame_of(sec));
+            }
         }
         due
     }
@@ -527,6 +570,126 @@ impl<S: Synth> Engine<S> {
             }
             self.next += 1;
         }
+        // Page-turn markers, on their exact frame.
+        while let Some((m, sec)) = self.backing.as_ref().and_then(|b| b.next_marker_sec()) {
+            if self.loop_range.is_some_and(|(_, end)| sec >= end - 1e-9) {
+                break;
+            }
+            if self.frame_of(sec) > self.frame || self.frame < self.pre_frames {
+                break;
+            }
+            let at = self.position();
+            self.fired.push((m, at));
+            if let Some(b) = &mut self.backing {
+                b.next_marker += 1;
+            }
+        }
+    }
+
+    /// PERF-04: load a backing track (resampled to the engine rate if
+    /// needed). It plays on an extra mixer channel at the end, labelled
+    /// [`BACKING_TRACK_LABEL`]; its index is returned. Replaces a loaded
+    /// track (keeping that channel's mixer settings). The engine duration
+    /// becomes the longer of the score and the track.
+    pub fn set_backing_track(&mut self, track: BackingTrack) -> usize {
+        let channel = match &self.backing {
+            Some(b) => b.channel,
+            None => self.mixer.push_channel(),
+        };
+        self.backing = Some(backing::Live::new(track, channel, self.sample_rate));
+        self.update_duration();
+        let pos = self.position().min(self.duration);
+        if let Some(b) = &mut self.backing {
+            b.rewind_markers(pos);
+        }
+        self.resync_backing();
+        channel
+    }
+
+    /// Remove the backing track and its mixer channel.
+    pub fn clear_backing_track(&mut self) {
+        if let Some(b) = self.backing.take() {
+            self.mixer.truncate(b.channel);
+        }
+        self.update_duration();
+    }
+
+    pub fn backing_track(&self) -> Option<&BackingTrack> {
+        self.backing.as_ref().map(|b| &b.track)
+    }
+
+    /// Mixer channel of the backing track.
+    pub fn backing_channel(&self) -> Option<usize> {
+        self.backing.as_ref().map(|b| b.channel)
+    }
+
+    /// Mixer label of channel `i` when the engine owns it (the backing track);
+    /// score channels are labelled by the [`ChannelPlan`].
+    pub fn channel_label(&self, i: usize) -> Option<&'static str> {
+        (self.backing_channel() == Some(i)).then_some(BACKING_TRACK_LABEL)
+    }
+
+    /// Track position = score seconds + `sec` (positive: the track starts
+    /// that far in when the score starts).
+    pub fn set_backing_offset(&mut self, sec: f64) {
+        let pos = self.position();
+        if let Some(b) = &mut self.backing {
+            b.track.offset_sec = sec;
+            b.rewind_markers(pos);
+        }
+        self.update_duration();
+        self.resync_backing();
+    }
+
+    pub fn backing_offset(&self) -> f64 {
+        self.backing.as_ref().map_or(0.0, |b| b.track.offset_sec)
+    }
+
+    /// Replace the turn markers (track seconds).
+    pub fn set_turn_markers(&mut self, markers: Vec<TurnMarker>) {
+        let pos = self.position();
+        if let Some(b) = &mut self.backing {
+            b.track.markers = markers;
+            b.track.sort_markers();
+            b.rewind_markers(pos);
+        }
+    }
+
+    /// Track position in seconds (score position + offset).
+    pub fn track_position(&self) -> f64 {
+        self.position() + self.backing_offset()
+    }
+
+    /// Turn markers fired since the last call, with the score second at
+    /// which each fired (frame-accurate: the block is split at the marker).
+    pub fn take_fired_markers(&mut self) -> Vec<(TurnMarker, f64)> {
+        std::mem::take(&mut self.fired)
+    }
+
+    /// Loop between two score seconds (for scores without measures, such as
+    /// a PDF with a recording), or `None`.
+    pub fn set_loop_seconds(&mut self, range: Option<(f64, f64)>) {
+        self.loop_range = range.and_then(|(a, b)| {
+            let (a, b) = (a.min(b).max(0.0), a.max(b).min(self.duration));
+            (b > a).then_some((a, b))
+        });
+    }
+
+    fn update_duration(&mut self) {
+        let track_end = self
+            .backing
+            .as_ref()
+            .map_or(0.0, |b| b.track.duration_sec() - b.track.offset_sec);
+        self.duration = self.score_duration.max(track_end);
+    }
+
+    /// Restart the backing track at the current score position (during a
+    /// count-in that is where the music will start).
+    fn resync_backing(&mut self) {
+        let (pos, scale) = (self.position(), self.tempo_scale);
+        if let Some(b) = &mut self.backing {
+            b.resync(pos, scale);
+        }
     }
 }
 
@@ -547,6 +710,7 @@ pub fn export_wav<S: Synth>(e: &mut Engine<S>, tail_sec: f64) -> Vec<u8> {
     e.loop_range = None;
     e.metronome = false;
     e.count_in = false;
+    let fired = std::mem::take(&mut e.fired);
     e.seek(0.0);
     e.play();
 
@@ -571,6 +735,7 @@ pub fn export_wav<S: Synth>(e: &mut Engine<S>, tail_sec: f64) -> Vec<u8> {
     }
 
     e.pause();
+    e.fired = fired;
     e.loop_range = saved.2;
     e.metronome = saved.3;
     e.count_in = saved.4;

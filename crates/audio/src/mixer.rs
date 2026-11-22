@@ -53,6 +53,17 @@ impl Mixer {
         self.strips.is_empty()
     }
 
+    /// Add a channel at the end (0 dB, centre); returns its index.
+    pub fn push_channel(&mut self) -> usize {
+        self.strips.push(Strip::default());
+        self.strips.len() - 1
+    }
+
+    /// Keep only the first `n` channels.
+    pub fn truncate(&mut self, n: usize) {
+        self.strips.truncate(n);
+    }
+
     /// -inf .. +6 dB.
     pub fn set_volume_db(&mut self, i: usize, db: f32) {
         if let Some(s) = self.strips.get_mut(i) {
