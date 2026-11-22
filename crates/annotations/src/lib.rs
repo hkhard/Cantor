@@ -16,6 +16,9 @@
 //! * [`to_svg`]: renders one page's annotations as SVG, the basis for annotated
 //!   PDF export (ANN-05).
 
+pub mod pdf;
+pub use pdf::annotate_pdf;
+
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
