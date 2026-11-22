@@ -29,6 +29,13 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - name: App backend (fmt, clippy, tests incl. M4A export)
+        working-directory: app/src-tauri
+        run: |
+          mkdir -p ../ui/dist && [ -f ../ui/dist/index.html ] || echo '<!doctype html>' > ../ui/dist/index.html
+          cargo fmt --check
+          cargo clippy -- -D warnings
+          cargo test --lib
       - name: Traceability (NFR-11)
         run: bash tools/trace.sh
       - name: Coverage >= 85% per core crate (NFR-11)

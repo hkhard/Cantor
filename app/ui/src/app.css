@@ -772,3 +772,18 @@ select {
 .popover {
   background: var(--glass-bg-strong);
 }
+
+.exportwrap .menu .fmt {
+  display: flex;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.exportwrap .menu .fmt button {
+  flex: 1;
+  font-size: 0.8125rem;
+}
+.exportwrap .menu .fmt button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}

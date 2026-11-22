@@ -6,6 +6,7 @@
 //! `cantor_audio::Engine` (rustysynth + GeneralUser GS).
 
 mod audio;
+mod m4a;
 mod remote;
 mod share;
 
@@ -457,7 +458,17 @@ fn import_bytes(
 /// learning track. Files go to Documents/Export (visible in Files) and the
 /// share sheet opens. Returns the file names.
 #[tauri::command]
-async fn export_audio(what: String, app: tauri::AppHandle) -> Result<Vec<String>, String> {
+async fn export_audio(
+    what: String,
+    format: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    // PLAY-11: AAC (.m4a, small, the default) or 16-bit WAV.
+    let ext = if format.as_deref() == Some("wav") {
+        "wav"
+    } else {
+        "m4a"
+    };
     let (jobs, out_dir) = {
         let paths = app.state::<Paths>();
         let player = app.state::<Shared>();
@@ -487,13 +498,18 @@ async fn export_audio(what: String, app: tauri::AppHandle) -> Result<Vec<String>
             for (i, c) in src.plan.channels.iter().enumerate() {
                 if c.role.is_vocal() {
                     jobs.push((
-                        format!("{} - {}{}.wav", safe(&src.title), safe(&c.label), tempo_tag),
+                        format!(
+                            "{} - {}{}.{ext}",
+                            safe(&src.title),
+                            safe(&c.label),
+                            tempo_tag
+                        ),
                         Some(i),
                     ));
                 }
             }
         } else {
-            jobs.push((format!("{}{}.wav", safe(&src.title), tempo_tag), None));
+            jobs.push((format!("{}{}.{ext}", safe(&src.title), tempo_tag), None));
         }
         let out_dir = paths.user.join("Export");
         std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
@@ -532,7 +548,12 @@ async fn export_audio(what: String, app: tauri::AppHandle) -> Result<Vec<String>
                 }
             }
             let wav = cantor_audio::export_wav(&mut e, 2.0);
-            std::fs::write(out.join(&name), wav).map_err(|e| e.to_string())?;
+            if name.ends_with(".m4a") {
+                let (pcm, rate) = m4a::wav_pcm(&wav).ok_or("render produced no audio")?;
+                m4a::write_m4a(&out.join(&name), &pcm, rate)?;
+            } else {
+                std::fs::write(out.join(&name), wav).map_err(|e| e.to_string())?;
+            }
             names.push(name);
         }
         Ok(names)

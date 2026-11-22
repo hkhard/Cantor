@@ -544,11 +544,12 @@
     }
   }
 
+  let audioFormat: 'm4a' | 'wav' = $state((localStorage.getItem('cantor.audioFormat') as 'm4a' | 'wav') ?? 'm4a')
   async function exportAudio(what: 'mix' | 'parts') {
     exportOpen = false
     exporting = what === 'mix' ? t('tr.exportingMix') : t('tr.exportingParts')
     try {
-      const names = await api.exportAudio(what)
+      const names = await api.exportAudio(what, audioFormat)
       exporting = t('tr.exported', { n: names.length })
     } catch (e) {
       exporting = t('tr.exportFailed', { e: String(e) })
@@ -983,6 +984,18 @@
           <span class="menu glass" role="menu">
             <button role="menuitem" onclick={() => exportAudio('mix')}>{t('tr.exportMix')}</button>
             <button role="menuitem" onclick={() => exportAudio('parts')}>{t('tr.exportParts')}</button>
+            <span class="fmt" role="group" aria-label={t('tr.format')}>
+              {#each ['m4a', 'wav'] as const as f}
+                <button
+                  class:on={audioFormat === f}
+                  aria-pressed={audioFormat === f}
+                  onclick={() => {
+                    audioFormat = f
+                    localStorage.setItem('cantor.audioFormat', f)
+                  }}>{f === 'm4a' ? t('tr.formatM4a') : t('tr.formatWav')}</button
+                >
+              {/each}
+            </span>
             {#if opened.pdf_url && currentEntry}
               <button role="menuitem" onclick={() => shareItem('pdf')}>{t('share.pdf')}</button>
               <button role="menuitem" onclick={() => shareItem('4sc')}>{t('share.4sc')}</button>

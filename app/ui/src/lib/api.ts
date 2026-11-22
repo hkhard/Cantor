@@ -133,7 +133,8 @@ export const api = {
     }),
   deleteScore: (file: string) => invoke<void>('delete_score', { file }),
   /** PLAY-11: "mix" = what you hear, "parts" = one learning track per voice. */
-  exportAudio: (what: 'mix' | 'parts') => invoke<string[]>('export_audio', { what }),
+  exportAudio: (what: 'mix' | 'parts', format: 'm4a' | 'wav' = 'm4a') =>
+    invoke<string[]>('export_audio', { what, format }),
   /** A-B loop over written measures a..=b (0-based); omit both to turn off. */
   setLoop: (a?: number, b?: number) => invoke<void>('set_loop', { a, b }),
   setClick: (c: { metronome?: boolean; countIn?: boolean }) =>
