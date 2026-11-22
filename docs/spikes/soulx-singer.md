@@ -5,6 +5,10 @@ Checked 2026-11-22 against github.com/Soul-AILab/SoulX-Singer at commit
 
 ## Verdict
 
+> **Superseded 2026-11-22 by `singing-engines.md`:** DiffSinger is the
+> default engine (on-device, smaller, Swedish possible via a trained voice).
+> SoulX-Singer stays an optional server engine for English "sing in my voice".
+
 **Use it as the default "sing my part" engine for English, behind the
 `VocalProvider` trait, run on a user GPU server. It cannot sing Swedish today.**
 Swedish needs either a phoneme mapping onto its English set (approximate) or
