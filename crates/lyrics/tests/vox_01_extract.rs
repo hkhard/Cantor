@@ -62,6 +62,23 @@ fn vox_01_syllables_words_and_timing() {
 }
 
 #[test]
+fn vox_01_melisma_does_not_cross_a_phrase_break() {
+    // "a" then a long rest, then lyric-less notes (instrumental bars, or lyrics
+    // OCR missed): those must not continue the old syllable.
+    let body = [
+        n("C", 1, &ly("single", "a")),
+        REST1.to_string(),
+        REST1.to_string(),
+        n("D", 1, ""),
+    ]
+    .concat();
+    let p = phrases(&body);
+    assert_eq!(p.len(), 2);
+    assert_eq!(p[1].notes[0].kind, NoteKind::NoLyric);
+    assert!(p[1].notes[0].text.is_empty());
+}
+
+#[test]
 fn vox_01_melisma_notes_continue_the_syllable() {
     // "a" held over three notes: explicit extender and lyric-less notes.
     let body = [

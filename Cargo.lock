@@ -82,6 +82,7 @@ dependencies = [
  "cantor-lyrics",
  "cantor-score",
  "cantor-timeline",
+ "flate2",
  "serde",
  "serde_json",
  "thiserror",

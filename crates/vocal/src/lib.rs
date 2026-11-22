@@ -4,6 +4,7 @@
 //! engine's request format. Network calls, caching and keys come later; the
 //! serialisers are pure so they can be contract-tested without a GPU.
 
+pub mod english;
 pub mod soulx;
 
 /// Shown wherever "Sing this part" is offered (product decision 2026-11-22:

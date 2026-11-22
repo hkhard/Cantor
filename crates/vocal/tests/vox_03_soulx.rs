@@ -118,3 +118,21 @@ fn vox_03_english_only_notice() {
     assert!(cantor_vocal::sung_language_supported("en"));
     assert!(!cantor_vocal::sung_language_supported("sv"));
 }
+
+/// For real scores (OCR typos), an unknown word is sung on "la" and reported,
+/// so one bad word does not block the whole part.
+#[test]
+fn vox_03_lenient_mode_sings_la_and_reports_unknown_words() {
+    let (s, tm) = gloria();
+    let only_amen = DictPhonemizer::from_pairs(&[("amen", "AA2 M EH1 N")]);
+    let (segs, unknown) = cantor_vocal::soulx::to_target_metadata_lenient(
+        &extract(&s, &tm, 0, None, 1),
+        Language::English,
+        &only_amen,
+    )
+    .unwrap();
+    assert_eq!(unknown, ["gloria"]);
+    assert_eq!(segs[0].phoneme, "en_L-AA1 en_L-AA1 en_L-AA1 en_L-AA1");
+    assert_eq!(segs[0].note_type, "2 2 2 3", "rhythm and melisma kept");
+    assert_eq!(segs[1].phoneme, "en_AA2 en_M-EH1-N");
+}

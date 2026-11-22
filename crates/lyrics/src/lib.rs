@@ -121,6 +121,7 @@ pub fn extract(
     // 2. One note per onset: the highest; its lyric, else any lyric at that onset.
     let mut notes: Vec<SungNote> = Vec::new();
     let mut held: Option<String> = None; // syllable available for melismas
+    let mut last_end: Option<Tick> = None;
     let mut word = String::new();
     for (onset, cands) in by_onset {
         let top = cands.iter().max_by_key(|c| c.pitch).expect("non-empty");
@@ -129,6 +130,11 @@ pub fn extract(
             .clone()
             .or_else(|| cands.iter().find_map(|c| c.lyric.clone()));
         let end = onset + top.dur;
+        // A silence that breaks the phrase also ends any held syllable.
+        if last_end.is_some_and(|e| onset >= e + PHRASE_BREAK) {
+            held = None;
+        }
+        last_end = Some(last_end.map_or(end, |e| e.max(end)));
 
         // Tie continuation: extend the previous note, no new attack.
         if top.tie_stop {

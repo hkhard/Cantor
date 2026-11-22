@@ -182,12 +182,35 @@ pub struct Segment {
 const NO_LYRIC_TEXT: &str = "la";
 const NO_LYRIC_PHONES: &str = "en_L-AA1";
 
-/// Build SoulX-Singer target segments, one per phrase.
+/// Build SoulX-Singer target segments, one per phrase. Any word without a
+/// pronunciation is an error.
 pub fn to_target_metadata(
     phrases: &[Phrase],
     language: Language,
     g2p: &dyn Phonemizer,
 ) -> Result<Vec<Segment>, SoulxError> {
+    let (segs, unknown) = build(phrases, language, g2p)?;
+    match unknown.into_iter().next() {
+        Some(w) => Err(SoulxError::UnknownWord(w)),
+        None => Ok(segs),
+    }
+}
+
+/// Like [`to_target_metadata`], but words without a pronunciation are sung on
+/// "la" (rhythm and melismas kept) and returned for the user to fix.
+pub fn to_target_metadata_lenient(
+    phrases: &[Phrase],
+    language: Language,
+    g2p: &dyn Phonemizer,
+) -> Result<(Vec<Segment>, Vec<String>), SoulxError> {
+    build(phrases, language, g2p)
+}
+
+fn build(
+    phrases: &[Phrase],
+    language: Language,
+    g2p: &dyn Phonemizer,
+) -> Result<(Vec<Segment>, Vec<String>), SoulxError> {
     if language != Language::English {
         return Err(SoulxError::UnsupportedLanguage(language));
     }
@@ -195,35 +218,43 @@ pub fn to_target_metadata(
     // Group syllables into words across the whole part (a word may span a
     // rest and therefore two phrases), phonemise once, split over syllables.
     let mut syllable_phones: HashMap<(usize, usize), String> = HashMap::new();
+    let mut unknown: Vec<String> = Vec::new();
     let mut pending: Vec<((usize, usize), String)> = Vec::new();
-    let flush = |pending: &mut Vec<((usize, usize), String)>,
-                 out: &mut HashMap<(usize, usize), String>|
-     -> Result<(), SoulxError> {
+    let mut flush = |pending: &mut Vec<((usize, usize), String)>,
+                     out: &mut HashMap<(usize, usize), String>| {
         if pending.is_empty() {
-            return Ok(());
+            return;
         }
         let word: String = pending.iter().map(|(_, t)| t.as_str()).collect();
-        let phones = g2p
-            .phonemes(&word)
-            .ok_or_else(|| SoulxError::UnknownWord(normalise(&word)))?;
-        for ((key, _), syl) in pending.iter().zip(split_syllables(&phones, pending.len())) {
-            let joined: Vec<String> = syl.iter().map(|p| p.to_string()).collect();
-            out.insert(*key, format!("en_{}", joined.join("-")));
+        match g2p.phonemes(&word) {
+            Some(phones) => {
+                for ((key, _), syl) in pending.iter().zip(split_syllables(&phones, pending.len())) {
+                    out.insert(*key, format!("en_{}", syl.join("-")));
+                }
+            }
+            None => {
+                let w = normalise(&word);
+                if !unknown.contains(&w) {
+                    unknown.push(w);
+                }
+                for (key, _) in pending.iter() {
+                    out.insert(*key, NO_LYRIC_PHONES.to_string());
+                }
+            }
         }
         pending.clear();
-        Ok(())
     };
     for (pi, ph) in phrases.iter().enumerate() {
         for (ni, n) in ph.notes.iter().enumerate() {
             if n.kind == NoteKind::Syllable {
                 pending.push(((pi, ni), n.text.clone()));
                 if !n.syllabic.continues_word() {
-                    flush(&mut pending, &mut syllable_phones)?;
+                    flush(&mut pending, &mut syllable_phones);
                 }
             }
         }
     }
-    flush(&mut pending, &mut syllable_phones)?;
+    flush(&mut pending, &mut syllable_phones);
 
     let mut segs = Vec::new();
     for (pi, ph) in phrases.iter().enumerate() {
@@ -270,7 +301,7 @@ pub fn to_target_metadata(
             note_type: typ.join(" "),
         });
     }
-    Ok(segs)
+    Ok((segs, unknown))
 }
 
 /// JSON document for SoulX-Singer's `--target_metadata_path`.
