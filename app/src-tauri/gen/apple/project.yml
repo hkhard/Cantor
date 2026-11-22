@@ -65,6 +65,51 @@ targets:
         CFBundleVersion: "0.1.0"
         CFBundleDisplayName: Cantor
         UIBackgroundModes: [audio]
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: false
+        UISupportsDocumentBrowser: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: MusicXML
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.recordare.musicxml, com.recordare.musicxml.uncompressed]
+          - CFBundleTypeName: forScore Score
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.forScore.4sc]
+          - CFBundleTypeName: forScore Setlist
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.forScore.4ss]
+          - CFBundleTypeName: PDF
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.adobe.pdf]
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: com.recordare.musicxml
+            UTTypeDescription: Compressed MusicXML
+            UTTypeConformsTo: [public.data, public.archive, public.zip-archive]
+            UTTypeReferenceURL: http://www.musicxml.org/
+            UTTypeTagSpecification:
+              public.filename-extension: [mxl]
+              public.mime-type: [application/vnd.recordare.musicxml]
+          - UTTypeIdentifier: com.recordare.musicxml.uncompressed
+            UTTypeDescription: MusicXML
+            UTTypeConformsTo: [public.xml]
+            UTTypeReferenceURL: http://www.musicxml.org/
+            UTTypeTagSpecification:
+              public.filename-extension: [musicxml]
+              public.mime-type: [application/vnd.recordare.musicxml+xml]
+          - UTTypeIdentifier: com.forScore.4sc
+            UTTypeDescription: forScore Score
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [4sc, 4SC]
+          - UTTypeIdentifier: com.forScore.4ss
+            UTTypeDescription: forScore Setlist
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification:
+              public.filename-extension: [4ss, 4SS]
         UIRequiresFullScreen: false
         ITSAppUsesNonExemptEncryption: false
     entitlements:

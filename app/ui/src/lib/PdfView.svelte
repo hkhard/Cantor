@@ -13,8 +13,10 @@
     follow: boolean
     /** Called with a written measure index when the user taps a measure. */
     onseek: (measure: number) => void
+    /** A-B loop range (written measures), shaded on the page. */
+    loop?: [number, number] | null
   }
-  let { url, boxes, measure, follow, onseek }: Props = $props()
+  let { url, boxes, measure, follow, onseek, loop = null }: Props = $props()
 
   let host: HTMLDivElement | undefined = $state()
   let canvas: HTMLCanvasElement | undefined = $state()
@@ -104,6 +106,9 @@
   }
 
   let cur = $derived(boxes && measure >= 0 ? boxes[measure] : null)
+  let loopBoxes = $derived(
+    boxes && loop ? boxes.slice(loop[0], loop[1] + 1).filter((b) => b.page === page) : [],
+  )
 </script>
 
 <div class="pdfhost" bind:this={host}>
@@ -111,6 +116,12 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div class="sheet" style="width:{size.w}px;height:{size.h}px" onclick={tap}>
     <canvas bind:this={canvas}></canvas>
+    {#each loopBoxes as b}
+      <div
+        class="loopbox"
+        style="left:{b.x * size.w}px;top:{b.y * size.h}px;width:{b.w * size.w}px;height:{b.h * size.h}px"
+      ></div>
+    {/each}
     {#if cur && cur.page === page}
       <div
         class="cursor"
@@ -155,6 +166,13 @@
       left 0.12s,
       top 0.12s,
       width 0.12s;
+  }
+  .loopbox {
+    position: absolute;
+    background: rgba(184, 86, 43, 0.08);
+    border-top: 3px solid rgba(184, 86, 43, 0.5);
+    border-bottom: 3px solid rgba(184, 86, 43, 0.5);
+    pointer-events: none;
   }
   .pageturn {
     position: absolute;

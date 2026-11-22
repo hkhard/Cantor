@@ -6,8 +6,12 @@
   import PdfView from './lib/PdfView.svelte'
   import { scoreFileUrl } from './lib/pdf'
   import Icon from './lib/Icon.svelte'
+  import { listen } from '@tauri-apps/api/event'
 
   let scores: ScoreEntry[] = $state([])
+  let notice = $state('')
+  let importing = $state(false)
+  let fileInput: HTMLInputElement | undefined = $state()
   let opened: Opened | null = $state(null)
   let engraved: Engraved | null = $state(null)
   let page = $state(1)
@@ -28,6 +32,13 @@
   /** 'pdf' = the original page, 'notation' = engraved from MusicXML. */
   let view: 'pdf' | 'notation' = $state('notation')
   let playingMeasure = $state(-1)
+  // PLAY-07 loop: tap "Slinga", then the first and last bar.
+  let loopPick: 'off' | 'a' | 'b' = $state('off')
+  let loopA: number | null = $state(null)
+  let loopB: number | null = $state(null)
+  // PLAY-06
+  let metronome = $state(false)
+  let countIn = $state(false)
 
   let scoreEl: HTMLDivElement | undefined = $state()
   let currentMeasure = -1
@@ -36,6 +47,19 @@
   onMount(async () => {
     try {
       scores = await api.listScores()
+      // Files shared to Cantor from other apps (share sheet, AirDrop, Files).
+      listen<string[]>('library-changed', async (ev) => {
+        scores = await api.listScores()
+        const added = ev.payload ?? []
+        notice = added.length
+          ? `Importerade ${added.length} ${added.length === 1 ? 'fil' : 'filer'}`
+          : ''
+        // A single shared score opens straight away.
+        if (added.length === 1) {
+          const s = scores.find((x) => x.file === added[0])
+          if (s) await open(s)
+        }
+      })
       // Demo/test hook: auto-open a score whose title contains this text,
       // set at build time (VITE_OPEN) or via ?open= in the URL.
       const want =
@@ -63,10 +87,20 @@
       strips = opened.channels.map(() => ({ volume_db: 0, mute: false, solo: false }))
       mine = null
       view = opened.pdf_url ? 'pdf' : 'notation'
+      loopPick = 'off'
+      loopA = null
+      loopB = null
+      if (metronome || countIn) api.setClick({ metronome, countIn })
       playingMeasure = -1
       playing = false
       position = 0
       tempo = 100
+      if (!opened.musicxml) {
+        // PDF only: show the page, no sound or notation.
+        engraved = null
+        svg = ''
+        return
+      }
       loading = 'Sätter noterna …'
       await tick()
       // In PDF view the notation pane is not mounted: size from the window.
@@ -77,7 +111,7 @@
       page = 1
       currentMeasure = -1
       svg = engraved.render(1)
-      startPolling()
+      if (opened.channels.length) startPolling()
     } catch (e) {
       error = String(e)
     } finally {
@@ -199,13 +233,7 @@
     const id = g.getAttribute('data-id') ?? g.id
     let written = -1
     for (const [i, loc] of engraved.measurePage) if (loc.id === id) written = i
-    const first = opened.measures.find((m) => m[1] === written)
-    if (first) {
-      await api.seek(first[0])
-      position = first[0]
-      currentMeasure = -1
-      updateCursor()
-    }
+    if (written >= 0) await seekMeasure(written)
   }
 
   async function setTempo(e: Event) {
@@ -260,12 +288,62 @@
 
   /** Play from the first time a written measure sounds (repeats unfolded). */
   async function seekMeasure(written: number) {
+    if (loopPick === 'a') {
+      loopA = written
+      loopB = null
+      loopPick = 'b'
+      markLoop()
+      return
+    }
+    if (loopPick === 'b' && loopA !== null) {
+      loopB = written
+      loopPick = 'off'
+      const [a, b] = [Math.min(loopA, written), Math.max(loopA, written)]
+      loopA = a
+      loopB = b
+      await api.setLoop(a, b)
+      markLoop()
+      return
+    }
     const first = opened?.measures.find((m) => m[1] === written)
     if (!first) return
     await api.seek(first[0])
     position = first[0]
     currentMeasure = -1
     updateCursor()
+  }
+
+  async function toggleLoop() {
+    if (loopPick !== 'off' || loopB !== null) {
+      loopPick = 'off'
+      loopA = null
+      loopB = null
+      await api.setLoop()
+      markLoop()
+    } else {
+      loopPick = 'a'
+    }
+  }
+
+  /** Outline the loop's bars in the notation view. */
+  function markLoop() {
+    scoreEl?.querySelectorAll('g.measure.inloop').forEach((el) => el.classList.remove('inloop'))
+    if (!engraved || loopA === null) return
+    const b = loopB ?? loopA
+    for (let m = loopA; m <= b; m++) {
+      const loc = engraved.measurePage.get(m)
+      if (loc) scoreEl?.querySelector(`g.measure[data-id="${CSS.escape(loc.id)}"]`)?.classList.add('inloop')
+    }
+  }
+
+  async function toggleMetronome() {
+    metronome = !metronome
+    await api.setClick({ metronome })
+  }
+
+  async function toggleCountIn() {
+    countIn = !countIn
+    await api.setClick({ countIn })
   }
 
   /** Re-engrave for the current pane size (rotation, mixer shown/hidden),
@@ -309,6 +387,38 @@
     }
   }
 
+  async function importPicked(e: Event) {
+    const input = e.target as HTMLInputElement
+    const files = [...(input.files ?? [])]
+    input.value = ''
+    if (!files.length) return
+    importing = true
+    notice = ''
+    const added: string[] = []
+    const failed: string[] = []
+    for (const f of files) {
+      try {
+        added.push(...(await api.importFile(f)))
+      } catch (err) {
+        failed.push(String(err))
+      }
+    }
+    importing = false
+    scores = await api.listScores()
+    notice = [
+      added.length ? `Importerade ${added.length} ${added.length === 1 ? 'fil' : 'filer'}` : '',
+      ...failed,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
+
+  async function removeScore(s: ScoreEntry) {
+    if (!confirm(`Ta bort "${s.title}" från ditt bibliotek?`)) return
+    await api.deleteScore(s.file)
+    scores = await api.listScores()
+  }
+
   function onKey(e: KeyboardEvent) {
     if (!opened) return
     if (e.code === 'Space') {
@@ -333,9 +443,35 @@
     </header>
     {#if error}<p class="error">{error}</p>{/if}
     {#if loading}<p class="loading">{loading}</p>{/if}
+    <div class="libbar">
+      <button class="chip on" onclick={() => fileInput?.click()} disabled={importing}
+        >{importing ? 'Importerar …' : '＋ Importera'}</button
+      >
+      <input
+        bind:this={fileInput}
+        type="file"
+        multiple
+        accept=".mxl,.musicxml,.xml,.pdf,.4sc,.4ss,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
+        style="display:none"
+        onchange={importPicked}
+      />
+      {#if notice}<span class="notice">{notice}</span>{/if}
+    </div>
     <ul class="scores">
       {#each scores as s (s.file)}
-        <li><button onclick={() => open(s)}>{s.title}</button></li>
+        <li>
+          <button onclick={() => open(s)}>
+            <span>{s.title}</span>
+            <span class="badges">
+              {#if s.playable}<span class="badge">♪ spelar</span>{/if}
+              {#if s.pdf}<span class="badge">PDF</span>{/if}
+              {#if s.user}<span class="badge mine">Mina</span>{/if}
+            </span>
+          </button>
+          {#if s.user}
+            <button class="remove" onclick={() => removeScore(s)} aria-label="Ta bort {s.title}">×</button>
+          {/if}
+        </li>
       {/each}
     </ul>
     <p class="note">Sjungen text finns bara på engelska. Svensk text visas i noterna.</p>
@@ -381,6 +517,7 @@
             measure={playingMeasure}
             {follow}
             onseek={seekMeasure}
+            loop={loopA !== null ? [loopA, loopB ?? loopA] : null}
           />
         </div>
       {:else}
@@ -395,7 +532,7 @@
       </div>
       {/if}
 
-      {#if mixerOpen}
+      {#if mixerOpen && opened.channels.length}
         <aside class="mixer glass">
           <div class="presets">
             <button onclick={() => preset('my_part')} disabled={mine === null}>Min stämma</button>
@@ -426,6 +563,12 @@
       {/if}
     </div>
 
+    {#if !opened.channels.length}
+      <footer class="transport glass silent">
+        Bara PDF: inga noter att spela. Lägg till en MusicXML-fil med samma namn (från MuseScore eller en
+        notskanner) så spelar stycket.
+      </footer>
+    {:else}
     <footer class="transport glass">
       <button class="icon" onclick={toStart} aria-label="Till början"><Icon name="start" /></button>
       <button class="play" onclick={toggle} aria-label={playing ? 'Paus' : 'Spela'}><Icon name={playing ? 'pause' : 'play'} size={24} /></button>
@@ -436,8 +579,21 @@
         >Tempo {tempo}%
         <input type="range" min="25" max="200" step="5" value={tempo} oninput={setTempo} />
       </label>
+      <button
+        class="chip"
+        class:on={loopPick !== 'off' || loopB !== null}
+        onclick={toggleLoop}
+        aria-label="Slinga A–B"
+        ><Icon name="loop" size={18} />
+        {#if loopPick === 'a'}Tryck första takten{:else if loopPick === 'b'}Tryck sista takten{:else if loopA !== null && loopB !== null}T. {loopA + 1}–{loopB + 1}{:else}Slinga{/if}</button
+      >
+      <button class="chip" class:on={metronome} onclick={toggleMetronome} aria-label="Metronom"
+        ><Icon name="metronome" size={18} /> Klick</button
+      >
+      <button class="chip" class:on={countIn} onclick={toggleCountIn}>Inräkning</button>
       <label class="follow"><input type="checkbox" bind:checked={follow} /> Följ</label>
       {#if engraved && view === 'notation'}<span class="page">{page}/{engraved.pages}</span>{/if}
     </footer>
+    {/if}
   </main>
 {/if}

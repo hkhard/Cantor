@@ -1,7 +1,7 @@
 <script lang="ts">
   // Minimal line-icon set (SF Symbols–like, 24px grid, currentColor).
   // Replaces unicode glyphs that iOS renders as emoji.
-  type Name = 'play' | 'pause' | 'start' | 'back' | 'sliders' | 'appearance'
+  type Name = 'play' | 'pause' | 'start' | 'back' | 'sliders' | 'appearance' | 'loop' | 'metronome'
   let { name, size = 22 }: { name: Name; size?: number } = $props()
 </script>
 
@@ -19,6 +19,12 @@
   {:else if name === 'sliders'}
     <path d="M6 4v16M12 4v16M18 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.45" />
     <g fill="currentColor"><rect x="3.5" y="13" width="5" height="3" rx="1.5" /><rect x="9.5" y="7" width="5" height="3" rx="1.5" /><rect x="15.5" y="11" width="5" height="3" rx="1.5" /></g>
+  {:else if name === 'loop'}
+    <path d="M17 7H8a4 4 0 0 0 0 8h1M7 17h9a4 4 0 0 0 0-8h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    <path d="M15 4.5 17.5 7 15 9.5M9 14.5 6.5 17 9 19.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  {:else if name === 'metronome'}
+    <path d="M9 3.5h6l3.5 16.5h-13z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+    <path d="M12 16 17 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
   {:else if name === 'appearance'}
     <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2" />
     <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
