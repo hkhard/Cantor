@@ -2,8 +2,8 @@
 
 use crate::dom::{self, DomError, Element};
 use crate::model::{
-    Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Swing, Syllabic, Tick,
-    PPQ,
+    Articulation, Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Swing,
+    Syllabic, Tick, PPQ,
 };
 use std::io::Read;
 
@@ -222,6 +222,62 @@ fn swing_from_words(dir: &Element) -> Option<Option<Swing>> {
     }
 }
 
+/// Velocity of a dynamic mark (`<dynamics><mf/>`), MIDI 1..127.
+fn dynamic_velocity(mark: &str) -> Option<u8> {
+    Some(match mark {
+        "pppp" => 16,
+        "ppp" => 24,
+        "pp" => 36,
+        "p" => 50,
+        "mp" => 64,
+        "mf" => 78,
+        "f" => 90,
+        "ff" => 104,
+        "fff" => 116,
+        "ffff" => 124,
+        "sf" | "sfz" | "fz" | "rf" | "rfz" | "sffz" => 100,
+        "fp" => 90,
+        _ => return None,
+    })
+}
+
+/// Dynamic from a `<direction>`: `<sound dynamics>` (percent of forte = 90)
+/// wins over the printed mark.
+fn direction_dynamic(dir: &Element) -> Option<u8> {
+    if let Some(v) = dir
+        .child("sound")
+        .and_then(|s| s.attr("dynamics"))
+        .and_then(|d| d.trim().parse::<f64>().ok())
+        .filter(|d| d.is_finite() && *d >= 0.0)
+    {
+        return Some((v * 0.9).round().clamp(1.0, 127.0) as u8);
+    }
+    let dt = dir.child("direction-type")?;
+    let d = dt.child("dynamics")?;
+    d.children
+        .iter()
+        .find_map(|c| dynamic_velocity(c.name.as_str()))
+}
+
+fn articulation_of(note: &Element) -> Articulation {
+    let mut a = Articulation::NORMAL;
+    for n in note.children("notations") {
+        for arts in n.children("articulations") {
+            for c in &arts.children {
+                match c.name.as_str() {
+                    "staccato" | "spiccato" => a.length_pct = a.length_pct.min(50),
+                    "staccatissimo" => a.length_pct = a.length_pct.min(25),
+                    "detached-legato" => a.length_pct = a.length_pct.min(75),
+                    "accent" => a.accent = a.accent.max(15),
+                    "strong-accent" => a.accent = a.accent.max(25),
+                    _ => {}
+                }
+            }
+        }
+    }
+    a
+}
+
 fn tempo_of(sound: &Element) -> Option<f64> {
     sound
         .attr("tempo")
@@ -235,6 +291,8 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
     let mut time_sig: Option<(u32, u32)> = None;
     // Volta numbers open across measures (ending start .. stop/discontinue).
     let mut open_ending: Vec<u32> = Vec::new();
+    // Dynamic velocity in effect per staff, carried across measures.
+    let mut dynamics: std::collections::HashMap<u32, u8> = std::collections::HashMap::new();
     let mut out = Vec::new();
 
     for m in part.children("measure") {
@@ -298,6 +356,22 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                         .or_else(|| swing_from_words(child))
                     {
                         swing.push((cursor, sw));
+                    }
+                    if let Some(v) = direction_dynamic(child) {
+                        // A dynamic applies to its staff, or all staves.
+                        match child
+                            .child_text("staff")
+                            .and_then(|s| s.trim().parse::<u32>().ok())
+                        {
+                            Some(st) => {
+                                dynamics.insert(st, v);
+                            }
+                            None => {
+                                for st in 1..=8 {
+                                    dynamics.insert(st, v);
+                                }
+                            }
+                        }
                     }
                     if let Some(s) = child.child("sound") {
                         if let Some(t) = tempo_of(s) {
@@ -394,6 +468,8 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                         tie_start: tie("start"),
                         tie_stop: tie("stop"),
                         lyrics: parse_lyrics(child),
+                        dynamic: dynamics.get(&staff).copied(),
+                        articulation: articulation_of(child),
                     });
                     if !is_chord && !is_grace {
                         last_onset = cursor;

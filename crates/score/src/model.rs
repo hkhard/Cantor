@@ -118,6 +118,27 @@ pub struct Event {
     pub tie_stop: bool,
     /// Lyrics on this note, one per verse (VOX-01).
     pub lyrics: Vec<Lyric>,
+    /// Velocity (1..127) from the dynamic in effect for this staff, if the
+    /// score marks one (PLAY-10).
+    pub dynamic: Option<u8>,
+    /// Articulation affecting playback (PLAY-10).
+    pub articulation: Articulation,
+}
+
+/// Playback-relevant articulation of a note.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Articulation {
+    /// Fraction of the written length that sounds, in percent (staccato 50).
+    pub length_pct: u8,
+    /// Velocity added (accent) or 0.
+    pub accent: u8,
+}
+
+impl Articulation {
+    pub const NORMAL: Articulation = Articulation {
+        length_pct: 100,
+        accent: 0,
+    };
 }
 
 /// MusicXML `<syllabic>`: where a syllable sits in its word.

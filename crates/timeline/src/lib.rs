@@ -30,7 +30,12 @@ pub struct TimedNote {
     pub tick_off: Tick,
     pub sec_on: f64,
     pub sec_off: f64,
+    /// MIDI velocity from dynamics and accents (PLAY-10).
+    pub velocity: u8,
 }
+
+/// Velocity when a score has no dynamics (mezzo-forte).
+pub const DEFAULT_VELOCITY: u8 = 78;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Timemap {
@@ -44,6 +49,34 @@ pub struct Timemap {
     pub tempos: Vec<(Tick, f64)>,
     pub duration_ticks: Tick,
     pub duration_sec: f64,
+    /// Beat grid per played measure (parallel to `measure_order`): the beat
+    /// unit in ticks from the time signature (a quarter in 4/4, a dotted
+    /// quarter in 6/8) and the number of beats. Drives the metronome click
+    /// and the count-in (PLAY-06).
+    pub beats: Vec<(Tick, u32)>,
+}
+
+impl Timemap {
+    /// Seconds of every beat in the played order, with `true` on downbeats.
+    pub fn beat_times(&self) -> Vec<(f64, bool)> {
+        let mut out = Vec::new();
+        for (visit, &(unit, count)) in self.beats.iter().enumerate() {
+            let start = self.measure_starts[visit];
+            let end = self
+                .measure_starts
+                .get(visit + 1)
+                .copied()
+                .unwrap_or(self.duration_ticks);
+            for b in 0..count {
+                let t = start + unit * b as Tick;
+                if t >= end && b > 0 {
+                    break; // short (pickup) measure
+                }
+                out.push((self.seconds_at(t), b == 0));
+            }
+        }
+        out
+    }
 }
 
 impl Timemap {
@@ -154,7 +187,15 @@ pub fn build_timemap(score: &Score) -> Timemap {
                 }
                 let sw = &swing_at[visit];
                 let on = measure_starts[visit] + swung(sw, e.offset);
-                let off = measure_starts[visit] + swung(sw, e.offset + e.duration);
+                let written_off = measure_starts[visit] + swung(sw, e.offset + e.duration);
+                // Staccato and friends shorten the sound, not the time slot.
+                let pct = e.articulation.length_pct.clamp(1, 100) as Tick;
+                let off = on + ((written_off - on) * pct / 100).max(1);
+                let velocity = e
+                    .dynamic
+                    .unwrap_or(DEFAULT_VELOCITY)
+                    .saturating_add(e.articulation.accent)
+                    .min(127);
                 if e.tie_stop {
                     if let Some(&idx) = open.get(&midi) {
                         // Only continue a tie that ends where this note starts.
@@ -177,6 +218,7 @@ pub fn build_timemap(score: &Score) -> Timemap {
                     tick_off: off,
                     sec_on: 0.0,
                     sec_off: 0.0,
+                    velocity,
                 });
                 if e.tie_start {
                     open.insert(midi, notes.len() - 1);
@@ -192,7 +234,20 @@ pub fn build_timemap(score: &Score) -> Timemap {
     }
     notes.sort_by_key(|n| (n.tick_on, n.part, n.pitch));
 
+    let beats = measure_order
+        .iter()
+        .map(|&mi| {
+            let ts = score
+                .parts
+                .iter()
+                .find_map(|p| p.measures.get(mi).and_then(|m| m.time_signature))
+                .unwrap_or((4, 4));
+            beat_grid(ts)
+        })
+        .collect();
+
     Timemap {
+        beats,
         duration_sec: seconds_at(&tempos, duration_ticks),
         notes,
         measure_starts,
@@ -258,4 +313,16 @@ fn swung(changes: &[(Tick, Option<Swing>)], offset: Tick) -> Tick {
         long + (x - sw.unit) * (pair - long) / (pair - sw.unit)
     };
     base + y
+}
+
+/// Beat unit (ticks) and beats per measure for a time signature: compound
+/// meters (6/8, 9/8, 12/8) count dotted beats, others count the denominator.
+fn beat_grid((num, den): (u32, u32)) -> (Tick, u32) {
+    let den = den.max(1) as Tick;
+    let note = cantor_score::PPQ * 4 / den;
+    if den >= 8 && num > 3 && num % 3 == 0 {
+        (note * 3, num / 3)
+    } else {
+        (note, num.max(1))
+    }
 }

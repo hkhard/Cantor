@@ -62,14 +62,18 @@ impl Synth for SoundFontSynth {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Ev {
     sec: f64,
+    velocity: u8,
     /// 0 = note off, 1 = note on (offs sort first at the same time).
     on: u8,
     channel: usize,
     key: u8,
 }
 
-const VELOCITY: u8 = 90;
 const DRUMS: u8 = 9;
+/// GM percussion keys for the click: hi wood block on the downbeat, low
+/// wood block on other beats.
+const CLICK_ACCENT: u8 = 76;
+const CLICK_BEAT: u8 = 77;
 
 /// MIDI channel for mixer channel `i`, skipping the GM drum channel.
 fn midi_channel(i: usize) -> u8 {
@@ -98,6 +102,19 @@ pub struct Engine<S: Synth> {
     duration: f64,
     /// Notes currently held, to release on seek/pause.
     held: Vec<(u8, u8)>,
+    /// Beats in score seconds, `true` on downbeats.
+    beats: Vec<(f64, bool)>,
+    next_beat: usize,
+    metronome: bool,
+    count_in: bool,
+    /// Count-in clicks still to play before the music: (frame since origin, accent).
+    pre_roll: Vec<(u64, bool)>,
+    /// Frames of count-in before the music clock starts.
+    pre_frames: u64,
+    /// Loop range in score seconds (start, end).
+    loop_range: Option<(f64, f64)>,
+    /// Start second of each written measure's first play, and its end.
+    measure_spans: Vec<Option<(f64, f64)>>,
 }
 
 impl<S: Synth> Engine<S> {
@@ -107,18 +124,35 @@ impl<S: Synth> Engine<S> {
             let ch = plan.channel_of(n);
             events.push(Ev {
                 sec: n.sec_on,
+                velocity: n.velocity,
                 on: 1,
                 channel: ch,
                 key: n.pitch,
             });
             events.push(Ev {
                 sec: n.sec_off,
+                velocity: 0,
                 on: 0,
                 channel: ch,
                 key: n.pitch,
             });
         }
         events.sort_by(|a, b| a.sec.total_cmp(&b.sec).then(a.on.cmp(&b.on)));
+        // Span of each written measure on its first pass (for A-B loops).
+        let n_written = tm.measure_order.iter().max().map_or(0, |m| m + 1);
+        let mut measure_spans = vec![None; n_written];
+        for (visit, &mi) in tm.measure_order.iter().enumerate() {
+            if measure_spans[mi].is_none() {
+                let a = tm.seconds_at(tm.measure_starts[visit]);
+                let b = tm.seconds_at(
+                    tm.measure_starts
+                        .get(visit + 1)
+                        .copied()
+                        .unwrap_or(tm.duration_ticks),
+                );
+                measure_spans[mi] = Some((a, b));
+            }
+        }
         let mut mixer = Mixer::new(plan.channels.len());
         for (i, c) in plan.channels.iter().enumerate() {
             mixer.set_pan(i, c.pan);
@@ -137,6 +171,14 @@ impl<S: Synth> Engine<S> {
             tempo_scale: 1.0,
             duration: tm.duration_sec,
             held: Vec::new(),
+            beats: tm.beat_times(),
+            next_beat: 0,
+            metronome: false,
+            count_in: false,
+            pre_roll: Vec::new(),
+            pre_frames: 0,
+            loop_range: None,
+            measure_spans,
         };
         e.init_channels();
         e
@@ -183,7 +225,71 @@ impl<S: Synth> Engine<S> {
     }
 
     pub fn play(&mut self) {
+        if !self.playing && self.count_in {
+            self.prepare_count_in();
+        }
         self.playing = true;
+    }
+
+    /// Metronome click on every beat while playing (PLAY-06).
+    pub fn set_metronome(&mut self, on: bool) {
+        self.metronome = on;
+    }
+
+    pub fn metronome(&self) -> bool {
+        self.metronome
+    }
+
+    /// One measure of clicks before the music when playback starts (PLAY-06).
+    pub fn set_count_in(&mut self, on: bool) {
+        self.count_in = on;
+    }
+
+    pub fn count_in(&self) -> bool {
+        self.count_in
+    }
+
+    /// Loop written measures `a..=b` (0-based), or `None` to play through
+    /// (PLAY-07). The loop uses each measure's first pass.
+    pub fn set_loop(&mut self, range: Option<(usize, usize)>) {
+        self.loop_range = range.and_then(|(a, b)| {
+            let (a, b) = (a.min(b), a.max(b));
+            let start = self.measure_spans.get(a).copied().flatten()?.0;
+            let end = self.measure_spans.get(b).copied().flatten()?.1;
+            (end > start).then_some((start, end))
+        });
+    }
+
+    pub fn loop_range(&self) -> Option<(f64, f64)> {
+        self.loop_range
+    }
+
+    /// Count-in: the beats of the measure the music starts in, played before
+    /// it at the current tempo; the music clock waits until they are done.
+    fn prepare_count_in(&mut self) {
+        let pos = self.position();
+        // Downbeat at or before the position and the beats of that measure.
+        let i = self.beats.partition_point(|b| b.0 <= pos + 1e-9);
+        let start = (0..i).rev().find(|&k| self.beats[k].1).unwrap_or(0);
+        let mut end = start + 1;
+        while end < self.beats.len() && !self.beats[end].1 {
+            end += 1;
+        }
+        let measure: Vec<f64> = self.beats[start..end.min(self.beats.len())]
+            .iter()
+            .map(|b| b.0)
+            .collect();
+        let beat_len = if measure.len() >= 2 {
+            measure[1] - measure[0]
+        } else {
+            0.5
+        };
+        let n = measure.len().max(1);
+        let fr = |sec: f64| (sec / self.tempo_scale * self.sample_rate as f64).round() as u64;
+        self.pre_roll = (0..n).map(|k| (fr(beat_len * k as f64), k == 0)).collect();
+        self.pre_frames = fr(beat_len * n as f64);
+        self.origin = pos;
+        self.frame = 0;
     }
 
     pub fn pause(&mut self) {
@@ -195,9 +301,11 @@ impl<S: Synth> Engine<S> {
         self.playing
     }
 
-    /// Score position in seconds (at the score's own tempo).
+    /// Score position in seconds (at the score's own tempo). During the
+    /// count-in it stays at the start position.
     pub fn position(&self) -> f64 {
-        self.origin + self.frame as f64 * self.tempo_scale / self.sample_rate as f64
+        let music = self.frame.saturating_sub(self.pre_frames);
+        self.origin + music as f64 * self.tempo_scale / self.sample_rate as f64
     }
 
     pub fn duration(&self) -> f64 {
@@ -213,13 +321,18 @@ impl<S: Synth> Engine<S> {
         self.release_all();
         self.origin = sec.clamp(0.0, self.duration);
         self.frame = 0;
+        self.pre_frames = 0;
+        self.pre_roll.clear();
         self.next = self.events.partition_point(|e| e.sec < self.origin);
+        self.next_beat = self.beats.partition_point(|b| b.0 < self.origin - 1e-9);
     }
 
     /// 1.0 = as written, 0.5 = half speed (PLAY-06: 25% to 200%).
     pub fn set_tempo_scale(&mut self, s: f64) {
         self.origin = self.position();
         self.frame = 0;
+        self.pre_frames = 0;
+        self.pre_roll.clear();
         self.tempo_scale = s.clamp(0.25, 2.0);
     }
 
@@ -228,10 +341,12 @@ impl<S: Synth> Engine<S> {
     }
 
     fn release_all(&mut self) {
+        for (ch, key) in std::mem::take(&mut self.held) {
+            self.synth.message(ch, 0x80, key, 0);
+        }
         for i in 0..self.programs.len() {
             self.synth.message(midi_channel(i), 0xB0, 0x7B, 0);
         }
-        self.held.clear();
     }
 
     /// Fill the buffers with the next block of audio.
@@ -240,11 +355,10 @@ impl<S: Synth> Engine<S> {
         let frames = left.len();
         let mut done = 0;
         while done < frames {
-            // Frames until the next event is due (or the end of the block).
+            // Frames until the next thing is due (note, click, loop end).
             let mut run = frames - done;
             if self.playing {
-                if let Some(ev) = self.events.get(self.next) {
-                    let due = self.frame_of(ev.sec);
+                if let Some(due) = self.next_due() {
                     run = run.min(due.saturating_sub(self.frame) as usize);
                 }
             }
@@ -258,28 +372,88 @@ impl<S: Synth> Engine<S> {
             }
             if self.playing {
                 self.fire_due();
-                if self.next >= self.events.len() && self.position() >= self.duration {
+                if self.loop_range.is_none()
+                    && self.next >= self.events.len()
+                    && self.position() >= self.duration
+                {
                     self.playing = false;
                 }
             }
         }
     }
 
+    /// Frame of the next event of any kind, if any.
+    fn next_due(&self) -> Option<u64> {
+        let mut due: Option<u64> = None;
+        let mut take = |f: u64| due = Some(due.map_or(f, |d: u64| d.min(f)));
+        if let Some(&(f, _)) = self.pre_roll.first() {
+            take(f);
+        }
+        if let Some(ev) = self.events.get(self.next) {
+            if self.loop_range.is_none_or(|(_, end)| ev.sec < end - 1e-9) {
+                take(self.frame_of(ev.sec));
+            }
+        }
+        if self.metronome {
+            if let Some(&(sec, _)) = self.beats.get(self.next_beat) {
+                take(self.frame_of(sec));
+            }
+        }
+        if let Some((_, end)) = self.loop_range {
+            take(self.frame_of(end));
+        }
+        due
+    }
+
+    fn click(&mut self, accent: bool) {
+        let key = if accent { CLICK_ACCENT } else { CLICK_BEAT };
+        let vel = if accent { 110 } else { 80 };
+        self.synth.message(DRUMS, 0x80, key, 0);
+        self.synth.message(DRUMS, 0x90, key, vel);
+    }
+
     /// Output frame (since the last seek) at which score time `sec` sounds.
     fn frame_of(&self, sec: f64) -> u64 {
         let rel = (sec - self.origin) / self.tempo_scale * self.sample_rate as f64;
         // Round to the nearest frame, tolerating float noise.
-        (rel - 1e-6).ceil().max(0.0) as u64
+        self.pre_frames + (rel - 1e-6).ceil().max(0.0) as u64
     }
 
     fn fire_due(&mut self) {
+        // Count-in clicks.
+        while let Some(&(f, accent)) = self.pre_roll.first() {
+            if f > self.frame {
+                break;
+            }
+            self.click(accent);
+            self.pre_roll.remove(0);
+        }
+        // Loop wrap: at the end of B, release and jump to A.
+        if let Some((start, end)) = self.loop_range {
+            if self.frame >= self.frame_of(end) && self.frame > self.pre_frames {
+                self.seek(start);
+            }
+        }
+        // Metronome.
+        while let Some(&(sec, accent)) = self.beats.get(self.next_beat) {
+            if self.frame_of(sec) > self.frame {
+                break;
+            }
+            if self.metronome && self.frame >= self.pre_frames {
+                self.click(accent);
+            }
+            self.next_beat += 1;
+        }
         while let Some(ev) = self.events.get(self.next).copied() {
+            if self.loop_range.is_some_and(|(_, end)| ev.sec >= end - 1e-9) {
+                break;
+            }
             if self.frame_of(ev.sec) > self.frame {
                 break;
             }
             let ch = midi_channel(ev.channel);
             if ev.on == 1 {
-                self.synth.message(ch, 0x90, ev.key, VELOCITY);
+                self.synth.message(ch, 0x90, ev.key, ev.velocity.max(1));
                 self.held.push((ch, ev.key));
             } else if let Some(i) = self.held.iter().position(|h| *h == (ch, ev.key)) {
                 self.synth.message(ch, 0x80, ev.key, 0);

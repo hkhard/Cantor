@@ -35,8 +35,6 @@ pub fn program_for(name: &str, explicit: Option<u8>) -> u8 {
         .map_or(52, |(_, p)| *p)
 }
 
-const VELOCITY: u8 = 80;
-
 /// Encode the score's timemap as a format 1 Standard MIDI File at [`PPQ`].
 pub fn to_smf(score: &Score, tm: &Timemap) -> Vec<u8> {
     let mut tracks: Vec<Vec<TrackEvent<'_>>> = Vec::new();
@@ -109,7 +107,7 @@ pub fn to_smf(score: &Score, tm: &Timemap) -> Vec<u8> {
                     channel: ch,
                     message: MidiMessage::NoteOn {
                         key,
-                        vel: u7::new(VELOCITY),
+                        vel: u7::new(n.velocity.clamp(1, 127)),
                     },
                 },
             ));
