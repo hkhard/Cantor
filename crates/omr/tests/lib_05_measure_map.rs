@@ -180,3 +180,173 @@ fn lib_05_real_book_matches_musicxml_measure_count() {
         .iter()
         .all(|b| b.w > 0.0 && b.h > 0.0 && b.x + b.w <= 1.0));
 }
+
+/// OMR that ran on preprocessed images (spreads split at the gutter, scan
+/// borders cropped) gives boxes as fractions of the processed image. The
+/// preprocessor records, per image, the source PDF page and the crop
+/// rectangle (fractions of that page); boxes map back through it so the
+/// app draws them on the PDF it shows.
+#[test]
+fn lib_05_cropped_images_map_back_to_pdf_pages() {
+    use cantor_omr::measure_map::{uncrop, PageCrop};
+    // Image 1 = left half of PDF page 1, image 2 = right half (from x 0.5),
+    // image 3 = PDF page 2 with a 10% border cropped all round.
+    let crops = vec![
+        PageCrop {
+            page: 1,
+            x: 0.0,
+            y: 0.0,
+            w: 0.5,
+            h: 1.0,
+        },
+        PageCrop {
+            page: 1,
+            x: 0.5,
+            y: 0.0,
+            w: 0.5,
+            h: 1.0,
+        },
+        PageCrop {
+            page: 2,
+            x: 0.1,
+            y: 0.1,
+            w: 0.8,
+            h: 0.8,
+        },
+    ];
+    let b = |page, x, y, w, h| MeasureBox { page, x, y, w, h };
+    let mut boxes = vec![
+        b(1, 0.2, 0.1, 0.4, 0.2),
+        b(2, 0.0, 0.5, 0.5, 0.2),
+        b(3, 0.5, 0.5, 0.25, 0.25),
+    ];
+    uncrop(&mut boxes, &crops).unwrap();
+    let close = |a: &MeasureBox, e: &MeasureBox| {
+        a.page == e.page
+            && [(a.x, e.x), (a.y, e.y), (a.w, e.w), (a.h, e.h)]
+                .iter()
+                .all(|(p, q)| (p - q).abs() < 1e-9)
+    };
+    assert!(
+        close(&boxes[0], &b(1, 0.1, 0.1, 0.2, 0.2)),
+        "{:?}",
+        boxes[0]
+    );
+    assert!(
+        close(&boxes[1], &b(1, 0.5, 0.5, 0.25, 0.2)),
+        "{:?}",
+        boxes[1]
+    );
+    assert!(
+        close(&boxes[2], &b(2, 0.5, 0.5, 0.2, 0.2)),
+        "{:?}",
+        boxes[2]
+    );
+    // A box on an image the sidecar does not know is an error, not a guess.
+    let mut stray = vec![b(4, 0.0, 0.0, 0.1, 0.1)];
+    assert!(uncrop(&mut stray, &crops).is_err());
+}
+
+/// The sidecar is the JSON the Python preprocessors write.
+#[test]
+fn lib_05_crop_sidecar_parses() {
+    use cantor_omr::measure_map::parse_crops;
+    let c = parse_crops(br#"[{"page":3,"x":0.01,"y":0.02,"w":0.48,"h":0.95}]"#).unwrap();
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].page, 3);
+    assert!((c[0].w - 0.48).abs() < 1e-12);
+    assert!(parse_crops(b"nope").is_err());
+}
+
+/// Which movement of a book an Audiveris export holds: `<n>.mvtK.mxl` is
+/// movement K, a single-movement book exports `<n>.mxl`, and a single-sheet
+/// run (`-sheets N`) on a multi-movement sheet writes every movement to
+/// `<n>.mvtnull.mxl`, so the file left behind is the last movement.
+#[test]
+fn lib_05_export_name_selects_movement() {
+    use cantor_omr::measure_map::export_movement;
+    assert_eq!(export_movement("Song.mxl", 1), Some(0));
+    assert_eq!(export_movement("Song.mvt2.mxl", 3), Some(1));
+    assert_eq!(export_movement("Song.mvtnull.mxl", 6), Some(5));
+    assert_eq!(
+        export_movement("Song.mvt4.mxl", 3),
+        None,
+        "no such movement"
+    );
+    assert_eq!(export_movement("Song.mxl", 0), None, "empty book");
+}
+
+/// Real page books of "I bröllopsgården" (private sample, when present): the
+/// joined MusicXML is pages 2-6 in order, one movement each as exported.
+#[test]
+fn lib_05_real_page_books_follow_exported_movements() {
+    use cantor_omr::measure_map::{export_movement, measure_map_movements};
+    let root: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "..", "..", "scores", "out"]
+        .iter()
+        .collect();
+    let pages = root.join(".I bröllopsgården.omr/cleaned/pages");
+    if !pages.exists() {
+        eprintln!("skipped: private sample not present");
+        return;
+    }
+    let mut total = 0;
+    for n in 1..=6 {
+        let dir = pages.join(format!("page{n}"));
+        let Some(export) = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .find(|f| f.ends_with(".mxl"))
+        else {
+            continue; // page without music, skipped by the converter
+        };
+        let mv = measure_map_movements(&std::fs::read(dir.join("I bröllopsgården.omr")).unwrap())
+            .unwrap();
+        let k = export_movement(&export, mv.len()).unwrap();
+        let xml = std::fs::read(dir.join(&export)).unwrap();
+        let score = cantor_score::parse_score_file(&xml).unwrap();
+        assert_eq!(mv[k].len(), score.measure_count(), "page {n} ({export})");
+        total += mv[k].len();
+    }
+    let joined = std::fs::read(root.join("I bröllopsgården.musicxml")).unwrap();
+    assert_eq!(
+        total,
+        cantor_score::parse_score_file(&joined)
+            .unwrap()
+            .measure_count()
+    );
+}
+
+/// Real spread-split book of "Do you hear what I hear" (private sample, when
+/// present): movement 2 is the exported MusicXML; through the crop sidecar
+/// its boxes land on the PDF the app shows (landscape screenshot spreads,
+/// odd pages; even pages are repeats dropped by split_spreads.py).
+#[test]
+fn lib_05_real_split_spreads_map_to_pdf_pages() {
+    use cantor_omr::measure_map::{measure_map_movements, parse_crops, uncrop};
+    let root: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "..", "..", "scores", "out"]
+        .iter()
+        .collect();
+    let split = root.join(".Do you her what I hear TTBB.omr/split");
+    let (Ok(book), Ok(json)) = (
+        std::fs::read(split.join("Do you her what I hear TTBB.omr")),
+        std::fs::read(split.join("Do you her what I hear TTBB.pages.json")),
+    ) else {
+        eprintln!("skipped: private sample not present");
+        return;
+    };
+    let mut mv = measure_map_movements(&book).unwrap();
+    let xml = std::fs::read(root.join("Do you her what I hear TTBB.mxl")).unwrap();
+    let measures = cantor_score::parse_score_file(&xml)
+        .unwrap()
+        .measure_count();
+    assert_eq!(mv[1].len(), measures);
+    uncrop(&mut mv[1], &parse_crops(&json).unwrap()).unwrap();
+    assert!(mv[1].iter().all(|b| b.page % 2 == 1 && b.page <= 17));
+    assert!(mv[1]
+        .iter()
+        .all(|b| b.x > 0.1 && b.x + b.w < 0.9 && b.y > 0.1 && b.y + b.h < 0.9));
+    // Page 1 holds the left and right half of the first spread.
+    let p1: Vec<_> = mv[1].iter().filter(|b| b.page == 1).collect();
+    assert!(p1.iter().any(|b| b.x < 0.45) && p1.iter().any(|b| b.x > 0.5));
+}

@@ -196,3 +196,64 @@ pub fn measure_map(omr: &[u8]) -> Result<Vec<MeasureBox>, MapError> {
         .next()
         .unwrap_or_default())
 }
+
+/// Where a preprocessed OMR image came from: 1-based PDF `page` and the crop
+/// rectangle on it as fractions of the page. Written per image, in image
+/// order, by `tools/omr/split_spreads.py` and `clean_scan.py` as
+/// `<image>.pages.json`.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct PageCrop {
+    pub page: u32,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// Parse a crop sidecar (`[{page,x,y,w,h}, ...]`).
+pub fn parse_crops(json: &[u8]) -> Result<Vec<PageCrop>, MapError> {
+    serde_json::from_slice(json).map_err(err)
+}
+
+/// Map boxes on preprocessed images (`box.page` = 1-based image) back to the
+/// PDF pages they were cut from.
+pub fn uncrop(boxes: &mut [MeasureBox], crops: &[PageCrop]) -> Result<(), MapError> {
+    for b in boxes {
+        let c = b
+            .page
+            .checked_sub(1)
+            .and_then(|i| crops.get(i as usize))
+            .ok_or_else(|| MapError::Book(format!("no crop for image {}", b.page)))?;
+        *b = MeasureBox {
+            page: c.page,
+            x: c.x + b.x * c.w,
+            y: c.y + b.y * c.h,
+            w: b.w * c.w,
+            h: b.h * c.h,
+        };
+    }
+    Ok(())
+}
+
+/// Index of the movement an Audiveris export file holds, given how many
+/// movements the book has: `<n>.mvtK.mxl` is movement K, `<n>.mxl` the only
+/// one, and `<n>.mvtnull.mxl` (a `-sheets N` run, where every movement is
+/// written to the same file) the last one.
+pub fn export_movement(file: &str, movements: usize) -> Option<usize> {
+    if movements == 0 {
+        return None;
+    }
+    let stem = file
+        .strip_suffix(".mxl")
+        .or_else(|| file.strip_suffix(".musicxml"))
+        .or_else(|| file.strip_suffix(".xml"))
+        .unwrap_or(file);
+    let Some((_, tag)) = stem.rsplit_once(".mvt") else {
+        return Some(0);
+    };
+    if tag == "null" {
+        return Some(movements - 1);
+    }
+    let k: usize = tag.parse().ok()?;
+    (1..=movements).contains(&k).then(|| k - 1)
+}
