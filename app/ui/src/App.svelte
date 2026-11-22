@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte'
   import { api, type ChannelInfo, type Opened, type ScoreEntry, type Strip, type ScoreSettings, type Setlist } from './lib/api'
-  import { engrave, partNames, withoutParts, type Engraved } from './lib/engrave'
+  import { engrave, partNames, withoutParts, withNoteIds, noteAddress, type Engraved } from './lib/engrave'
   import Appearance from './lib/Appearance.svelte'
   import PdfView from './lib/PdfView.svelte'
   import Library from './lib/Library.svelte'
@@ -101,7 +101,35 @@
   }
 
   function notationXml(): string {
-    return opened ? withoutParts(opened.musicxml, settings?.hidden_parts ?? []) : ''
+    return opened ? withoutParts(withNoteIds(opened.musicxml), settings?.hidden_parts ?? []) : ''
+  }
+
+  // LIB-06: correct OMR mistakes on the notation (user's own scores).
+  let correcting = $state(false)
+  let picked: { part: number; measure: number; note: number; id: string } | null = $state(null)
+  function markPicked() {
+    scoreEl?.querySelectorAll('.picked').forEach((el) => el.classList.remove('picked'))
+    if (picked) scoreEl?.querySelector(`[data-id="${CSS.escape(picked.id)}"]`)?.classList.add('picked')
+  }
+  async function correct(edit: 'up' | 'down' | 'rest') {
+    if (!picked || !currentEntry) return
+    const keep = picked
+    try {
+      await api.correctNote(currentEntry.file, keep.part, keep.measure, keep.note, edit)
+      const pageNow = page
+      await open(currentEntry, opened?.choir === 'auto' ? undefined : opened?.choir, setCtx ?? undefined)
+      view = 'notation'
+      if (engraved && pageNow <= engraved.pages) {
+        page = pageNow
+        svg = engraved.render(page)
+      }
+      await tick()
+      picked = edit === 'rest' ? null : keep
+      markPicked()
+    } catch (e) {
+      exporting = String(e)
+      setTimeout(() => (exporting = ''), 6000)
+    }
   }
 
   async function setTranspose(n: number) {
@@ -430,6 +458,29 @@
   /** Tap a measure in the score to play from there. */
   async function tapScore(e: MouseEvent) {
     if (!opened || !engraved) return
+    if (correcting) {
+      // Nearest note head to the tap (glyphs are thin and the tap target is
+      // often the staff or the page, not the note itself).
+      let el = (e.target as Element).closest('[data-id^="cn-"]')
+      if (!el && scoreEl) {
+        let best = 28 * 28 // within 28 px
+        for (const n of scoreEl.querySelectorAll('g.note[data-id^="cn-"], g.rest[data-id^="cn-"], g.mRest[data-id^="cn-"]')) {
+          const r = n.getBoundingClientRect()
+          const dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right)
+          const dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom)
+          const d = dx * dx + dy * dy
+          if (d < best) {
+            best = d
+            el = n
+          }
+        }
+      }
+      const id = el?.getAttribute('data-id') ?? null
+      const a = noteAddress(id)
+      picked = a && id ? { ...a, id } : null
+      markPicked()
+      return
+    }
     const g = (e.target as Element).closest('g.measure')
     if (!g) return
     const id = g.getAttribute('data-id') ?? g.id
@@ -711,6 +762,11 @@
           <button class:on={view === 'notation'} aria-pressed={view === 'notation'} onclick={() => switchView('notation')}>{t('read.notation')}</button>
         </div>
       {/if}
+      {#if view === 'notation' && engraved && currentEntry?.user && !performance}
+        <button class="icon" class:active={correcting} aria-pressed={correcting} onclick={() => { correcting = !correcting; picked = null; annotating = false; markPicked() }}
+          >{correcting ? t('common.done') : t('read.correct')}</button
+        >
+      {/if}
       {#if ann && (view === 'pdf' ? !!opened.pdf_url : !!engraved)}
         <button class="icon annotate" class:active={annotating} aria-pressed={annotating} onclick={() => (annotating = !annotating)}
           >{annotating ? t('common.done') : t('read.annotate')}</button
@@ -806,6 +862,15 @@
         </div>
       {/if}
     </nav>
+
+    {#if correcting && view === 'notation'}
+      <div class="annbar glass" role="toolbar" aria-label={t('read.correct')}>
+        <span class="hint">{picked ? t('fix.picked', { bar: picked.measure + 1 }) : t('fix.hint')}</span>
+        <button class="icon" disabled={!picked} onclick={() => correct('up')} aria-label={t('fix.up')}>↑ {t('fix.up')}</button>
+        <button class="icon" disabled={!picked} onclick={() => correct('down')} aria-label={t('fix.down')}>↓ {t('fix.down')}</button>
+        <button class="icon" disabled={!picked} onclick={() => correct('rest')}>{t('fix.rest')}</button>
+      </div>
+    {/if}
 
     {#if annotating && ann}
       <div class="annbar glass" role="toolbar">

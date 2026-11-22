@@ -150,6 +150,12 @@ const sv = {
   'backup.waiting': 'Säkerhetskopian "{name}" har tagits emot.',
   'backup.restoreNow': 'Återställ',
   'backup.discard': 'Släng',
+  'read.correct': 'Rätta noter',
+  'fix.hint': 'Tryck på en not som skannern läste fel.',
+  'fix.picked': 'Vald not i takt {bar}.',
+  'fix.up': 'Upp',
+  'fix.down': 'Ned',
+  'fix.rest': 'Gör till paus',
   'pdf.openFailed': 'Kunde inte öppna PDF: {e}',
 } as const
 
@@ -302,6 +308,12 @@ const en: Record<Key, string> = {
   'backup.waiting': 'The backup "{name}" was received.',
   'backup.restoreNow': 'Restore',
   'backup.discard': 'Discard',
+  'read.correct': 'Correct notes',
+  'fix.hint': 'Tap a note the scanner misread.',
+  'fix.picked': 'Note selected in bar {bar}.',
+  'fix.up': 'Up',
+  'fix.down': 'Down',
+  'fix.rest': 'Make a rest',
   'pdf.openFailed': 'Could not open PDF: {e}',
 }
 

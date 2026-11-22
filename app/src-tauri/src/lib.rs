@@ -723,6 +723,54 @@ fn resident_mb() -> f64 {
     0.0
 }
 
+/// LIB-06: correct one note of a user's score (OMR mistakes) and save it.
+/// `edit` is `"up"`, `"down"` (a step in the key) or `"rest"`. The original
+/// is kept once in Documents/.originals so the uncorrected file is never lost.
+#[tauri::command]
+fn correct_note(
+    file: String,
+    part: usize,
+    measure: usize,
+    note: usize,
+    edit: String,
+    paths: State<'_, Paths>,
+) -> Result<(), String> {
+    if !file.starts_with("1:") {
+        return Err("bundled scores are read-only; import a copy to correct it".into());
+    }
+    let e = paths.entry(&file)?;
+    let name = e.score_file.ok_or("no MusicXML to correct")?;
+    let path = e.dir.join(&name);
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let xml =
+        String::from_utf8_lossy(&cantor_score::musicxml_bytes(&bytes).map_err(|e| e.to_string())?)
+            .into_owned();
+    let op = match edit.as_str() {
+        "up" => cantor_score::NoteEdit::Step(1),
+        "down" => cantor_score::NoteEdit::Step(-1),
+        "rest" => cantor_score::NoteEdit::Rest,
+        _ => return Err(format!("unknown edit {edit}")),
+    };
+    let out = cantor_score::edit_note(&xml, part, measure, note, op).map_err(|e| e.to_string())?;
+    // Keep the very first version, hidden from the library list.
+    let (stem, _) = name.rsplit_once('.').unwrap_or((&name, "musicxml"));
+    let keep = e.dir.join(".originals");
+    std::fs::create_dir_all(&keep).map_err(|e| e.to_string())?;
+    let orig = keep.join(&name);
+    if !orig.exists() {
+        std::fs::write(&orig, &bytes).map_err(|e| e.to_string())?;
+    }
+    // Saved as plain MusicXML next to the score; an .mxl is replaced by it.
+    let target = e.dir.join(format!("{stem}.musicxml"));
+    let tmp = target.with_extension("musicxml.tmp");
+    std::fs::write(&tmp, out).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &target).map_err(|e| e.to_string())?;
+    if target != path {
+        let _ = std::fs::remove_file(&path);
+    }
+    Ok(())
+}
+
 /// Open the share sheet for files (on the UI thread, as UIKit requires).
 fn share_on_main(app: &tauri::AppHandle, files: Vec<PathBuf>) -> Result<(), String> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -1371,7 +1419,8 @@ pub fn run() {
             restore_library,
             pending_backups,
             restore_pending,
-            perf_mark
+            perf_mark,
+            correct_note
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")

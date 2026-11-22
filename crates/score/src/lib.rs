@@ -5,11 +5,13 @@
 //! file-specific divisions.
 
 mod dom;
+mod edit;
 mod model;
 mod parse;
 mod transpose;
 mod write;
 
+pub use edit::{edit_note, NoteEdit};
 pub use model::{
     Articulation, Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Swing,
     Syllabic, Tick, PPQ,

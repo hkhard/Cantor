@@ -268,6 +268,8 @@ select {
   fill: var(--cursor-fill);
   stroke: var(--cursor-stroke);
   stroke-width: 12;
+  /* Drawn over the bar: taps must reach the notes below. */
+  pointer-events: none;
 }
 .score g.measure.playing g.note use,
 .score g.measure.playing g.note path {
@@ -786,4 +788,12 @@ select {
 .exportwrap .menu .fmt button.on {
   background: var(--accent);
   color: var(--accent-ink);
+}
+
+/* LIB-06: the note picked for correction */
+.score g.picked use,
+.score g.picked path,
+.score g.picked rect {
+  fill: var(--accent) !important;
+  stroke: var(--accent);
 }

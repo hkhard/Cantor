@@ -30,6 +30,7 @@ exports.setup = async function setup(page, dir) {
         { file: '0:Glimmande Nymf', title: 'Glimmande Nymf', playable: true, pdf: true, user: false },
         { file: '0:Christmas', title: 'Christmas Day', playable: true, pdf: false, user: false },
         { file: '1:Mine', title: 'Min egen', playable: false, pdf: true, user: true },
+        { file: '1:Scanned', title: 'Skannad', playable: true, pdf: false, user: true },
       ]
       const defSettings = () => ({ my_part: null, strips: [], tempo_percent: 100, view: 'pdf', choir: 'auto', presets: [], transpose: 0, hidden_parts: [] })
       let pos = 0
@@ -108,6 +109,9 @@ exports.setup = async function setup(page, dir) {
         export_item: ({ kind, id }) => {
           store.exports = [...(store.exports ?? []), [kind, id]]
           return kind === 'setlist' ? 'Vårkonsert.cantorset' : kind === '4ss' ? 'Vårkonsert.4ss' : 'x.' + kind
+        },
+        correct_note: (a) => {
+          store.corrections = [...(store.corrections ?? []), a]
         },
         pitch_pipe: ({ channel }) => {
           store.pipe.push(channel ?? 'all')

@@ -132,3 +132,24 @@ export function withoutParts(musicxml: string, hidden: number[]): string {
   }
   return new XMLSerializer().serializeToString(doc)
 }
+
+/** LIB-06: give every <note> an id "cn-<part>-<measure>-<note>" (original
+ *  indices, before parts are hidden) so a tapped note in the engraving maps
+ *  back to the note to correct. Verovio keeps these ids in its SVG. */
+export function withNoteIds(musicxml: string): string {
+  if (!musicxml) return musicxml
+  const doc = new DOMParser().parseFromString(musicxml, 'application/xml')
+  if (doc.querySelector('parsererror')) return musicxml
+  ;[...doc.querySelectorAll('score-partwise > part')].forEach((part, p) => {
+    ;[...part.querySelectorAll(':scope > measure')].forEach((m, mi) => {
+      ;[...m.querySelectorAll(':scope > note')].forEach((n, ni) => n.setAttribute('id', `cn-${p}-${mi}-${ni}`))
+    })
+  })
+  return new XMLSerializer().serializeToString(doc)
+}
+
+/** Address of a note id made by withNoteIds. */
+export function noteAddress(id: string | null): { part: number; measure: number; note: number } | null {
+  const m = id?.match(/^cn-(\d+)-(\d+)-(\d+)$/)
+  return m ? { part: +m[1], measure: +m[2], note: +m[3] } : null
+}

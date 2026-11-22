@@ -120,6 +120,9 @@ export const api = {
   /** NFR-03/04 probe: log a timing plus the app's memory footprint. */
   perfMark: (name: string, ms: number) =>
     invoke<{ name: string; ms: number; memory_mb: number }>('perf_mark', { name, ms }),
+  /** LIB-06: correct one note of an imported score and save it. */
+  correctNote: (file: string, part: number, measure: number, note: number, edit: 'up' | 'down' | 'rest') =>
+    invoke<void>('correct_note', { file, part, measure, note, edit }),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),
