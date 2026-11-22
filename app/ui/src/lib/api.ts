@@ -150,6 +150,8 @@ export const api = {
   chooseSyncFolder: (path?: string) => invoke<string | null>('choose_sync_folder', { path: path ?? null }),
   forgetSyncFolder: () => invoke<void>('forget_sync_folder'),
   syncFolderName: () => invoke<string | null>('sync_folder_name'),
+  /** Save the manual order of the library ('scores') or the setlist tabs. */
+  setOrder: (kind: 'scores' | 'setlists', ids: string[]) => invoke<void>('set_order', { kind, ids }),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),

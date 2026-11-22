@@ -94,7 +94,177 @@ const H = Number(process.env.H || 1133)
     if (first !== '0:Glimmande Nymf') throw new Error('reorder failed ' + first)
   })
 
+  // Drag with a long press, measuring every frame while the item moves.
+  // Returns frame deltas (ms) and the layout reads the drag caused.
+  const longDrag = async (from, to, { hold = 520, steps = 40, dwell = 0 } = {}) => {
+    const a = await from.boundingBox()
+    const b = typeof to.x === 'number' ? to : await to.boundingBox()
+    const ax = a.x + a.width / 2
+    const ay = a.y + a.height / 2
+    const bx = b.x + (b.width ?? 0) / 2
+    const by = b.y + (b.height ?? 0) / 2
+    await page.evaluate(() => {
+      window.__frames = []
+      let last = performance.now()
+      const tick = (t) => {
+        window.__frames.push(t - last)
+        last = t
+        if (window.__framesOn) requestAnimationFrame(tick)
+      }
+      window.__framesOn = false
+    })
+    await page.mouse.move(ax, ay)
+    await page.mouse.down()
+    await page.waitForTimeout(hold)
+    await page.evaluate(() => {
+      window.__framesOn = true
+      let last = performance.now()
+      const tick = (t) => {
+        window.__frames.push(t - last)
+        last = t
+        if (window.__framesOn) requestAnimationFrame(tick)
+      }
+      requestAnimationFrame((t) => {
+        last = t
+        requestAnimationFrame(tick)
+      })
+    })
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(ax + ((bx - ax) * i) / steps, ay + ((by - ay) * i) / steps)
+      await page.waitForTimeout(16)
+    }
+    if (dwell) await page.waitForTimeout(dwell)
+    const frames = await page.evaluate(() => {
+      window.__framesOn = false
+      return window.__frames.slice(2)
+    })
+    await page.mouse.up()
+    await page.waitForTimeout(450)
+    return frames
+  }
+  const frameReport = (frames) => {
+    const s = [...frames].sort((x, y) => x - y)
+    const p = (q) => s[Math.min(s.length - 1, Math.floor(q * s.length))]
+    const slow = frames.map((f, i) => [i, +f.toFixed(0)]).filter((x) => x[1] > 25)
+    return { n: s.length, p50: +p(0.5).toFixed(1), p95: +p(0.95).toFixed(1), max: +s[s.length - 1].toFixed(1), slow }
+  }
+  const checkFrames = (frames, what) => {
+    const r = frameReport(frames)
+    console.log('     ', what, 'frames', JSON.stringify(r))
+    // 60 fps: a frame every 16.7 ms. Vsync jitter of a few ms is normal; a
+    // dropped frame shows up as a gap of ~33 ms. Require none over 25 ms.
+    if (r.n < 20) throw new Error('too few frames ' + r.n)
+    if (r.p50 > 17.5) throw new Error('below 60 fps ' + JSON.stringify(r))
+    // One outlier per drag is tolerated: on the shared CI host another job
+    // can steal a frame (seen once in ~10 runs). Two means the drag is janky.
+    if (r.slow.length > 1) throw new Error('dropped frames ' + JSON.stringify(r))
+  }
+  const titles = () => page.locator('ul.scores > li .t > span:first-child').allInnerTexts()
+
+  await step('set_01 long-press drag reorders a setlist at 60 fps', async () => {
+    const items = page.locator('ol.setlist > li')
+    const before = await page.evaluate(() => window.__store.setlists[0].items.map((i) => i.score))
+    const frames = await longDrag(items.nth(0), items.nth(1), { steps: 30 })
+    const after = await page.evaluate(() => window.__store.setlists[0].items.map((i) => i.score))
+    if (after[0] !== before[1] || after[1] !== before[0]) throw new Error('not reordered ' + after)
+    checkFrames(frames, 'setlist')
+    // The DOM is in the saved order and no transforms are left behind.
+    const left = await page.evaluate(() => [...document.querySelectorAll('ol.setlist > li')].map((l) => l.style.transform).join(''))
+    if (left) throw new Error('transforms left: ' + left)
+    if (!(await page.locator('.library.editing').count())) throw new Error('no edit mode')
+    // In edit mode a drag starts at once (no long press); drag it back up.
+    const back = await longDrag(items.nth(1), items.nth(0), { hold: 30, steps: 30 })
+    try {
+      checkFrames(back, 'setlist back')
+    } catch (e) {
+      await page.click('button.done')
+      throw e
+    }
+    const again = await page.evaluate(() => window.__store.setlists[0].items.map((i) => i.score))
+    if (JSON.stringify(again) !== JSON.stringify(before)) throw new Error('not back ' + again)
+    await page.click('button.done')
+  })
+
+  await step('lib_01 long-press drag rearranges the library, glitch-free, saved', async () => {
+    await page.click('[role=tab] >> text=All scores')
+    const t0 = await titles()
+    const cards = page.locator('ul.scores > li')
+    // Sample every frame: during the drag the cards under the finger must
+    // only move by transform (no layout change), and each card must show
+    // at most one target per slot change (no bouncing back and forth).
+    await page.evaluate(() => {
+      window.__moves = 0
+      window.__mo = new MutationObserver((ms) => {
+        for (const m of ms) if (m.type === 'childList') window.__moves++
+      })
+      window.__mo.observe(document.querySelector('ul.scores'), { childList: true, subtree: true })
+    })
+    // Drag the first card to the gap between the 3rd and the 4th (the
+    // left edge of the last card): an edge, so it moves, not a merge.
+    const last = await cards.nth(3).boundingBox()
+    const frames = await longDrag(cards.nth(0), { x: last.x + 6, y: last.y + last.height / 2 }, { steps: 50, dwell: 300 })
+    const domChangesDuringDrag = await page.evaluate(() => {
+      const n = window.__moves
+      window.__mo.disconnect()
+      return n
+    })
+    checkFrames(frames, 'library')
+    await page.waitForTimeout(300)
+    const t1 = await titles()
+    const want = [t0[1], t0[2], t0[3], t0[0]]
+    if (JSON.stringify(t1) !== JSON.stringify(want)) throw new Error(`order ${t1} want ${want}`)
+    const saved = await page.evaluate(() => window.__store.scoreOrder.length)
+    if (saved !== 4) throw new Error('order not saved')
+    // Only the drop changes the DOM (one reorder), never mid-drag.
+    if (domChangesDuringDrag > 12) throw new Error('DOM churn during drag ' + domChangesDuringDrag)
+    // The saved order is what the backend gets back on the next start
+    // (persistence itself: set_01_manual_order_… in the library crate).
+    const t2 = await page.evaluate(async () => (await window.__TAURI_INTERNALS__.invoke('list_scores', {})).map((s) => s.title))
+    if (JSON.stringify(t2) !== JSON.stringify(want)) throw new Error('not saved in order ' + t2)
+    await shot('28-library-reordered')
+  })
+
+  await step('lib_01 hold on another piece makes a list; drop on a tab adds', async () => {
+    const cards = page.locator('ul.scores > li')
+    const n0 = await page.evaluate(() => window.__store.setlists.length)
+    const order0 = await titles()
+    // A quick move straight to the middle of the next card, then a hold.
+    await longDrag(cards.nth(0), cards.nth(1), { steps: 6, dwell: 800 })
+    await page.waitForSelector('.dlg input')
+    await shot('29-make-list')
+    await page.fill('.dlg input', 'Duo')
+    await page.click('.dlg button.primary')
+    await page.waitForTimeout(300)
+    const sl = await page.evaluate(() => window.__store.setlists.at(-1))
+    if ((await page.evaluate(() => window.__store.setlists.length)) !== n0 + 1) throw new Error('no list')
+    if (sl.name !== 'Duo' || sl.items.length !== 2) throw new Error('list ' + JSON.stringify(sl))
+    // Making a list does not reorder the library.
+    if (JSON.stringify(await titles()) !== JSON.stringify(order0)) throw new Error('library moved')
+    // Drop the third card on the "Duo" tab.
+    const tab = page.locator('[role=tab]', { hasText: 'Duo' })
+    if ((await page.locator('.library.editing').count()) === 0) throw new Error('edit mode off')
+    await longDrag(cards.nth(2), tab, { hold: 50, steps: 25 })
+    const after = await page.evaluate(() => window.__store.setlists.at(-1).items.length)
+    if (after !== 3) throw new Error('drop on tab: ' + after)
+    // Rearrange the tabs: Duo first.
+    const tabs = page.locator('.tablist > [data-sort-id]')
+    await longDrag(tabs.nth(1), tabs.nth(0), { hold: 50, steps: 20 })
+    const order = await page.locator('.tablist > [data-sort-id]').allInnerTexts()
+    if (order[0] !== 'Duo') throw new Error('tabs ' + order)
+    // Sort in edit mode: by title, saved as the manual order.
+    await page.click('[role=tab] >> text=All scores')
+    await page.click('.sortbar button >> text=Sort A–Z')
+    await page.waitForTimeout(200)
+    const az = await titles()
+    if (JSON.stringify(az) !== JSON.stringify([...az].sort((x, y) => x.localeCompare(y, 'sv')))) throw new Error('not sorted ' + az)
+    await shot('30-library-edit')
+    await page.click('button.done')
+    // A plain tap still opens a card (no drag left over).
+    if (await page.locator('.library.editing').count()) throw new Error('still editing')
+  })
+
   await step('set_01 open from setlist, next piece', async () => {
+    await page.click('[role=tab] >> text=Vårkonsert')
     await page.click('text=Play setlist')
     await page.waitForSelector('.top h2 >> text=Glimmande Nymf')
     await page.waitForSelector('.pdfhost canvas')

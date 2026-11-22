@@ -172,6 +172,14 @@ const sv = {
   'sync.now': 'Synka nu',
   'sync.folder': 'Synkar med mappen "{name}".',
   'sync.done': 'Synkat: {sent} ändringar skickade, {received} mottagna.',
+  'lib.sortHint': 'Dra för att flytta. Släpp på ett annat stycke för att göra en lista, eller på en lista för att lägga till.',
+  'lib.sortHintList': 'Dra för att ändra ordningen.',
+  'lib.sortBy': 'Sortera',
+  'lib.sortTitle': 'Sortera A–Ö',
+  'lib.sortComposer': 'Sortera på tonsättare',
+  'lib.newListFrom': '{a} och {b}',
+  'lib.listMade': 'Listan "{name}" skapades.',
+  'lib.addedTo': '"{title}" lades till i {name}.',
   'pdf.openFailed': 'Kunde inte öppna PDF: {e}',
 } as const
 
@@ -346,6 +354,14 @@ const en: Record<Key, string> = {
   'sync.now': 'Sync now',
   'sync.folder': 'Syncing with the folder "{name}".',
   'sync.done': 'Synced: {sent} changes sent, {received} received.',
+  'lib.sortHint': 'Drag to move. Drop on another piece to make a list, or on a list to add to it.',
+  'lib.sortHintList': 'Drag to change the order.',
+  'lib.sortBy': 'Sort',
+  'lib.sortTitle': 'Sort A–Z',
+  'lib.sortComposer': 'Sort by composer',
+  'lib.newListFrom': '{a} and {b}',
+  'lib.listMade': 'The list "{name}" was made.',
+  'lib.addedTo': '"{title}" was added to {name}.',
   'pdf.openFailed': 'Could not open PDF: {e}',
 }
 

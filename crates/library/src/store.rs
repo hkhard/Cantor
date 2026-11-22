@@ -147,6 +147,11 @@ struct Data {
     metadata: BTreeMap<String, Metadata>,
     setlists: Vec<Setlist>,
     settings: BTreeMap<String, ScoreSettings>,
+    /// Manual order of the main library view (score ids), set by dragging.
+    /// Scores not listed come after, by title.
+    score_order: Vec<String>,
+    /// Manual order of the setlist tabs (setlist ids).
+    setlist_order: Vec<String>,
 }
 
 /// The persisted library store.
@@ -267,6 +272,56 @@ impl Store {
     }
     pub fn set_settings(&mut self, id: &str, s: ScoreSettings) {
         self.data.settings.insert(id.to_string(), s);
+    }
+
+    // --- manual order (drag to rearrange) ---
+    pub fn score_order(&self) -> &[String] {
+        &self.data.score_order
+    }
+    pub fn set_score_order(&mut self, ids: Vec<String>) {
+        self.data.score_order = ids;
+    }
+    pub fn set_setlist_order(&mut self, ids: Vec<String>) {
+        self.data.setlist_order = ids;
+    }
+    /// `(id, title)` entries in the manual order: ordered ids first, the
+    /// rest by title (case-insensitive) after them.
+    pub fn in_score_order(&self, mut entries: Vec<(String, String)>) -> Vec<(String, String)> {
+        let pos: BTreeMap<&str, usize> = self
+            .data
+            .score_order
+            .iter()
+            .enumerate()
+            .map(|(i, id)| (id.as_str(), i))
+            .collect();
+        entries.sort_by(
+            |a, b| match (pos.get(a.0.as_str()), pos.get(b.0.as_str())) {
+                (Some(x), Some(y)) => x.cmp(y),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.1.to_lowercase().cmp(&b.1.to_lowercase()),
+            },
+        );
+        entries
+    }
+    /// Setlists in the user's tab order (unlisted ones after, as created).
+    pub fn setlists_ordered(&self) -> Vec<&Setlist> {
+        let pos = |id: &str| {
+            self.data
+                .setlist_order
+                .iter()
+                .position(|x| x == id)
+                .unwrap_or(usize::MAX)
+        };
+        let mut v: Vec<(usize, usize, &Setlist)> = self
+            .data
+            .setlists
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (pos(&s.id), i, s))
+            .collect();
+        v.sort_by_key(|x| (x.0, x.1));
+        v.into_iter().map(|x| x.2).collect()
     }
 
     // --- setlists ---

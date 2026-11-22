@@ -449,6 +449,26 @@ tests (NFR-11: 100% of P0 criteria automated).
     - All UI scenarios pass.
     - Coverage per crate: 87.7% to 94.9%.
     - Only the parked singing P0s are without tests.
+  - **Rearranging the library (iOS home-screen style):**
+    - Long-press a piece, a list tab or a setlist row to pick it up. Edit mode turns on: the cards wiggle, a drag starts at once without another long press, and "Done" ends it.
+    - Drag to an edge of another piece and the others slide aside.
+    - Hold over the middle of another piece to make a new list with both of them (like an iOS folder).
+    - Drop a piece on a list tab to add it to that list.
+    - "Sortera A–Ö" and "Sortera på tonsättare" save the sorted result as the new manual order.
+    - The order is saved in `library.json` (`score_order`, `setlist_order`) and syncs like other library keys.
+    - Setlist rows can be dragged; the ↑/↓ buttons remain for VoiceOver and keyboard users.
+    - How it stays smooth (`reorder.ts`):
+      - Positions are measured once when the item is lifted.
+      - During the drag only CSS transforms change, and only when an item changes slot.
+      - The DOM is reordered once, on drop.
+      - An item only moves aside after the finger has stayed on it for 90 ms, so passing over it does not shuffle it. The engine also never toggles between two slots.
+    - Harness (WebKit, iPad mini size) measured every frame while dragging:
+      - Median 17 ms (60 fps). Worst frame 18–21 ms. No dropped frames, where a dropped frame would show as a gap of 33 ms or more.
+      - The DOM does not change during the drag.
+      - No transforms are left behind.
+      - The order is saved.
+    - Test: `set_01_manual_order_…` in the library crate.
+    - Not verified: frame timing on the real iPad mini, and drag feel with a finger.
 
 ## 8. Future features (parked)
 

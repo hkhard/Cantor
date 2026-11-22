@@ -9,6 +9,7 @@
   import About from './About.svelte'
   import { t } from './i18n.svelte'
   import { ask, confirmBox } from './prompts.svelte'
+  import { sortable } from './reorder'
 
   interface Props {
     scores: ScoreEntry[]
@@ -32,6 +33,64 @@
   let aboutOpen = $state(false)
   let importing = $state(false)
   let fileInput: HTMLInputElement | undefined = $state()
+
+  // iOS home-screen style editing: a long press lifts a card and turns on
+  // edit mode (cards wiggle, drags start at once); Done ends it.
+  let editMode = $state(false)
+  let scrollerEl: HTMLElement | undefined = $state()
+  let tabsEl: HTMLElement | undefined = $state()
+
+  async function reorderScores(ids: string[]) {
+    // Search results are a subset: keep the others in their places.
+    await api.setOrder('scores', ids)
+    await onrefresh()
+  }
+
+  /** One-tap sort in edit mode; the result becomes the manual order. */
+  async function sortBy(key: 'title' | 'composer') {
+    const k = (s: ScoreEntry) =>
+      key === 'title' ? s.title.toLowerCase() : `${(metadata[s.file]?.composer ?? '').toLowerCase() || '\uffff'} ${s.title.toLowerCase()}`
+    const ids = [...scores].sort((a, b) => k(a).localeCompare(k(b), 'sv')).map((s) => s.file)
+    await api.setOrder('scores', ids)
+    await onrefresh()
+  }
+
+  async function reorderTabs(ids: string[]) {
+    await api.setOrder('setlists', ids)
+    await reload()
+  }
+
+  async function reorderItems(sl: Setlist, keys: string[]) {
+    const old = [...sl.items]
+    sl.items = keys.map((k) => old[Number(k)])
+    await saveList(sl)
+  }
+
+  /** Drop a score on another one: a new list with both (iOS folder). */
+  async function makeList(dragged: string, target: string) {
+    const a = scores.find((x) => x.file === target)
+    const b = scores.find((x) => x.file === dragged)
+    if (!a || !b) return
+    const name = (await ask(t('lib.setlistName'), t('lib.newListFrom', { a: a.title, b: b.title }))) ?? ''
+    if (!name.trim()) return
+    const id = await api.createSetlist(name.trim())
+    await reload()
+    const sl = setlists.find((x) => x.id === id)
+    if (!sl) return
+    sl.items.push({ kind: 'score', score: a.file, start_page: null }, { kind: 'score', score: b.file, start_page: null })
+    await saveList(sl)
+    notice = t('lib.listMade', { name: sl.name })
+  }
+
+  /** Drop a score on a setlist tab: add it to the end of that list. */
+  async function dropOnTab(dragged: string, setlistId: string) {
+    const sl = setlists.find((x) => x.id === setlistId)
+    const s = scores.find((x) => x.file === dragged)
+    if (!sl || !s) return
+    sl.items.push({ kind: 'score', score: s.file, start_page: null })
+    await saveList(sl)
+    notice = t('lib.addedTo', { title: s.title, name: sl.name })
+  }
 
   let pending: string[] = $state([])
   async function reload() {
@@ -177,7 +236,7 @@
   }
 </script>
 
-<main class="library">
+<main class="library" bind:this={scrollerEl} class:editing={editMode}>
   <header>
     <img class="mark" src="/cantor-mark.svg" alt="" width="64" height="64" />
     <div class="titles">
@@ -197,17 +256,38 @@
     </div>
   {/each}
 
-  <div class="tabs">
-    <div class="tablist" role="tablist" aria-label={t('lib.setlists')}>
-    <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
-    {#each setlists as sl (sl.id)}
-      <button role="tab" class="chip" class:on={tab === sl.id} aria-selected={tab === sl.id} onclick={() => (tab = sl.id)}
-        >{sl.name}</button
-      >
-    {/each}
+  <div class="tabs" bind:this={tabsEl}>
+    <div
+      class="tablist"
+      role="tablist"
+      aria-label={t('lib.setlists')}
+      use:sortable={{ onreorder: reorderTabs, onlift: () => (editMode = true), immediate: () => editMode }}
+    >
+      <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
+      {#each setlists as sl (sl.id)}
+        <button
+          role="tab"
+          class="chip"
+          class:on={tab === sl.id}
+          aria-selected={tab === sl.id}
+          data-sort-id={sl.id}
+          data-drop={sl.id}
+          onclick={() => (tab = sl.id)}>{sl.name}</button
+        >
+      {/each}
     </div>
     <button class="chip" onclick={newSetlist}>{t('lib.newSetlist')}</button>
+    {#if editMode}
+      <button class="chip on done" onclick={() => (editMode = false)}>{t('common.done')}</button>
+    {/if}
   </div>
+  {#if editMode && !current}
+    <div class="sortbar" role="group" aria-label={t('lib.sortBy')}>
+      <button class="chip" onclick={() => sortBy('title')}>{t('lib.sortTitle')}</button>
+      <button class="chip" onclick={() => sortBy('composer')}>{t('lib.sortComposer')}</button>
+    </div>
+  {/if}
+  {#if editMode}<p class="hint sort-hint">{current ? t('lib.sortHintList') : t('lib.sortHint')}</p>{/if}
 
   {#if !current}
     <div class="libbar">
@@ -223,9 +303,21 @@
       />
       {#if notice}<span class="notice">{notice}</span>{/if}
     </div>
-    <ul class="scores">
+    <ul
+      class="scores"
+      use:sortable={{
+        onreorder: reorderScores,
+        onmerge: makeList,
+        ondrop: dropOnTab,
+        dropRoot: () => tabsEl,
+        onlift: () => (editMode = true),
+        immediate: () => editMode,
+        disabled: () => hits !== null,
+        scroller: () => scrollerEl,
+      }}
+    >
       {#each shown as s (s.file)}
-        <li>
+        <li data-sort-id={s.file}>
           <button class="open" onclick={() => onopen(s)}>
             <span class="t">
               <span>{s.title}</span>
@@ -237,12 +329,12 @@
               {#if s.user}<span class="badge mine">{t('lib.mine')}</span>{/if}
             </span>
           </button>
-          <button class="side info" onclick={() => (editing = s)} aria-label="{t('lib.edit')} {s.title}">{t('lib.edit')}</button>
+          <button class="side info" data-nodrag onclick={() => (editing = s)} aria-label="{t('lib.edit')} {s.title}">{t('lib.edit')}</button>
           {#if setlists.length}
-            <button class="side add" onclick={() => (addTo = addTo === s ? null : s)} aria-label="{t('set.add')}: {s.title}">＋</button>
+            <button class="side add" data-nodrag onclick={() => (addTo = addTo === s ? null : s)} aria-label="{t('set.add')}: {s.title}">＋</button>
           {/if}
           {#if s.user}
-            <button class="remove" onclick={() => removeScore(s)} aria-label="{t('common.delete')} {s.title}">×</button>
+            <button class="remove" data-nodrag onclick={() => removeScore(s)} aria-label="{t('common.delete')} {s.title}">×</button>
           {/if}
           {#if addTo === s}
             <span class="addmenu glass">
@@ -268,9 +360,17 @@
       <button class="chip" onclick={() => share('4ss', current!.id)}>forScore</button>
       <button class="chip" onclick={() => deleteList(current!)}>{t('common.delete')}</button>
     </div>
-    <ol class="scores setlist">
-      {#each current.items as it, i (i)}
-        <li>
+    <ol
+      class="scores setlist"
+      use:sortable={{
+        onreorder: (keys) => reorderItems(current!, keys),
+        onlift: () => (editMode = true),
+        immediate: () => editMode,
+        scroller: () => scrollerEl,
+      }}
+    >
+      {#each current.items as it, i (`${i}-${it.kind === 'score' ? it.score : it.title}`)}
+        <li data-sort-id={String(i)}>
           {#if it.kind === 'score' && byId.get(it.score)}
             <button class="open" onclick={() => openItem(current!, i)}><span class="num">{i + 1}</span> {byId.get(it.score)!.title}</button>
           {:else}
@@ -279,9 +379,10 @@
               {it.kind === 'placeholder' ? it.title : it.score} <span class="badge">{t('set.missing')}</span></span
             >
           {/if}
-          <button class="side up" onclick={() => move(current!, i, -1)} disabled={i === 0} aria-label={t('set.up')}>↑</button>
-          <button class="side down" onclick={() => move(current!, i, 1)} disabled={i === current!.items.length - 1} aria-label={t('set.down')}>↓</button>
+          <button class="side up" data-nodrag onclick={() => move(current!, i, -1)} disabled={i === 0} aria-label={t('set.up')}>↑</button>
+          <button class="side down" data-nodrag onclick={() => move(current!, i, 1)} disabled={i === current!.items.length - 1} aria-label={t('set.down')}>↓</button>
           <button
+            data-nodrag
             class="remove"
             onclick={() => {
               current!.items.splice(i, 1)
@@ -330,7 +431,17 @@
     margin-bottom: 10px;
   }
   .tablist {
-    display: contents;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .sortbar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .sort-hint {
+    margin: -4px 0 10px;
   }
   .tabs {
     display: flex;

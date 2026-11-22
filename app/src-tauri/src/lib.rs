@@ -226,7 +226,7 @@ fn library_data(paths: State<'_, Paths>) -> LibraryData {
     let st = store(&paths);
     LibraryData {
         metadata: st.all_metadata().clone(),
-        setlists: st.setlists().to_vec(),
+        setlists: st.setlists_ordered().into_iter().cloned().collect(),
     }
 }
 
@@ -546,8 +546,30 @@ fn list_scores(paths: State<'_, Paths>) -> Result<Vec<ScoreEntry>, String> {
             });
         }
     }
-    out.sort_by_key(|a| a.title.to_lowercase());
-    Ok(out)
+    // The user's own order (dragged on the library screen), then by title.
+    let order = st.in_score_order(
+        out.iter()
+            .map(|e| (e.file.clone(), e.title.clone()))
+            .collect(),
+    );
+    let mut by_id: std::collections::HashMap<String, ScoreEntry> =
+        out.into_iter().map(|e| (e.file.clone(), e)).collect();
+    Ok(order
+        .into_iter()
+        .filter_map(|(id, _)| by_id.remove(&id))
+        .collect())
+}
+
+/// Save the manual order of the library (score ids) or of the setlist tabs.
+#[tauri::command]
+fn set_order(kind: String, ids: Vec<String>, paths: State<'_, Paths>) -> Result<(), String> {
+    let mut st = store(&paths);
+    match kind.as_str() {
+        "scores" => st.set_score_order(ids),
+        "setlists" => st.set_setlist_order(ids),
+        _ => return Err(format!("unknown order {kind}")),
+    }
+    save_store(&st)
 }
 
 /// Import a file picked in the app (raw bytes, name in the `x-name` header).
@@ -1809,7 +1831,8 @@ pub fn run() {
             sync_now,
             choose_sync_folder,
             forget_sync_folder,
-            sync_folder_name
+            sync_folder_name,
+            set_order
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")

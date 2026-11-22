@@ -24,7 +24,7 @@ exports.setup = async function setup(page, dir) {
       window.__xml = xml
       const calls = []
       window.__calls = calls
-      const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [] }
+      const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [], scoreOrder: [], setlistOrder: [] }
       window.__store = store
       const scores = [
         { file: '0:Glimmande Nymf', title: 'Glimmande Nymf', playable: true, pdf: true, user: false },
@@ -36,8 +36,27 @@ exports.setup = async function setup(page, dir) {
       let pos = 0
       let playing = false
       const handlers = {
-        list_scores: () => scores.map((s) => ({ ...s, title: store.metadata[s.file]?.title || s.title })),
-        library_data: () => ({ metadata: store.metadata, setlists: store.setlists }),
+        list_scores: () => {
+          const pos = (id) => {
+            const i = store.scoreOrder.indexOf(id)
+            return i < 0 ? 1e9 : i
+          }
+          return scores
+            .map((s) => ({ ...s, title: store.metadata[s.file]?.title || s.title }))
+            .sort((a, b) => pos(a.file) - pos(b.file)) // unlisted keep the fixture order
+        },
+        library_data: () => {
+          const pos = (id) => {
+            const i = store.setlistOrder.indexOf(id)
+            return i < 0 ? 1e9 : i
+          }
+          const setlists = store.setlists.map((s, i) => [s, i]).sort((a, b) => pos(a[0].id) - pos(b[0].id) || a[1] - b[1]).map((x) => x[0])
+          return { metadata: store.metadata, setlists }
+        },
+        set_order: ({ kind, ids }) => {
+          if (kind === 'scores') store.scoreOrder = ids
+          else store.setlistOrder = ids
+        },
         set_metadata: ({ id, metadata }) => {
           store.metadata[id] = metadata
         },

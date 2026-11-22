@@ -252,3 +252,39 @@ fn lib_08_setlist_from_forscore_keeps_order_and_placeholders() {
         ]
     );
 }
+
+#[test]
+fn set_01_manual_order_of_library_and_setlist_tabs_persists() {
+    let d = std::env::temp_dir().join(format!("cantor-order-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let mut s = Store::open(&d);
+    assert!(s.score_order().is_empty());
+    s.set_score_order(vec!["1:B".into(), "0:A".into(), "1:C".into()]);
+    let a = s.create_setlist("Vår");
+    let b = s.create_setlist("Jul");
+    s.set_setlist_order(vec![b.clone(), a.clone()]);
+    s.save().unwrap();
+    let s = Store::open(&d);
+    assert_eq!(s.score_order(), &["1:B", "0:A", "1:C"]);
+    // Setlists come back in the user's order.
+    let names: Vec<&str> = s
+        .setlists_ordered()
+        .iter()
+        .map(|l| l.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["Jul", "Vår"]);
+    // Sorting entries: ordered ids first in that order, the rest by title after.
+    let entries = vec![
+        ("0:A".to_string(), "Alfa".to_string()),
+        ("1:C".into(), "Cesar".into()),
+        ("1:B".into(), "Beta".into()),
+        ("1:N".into(), "Ny".into()),
+    ];
+    let sorted: Vec<String> = s
+        .in_score_order(entries)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    assert_eq!(sorted, vec!["1:B", "0:A", "1:C", "1:N"]);
+}
