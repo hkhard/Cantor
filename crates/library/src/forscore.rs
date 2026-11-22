@@ -51,6 +51,8 @@ pub struct PageView {
     pub zoom: Option<f64>,
     pub offset: Option<Point>,
     pub tr_offset: Option<Point>,
+    /// `croppedLandscape` flag (meaning not confirmed; stored as 0/1).
+    pub cropped_landscape: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,6 +63,9 @@ pub struct ForscoreScore {
     pub pdf: Vec<u8>,
     /// View state per 1-based page. May contain more slots than the PDF has pages.
     pub pages: BTreeMap<u32, PageView>,
+    /// Ink layer per 1-based page (`<file>|<page>.png`): a transparent PNG the
+    /// size of forScore's page canvas, drawn over the PDF page.
+    pub ink: BTreeMap<u32, Vec<u8>>,
     /// Every key not understood yet, verbatim.
     pub unknown: BTreeMap<String, Value>,
 }
@@ -108,6 +113,7 @@ fn score_from_dict(d: Dictionary) -> Result<ForscoreScore, ForscoreError> {
     let mut file_name: Option<String> = None;
     let mut title = None;
     let mut pages: BTreeMap<u32, PageView> = BTreeMap::new();
+    let mut ink: BTreeMap<u32, Vec<u8>> = BTreeMap::new();
     let mut unknown = BTreeMap::new();
 
     for (key, value) in d {
@@ -126,6 +132,12 @@ fn score_from_dict(d: Dictionary) -> Result<ForscoreScore, ForscoreError> {
         }
         let known = match parts.as_slice() {
             [_, "title"] => value.as_string().map(|s| title = Some(nfc(s))).is_some(),
+            [_, png] if png.ends_with(".png") => {
+                match (png.trim_end_matches(".png").parse::<u32>(), &value) {
+                    (Ok(n), Value::Data(b)) => ink.insert(n, b.clone()).is_none(),
+                    _ => false,
+                }
+            }
             [_, page, field] => match page.parse::<u32>() {
                 Ok(n) => apply_page_field(pages.entry(n).or_default(), field, &value),
                 Err(_) => false,
@@ -147,6 +159,7 @@ fn score_from_dict(d: Dictionary) -> Result<ForscoreScore, ForscoreError> {
         title,
         pdf,
         pages,
+        ink,
         unknown,
     })
 }
@@ -176,6 +189,17 @@ fn apply_page_field(p: &mut PageView, field: &str, v: &Value) -> bool {
             .and_then(parse_point)
             .map(|o| p.tr_offset = Some(o))
             .is_some(),
+        "croppedLandscape" => match v {
+            Value::Integer(i) => i
+                .as_signed()
+                .map(|i| p.cropped_landscape = Some(i != 0))
+                .is_some(),
+            Value::Boolean(b) => {
+                p.cropped_landscape = Some(*b);
+                true
+            }
+            _ => false,
+        },
         _ => false,
     }
 }

@@ -8,6 +8,7 @@ Reverse-engineered on 2026-11-21 from three files supplied by the product owner
 | `Christmas Day - F dur.4sc` | 311 KB | one score, 6-page PDF, no annotations |
 | `CMB 40.4ss` | 10.9 MB | setlist of 10 scores with embedded PDFs |
 | `En glad calypso om våren TTBB.pdf` | 225 KB | plain PDF, 2 pages, A4, scanned (Photoshop) |
+| `Do you her what I hear TTBB.4sc` | 3.2 MB | 18 PDF pages, each an iPad screenshot of a two-page publisher "PREVIEW" spread (2592x1939 JPEG); ink layer on every page |
 
 ## Container
 
@@ -34,6 +35,13 @@ Fields seen:
 | `X.pdf\|N\|zoom` | real | `1.0336` | zoom factor for page N |
 | `X.pdf\|N\|offset` | string, NSPoint | `{6.5, 17.66}` | scroll offset of page N |
 | `X.pdf\|N\|trOffset` | string, NSPoint | `{19.64, 35.14}` | offset, probably used in a "transformed" (half-page or two-up) view |
+| `X.pdf\|N.png` | data, PNG | 2732x3572 RGBA | **ink layer** of page N: a transparent PNG at the iPad Pro 12.9" portrait canvas size (2732 px wide), drawn over the page. Pen colour is in the pixels; there are no vector strokes |
+| `X.pdf\|N\|croppedLandscape` | integer 0/1 | `0` | flag; probably whether the landscape view uses the crop. Meaning not confirmed |
+
+In the "Do you hear" sample every ink layer holds only white strokes along the
+left and right edges: the user painted out the iPad screenshot borders. So ink
+is not always musical markup, and it is a raster image, not editable strokes.
+Cantor keeps the PNG as an opaque layer per page (`ForscoreScore::ink`).
 
 Geometry strings use Cocoa's `NSStringFromRect` / `NSStringFromPoint` syntax:
 `{{x, y}, {w, h}}` and `{x, y}`.
@@ -42,8 +50,9 @@ Pages 7 and 8 have entries while the PDF has only 6 pages. They contain defaults
 (`{{0, 0}, {768, 1004}}`, i.e. an iPad portrait viewport). So the per-page keys can
 outnumber the pages, and the importer must keep them without complaint.
 
-Not present in this sample (expected in others, to be added when samples arrive):
-annotations, bookmarks, links, audio/MIDI attachments, composer, genre, tags, rating,
+Not present in these samples (expected in others, to be added when samples arrive):
+text and stamp annotations (if forScore keeps them apart from the ink PNG),
+bookmarks, links, audio/MIDI attachments, composer, genre, tags, rating,
 difficulty, key, tempo. The importer keeps **every unknown key** verbatim (LIB-07).
 
 ## `.4ss` (setlist)
@@ -69,7 +78,7 @@ No sample yet. LIB-08 backup import stays open until one is provided.
 
 ## Open points for more samples
 
-1. A `.4sc` with ink, text and stamp annotations, plus bookmarks and links.
+1. A `.4sc` with text and stamp annotations, plus bookmarks and links (ink: done).
 2. A `.4sc` with an audio track or MIDI attachment.
 3. A `.4ss` with a placeholder and a per-item start page.
 4. A `.4sb` backup.

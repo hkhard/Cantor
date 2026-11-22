@@ -55,6 +55,7 @@ fn lib_07_parses_synthetic_4sc_metadata_pdf_and_pages() {
             zoom: Some(1.25),
             offset: Some(Point { x: 6.5, y: 37.75 }),
             tr_offset: Some(Point { x: 19.5, y: 55.25 }),
+            cropped_landscape: None,
         })
     );
     assert_eq!(
@@ -285,6 +286,45 @@ fn lib_07_every_example_imports_christmas_day() {
         "no fields beyond the documented ones: {:?}",
         s.unknown.keys()
     );
+}
+
+#[test]
+fn lib_07_ink_layer_png_per_page_and_cropped_landscape() {
+    // forScore stores each page's drawing as `<file>|<page>.png`: a transparent
+    // PNG the size of the page canvas. `<file>|<page>|croppedLandscape` is a flag.
+    let mut d = score_dict("Hear.pdf", "Hear");
+    let png = b"\x89PNG\r\n\x1a\nfake".to_vec();
+    d.insert("Hear.pdf|3.png".into(), Value::Data(png.clone()));
+    d.insert(
+        "Hear.pdf|2|croppedLandscape".into(),
+        Value::Integer(0.into()),
+    );
+    d.insert(
+        "Hear.pdf|1|croppedLandscape".into(),
+        Value::Integer(1.into()),
+    );
+    let s = parse_4sc(&gz_bplist(&Value::Dictionary(d))).unwrap();
+    assert_eq!(s.ink.get(&3), Some(&png));
+    assert_eq!(s.ink.len(), 1);
+    assert_eq!(s.pages[&2].cropped_landscape, Some(false));
+    assert_eq!(s.pages[&1].cropped_landscape, Some(true));
+    assert!(!s.unknown.contains_key("Hear.pdf|3.png"));
+    assert!(!s.unknown.keys().any(|k| k.ends_with("croppedLandscape")));
+}
+
+#[test]
+fn lib_07_every_example_imports_do_you_hear_with_ink() {
+    let Some(bytes) = sample("Do you her what I hear TTBB.4sc") else {
+        eprintln!("skipped: private sample not present");
+        return;
+    };
+    let s = parse_4sc(&bytes).unwrap();
+    assert_eq!(s.title.as_deref(), Some("Do you her what I hear TTBB"));
+    assert_eq!(s.ink.len(), 18, "one ink layer per page");
+    for png in s.ink.values() {
+        assert!(png.starts_with(b"\x89PNG"));
+    }
+    assert!(s.unknown.is_empty(), "{:?}", s.unknown.keys());
 }
 
 #[test]
