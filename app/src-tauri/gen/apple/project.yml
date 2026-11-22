@@ -85,6 +85,10 @@ targets:
             CFBundleTypeRole: Editor
             LSHandlerRank: Owner
             LSItemContentTypes: [se.nikielhard.cantor.setlist]
+          - CFBundleTypeName: Cantor Backup
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes: [se.nikielhard.cantor.backup]
           - CFBundleTypeName: PDF
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
@@ -120,6 +124,11 @@ targets:
             UTTypeConformsTo: [public.data, public.zip-archive]
             UTTypeTagSpecification:
               public.filename-extension: [cantorset]
+          - UTTypeIdentifier: se.nikielhard.cantor.backup
+            UTTypeDescription: Cantor Backup
+            UTTypeConformsTo: [public.data, public.zip-archive]
+            UTTypeTagSpecification:
+              public.filename-extension: [cantorbackup]
         UIRequiresFullScreen: false
         ITSAppUsesNonExemptEncryption: false
     entitlements:

@@ -62,6 +62,7 @@ fn sweep_incoming(paths: &Paths) -> Vec<String> {
                     x.eq_ignore_ascii_case("4sc")
                         || x.eq_ignore_ascii_case("4ss")
                         || x.eq_ignore_ascii_case(cantor_library::bundle::BUNDLE_EXT)
+                        || x.eq_ignore_ascii_case(cantor_library::backup::BACKUP_EXT)
                 })
         }));
     }
@@ -77,6 +78,20 @@ fn sweep_incoming(paths: &Paths) -> Vec<String> {
 
 /// Import one file into the user library; returns the new score ids.
 fn import_path(paths: &Paths, path: &std::path::Path) -> Vec<String> {
+    if path
+        .extension()
+        .is_some_and(|x| x.eq_ignore_ascii_case(cantor_library::backup::BACKUP_EXT))
+    {
+        // DATA-03: a backup received from Files/AirDrop is never restored
+        // silently (it replaces the library); it waits in Documents/Backups
+        // and the library screen offers to restore it.
+        let dir = paths.user.join("Backups");
+        let _ = std::fs::create_dir_all(&dir);
+        if let Some(n) = path.file_name() {
+            let _ = std::fs::copy(path, dir.join(n));
+        }
+        return Vec::new();
+    }
     if path
         .extension()
         .is_some_and(|x| x.eq_ignore_ascii_case(cantor_library::bundle::BUNDLE_EXT))
@@ -408,6 +423,13 @@ fn import_bytes(
         return Err("expected raw file bytes".into());
     };
     let lower = name.to_lowercase();
+    if lower.ends_with(&format!(".{}", cantor_library::backup::BACKUP_EXT)) {
+        // Parked in Documents/Backups; the library screen asks before restoring.
+        let dir = paths.user.join("Backups");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        std::fs::write(dir.join(file_safe(&name)), bytes).map_err(|e| e.to_string())?;
+        return Ok(Vec::new());
+    }
     if lower.ends_with(".4ss")
         || lower.ends_with(&format!(".{}", cantor_library::bundle::BUNDLE_EXT))
     {
@@ -518,6 +540,97 @@ async fn export_audio(what: String, app: tauri::AppHandle) -> Result<Vec<String>
     let files: Vec<PathBuf> = names.iter().map(|n| out_dir.join(n)).collect();
     share_on_main(&app, files)?;
     Ok(names)
+}
+
+/// DATA-03: back up the whole library (scores, notes, setlists, mixes) to
+/// Documents/Export/Cantor <date>.cantorbackup and open the share sheet so it
+/// can go to iCloud Drive, AirDrop or a computer. Returns the file name.
+#[tauri::command]
+async fn backup_library(app: tauri::AppHandle) -> Result<String, String> {
+    let paths = app.state::<Paths>();
+    let user = paths.user.clone();
+    let out_dir = user.join("Export");
+    let (name, path) =
+        tauri::async_runtime::spawn_blocking(move || -> Result<(String, PathBuf), String> {
+            let bytes = cantor_library::backup::backup(&user)?;
+            std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+            let secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            let name = format!(
+                "Cantor {}.{}",
+                ymd(secs),
+                cantor_library::backup::BACKUP_EXT
+            );
+            let path = out_dir.join(&name);
+            std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+            Ok((name, path))
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+    share_on_main(&app, vec![path])?;
+    Ok(name)
+}
+
+/// `YYYY-MM-DD` (UTC) for a Unix time, without a date crate.
+fn ymd(secs: i64) -> String {
+    let days = secs.div_euclid(86_400);
+    // Civil-from-days (Howard Hinnant).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// DATA-03: restore a backup picked in the app (raw bytes). The current
+/// library is moved aside into Documents/.before-restore-<time>, never deleted.
+#[tauri::command]
+fn restore_library(
+    request: tauri::ipc::Request<'_>,
+    paths: State<'_, Paths>,
+) -> Result<usize, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected raw file bytes".into());
+    };
+    let r = cantor_library::backup::restore(&paths.user, bytes)?;
+    Ok(r.files)
+}
+
+/// Backups waiting to be restored (received from Files, AirDrop, Open in).
+#[tauri::command]
+fn pending_backups(paths: State<'_, Paths>) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(paths.user.join("Backups"))
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .filter(|n| n.ends_with(&format!(".{}", cantor_library::backup::BACKUP_EXT)))
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort();
+    v
+}
+
+/// Restore a waiting backup by name, or discard it (`discard: true`).
+#[tauri::command]
+fn restore_pending(name: String, discard: bool, paths: State<'_, Paths>) -> Result<usize, String> {
+    let p = paths.user.join("Backups").join(file_safe(&name));
+    if discard {
+        return std::fs::remove_file(&p)
+            .map(|_| 0)
+            .map_err(|e| e.to_string());
+    }
+    let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
+    let r = cantor_library::backup::restore(&paths.user, &bytes)?;
+    let _ = std::fs::remove_file(&p);
+    Ok(r.files)
 }
 
 /// Open the share sheet for files (on the UI thread, as UIKit requires).
@@ -1152,7 +1265,11 @@ pub fn run() {
             score_settings,
             save_score_settings,
             pitch_pipe,
-            export_item
+            export_item,
+            backup_library,
+            restore_library,
+            pending_backups,
+            restore_pending
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")

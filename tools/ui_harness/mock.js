@@ -8,9 +8,20 @@ exports.setup = async function setup(page, dir) {
   const pdf = fs.readFileSync(path.join(dir, 'Glimmande Nymf.pdf'))
   const boxes = JSON.parse(fs.readFileSync(path.join(dir, 'Glimmande Nymf.measures.json'), 'utf8'))
   await page.route('http://cantor.localhost/**', (r) => r.fulfill({ body: pdf, contentType: 'application/pdf' }))
+  // DATA-01 / NFR-05 / NFR-07: the app must work with no network and must not
+  // call out. Every request that is not the local dev server or the cantor://
+  // scheme is blocked and recorded in page.__external.
+  page.__external = []
+  await page.route(/^(?!http:\/\/(localhost|127\.0\.0\.1|cantor\.localhost)[:/]).*/, (r) => {
+    const u = r.request().url()
+    if (u.startsWith('data:') || u.startsWith('blob:')) return r.continue()
+    page.__external.push(u)
+    return r.abort('internetdisconnected')
+  })
   await page.exposeBinding('__node', () => null)
   await page.addInitScript(
     ({ xml, boxes }) => {
+      window.__xml = xml
       const calls = []
       window.__calls = calls
       const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [] }
@@ -83,6 +94,20 @@ exports.setup = async function setup(page, dir) {
         },
         seek: ({ seconds }) => {
           pos = seconds
+        },
+        backup_library: () => {
+          store.backups = (store.backups ?? 0) + 1
+          return 'Cantor 2026-11-22.cantorbackup'
+        },
+        pending_backups: () => store.pending ?? [],
+        restore_pending: ({ name, discard }) => {
+          store.pending = (store.pending ?? []).filter((n) => n !== name)
+          store.restored = discard ? store.restored : name
+          return discard ? 0 : 7
+        },
+        export_item: ({ kind, id }) => {
+          store.exports = [...(store.exports ?? []), [kind, id]]
+          return kind === 'setlist' ? 'Vårkonsert.cantorset' : kind === '4ss' ? 'Vårkonsert.4ss' : 'x.' + kind
         },
         pitch_pipe: ({ channel }) => {
           store.pipe.push(channel ?? 'all')

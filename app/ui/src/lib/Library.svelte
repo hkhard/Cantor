@@ -33,13 +33,22 @@
   let importing = $state(false)
   let fileInput: HTMLInputElement | undefined = $state()
 
+  let pending: string[] = $state([])
   async function reload() {
+    pending = await api.pendingBackups().catch(() => [])
     const d = await api.libraryData()
     metadata = d.metadata
     setlists = d.setlists
     if (tab && !setlists.some((s) => s.id === tab)) tab = ''
   }
-  onMount(reload)
+  onMount(() => {
+    reload()
+    // Files dropped in through the Files app arrive while Cantor is in the
+    // background: look again when it comes back.
+    const onVis = () => document.visibilityState === 'visible' && onrefresh().then(reload)
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  })
   // Imports (also from the share sheet) can add setlists.
   $effect(() => {
     void scores
@@ -98,6 +107,18 @@
     if (!(await confirmBox(t('lib.removeConfirm', { title: s.title })))) return
     await api.deleteScore(s.file)
     await onrefresh()
+  }
+
+  async function restorePending(name: string, discard: boolean) {
+    if (!discard && !(await confirmBox(t('backup.restoreConfirm')))) return
+    try {
+      const n = await api.restorePending(name, discard)
+      notice = discard ? '' : t('backup.restored', { n })
+    } catch (e) {
+      notice = t('backup.failed', { e: String(e) })
+    }
+    await onrefresh()
+    await reload()
   }
 
   async function newSetlist() {
@@ -160,6 +181,13 @@
   </header>
   {#if error}<p class="error">{error}</p>{/if}
   {#if loading}<p class="loading">{loading}</p>{/if}
+  {#each pending as name (name)}
+    <div class="pending glass" role="alert">
+      <span>{t('backup.waiting', { name })}</span>
+      <button class="chip on" onclick={() => restorePending(name, false)}>{t('backup.restoreNow')}</button>
+      <button class="chip" onclick={() => restorePending(name, true)}>{t('backup.discard')}</button>
+    </div>
+  {/each}
 
   <div class="tabs">
     <div class="tablist" role="tablist" aria-label={t('lib.setlists')}>
@@ -181,7 +209,7 @@
         bind:this={fileInput}
         type="file"
         multiple
-        accept=".mxl,.musicxml,.xml,.pdf,.4sc,.4ss,.cantorset,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
+        accept=".mxl,.musicxml,.xml,.pdf,.4sc,.4ss,.cantorset,.cantorbackup,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
         style="display:none"
         onchange={importPicked}
       />
@@ -275,9 +303,24 @@
     }}
   />
 {/if}
-{#if aboutOpen}<About onclose={() => (aboutOpen = false)} />{/if}
+{#if aboutOpen}<About
+    onclose={() => (aboutOpen = false)}
+    onrestored={async () => {
+      await onrefresh()
+      await reload()
+    }}
+  />{/if}
 
 <style>
+  .pending {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+  }
   .tablist {
     display: contents;
   }

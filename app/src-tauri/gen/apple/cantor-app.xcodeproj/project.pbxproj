@@ -179,14 +179,14 @@
 			path = "cantor-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_239B5870-433F-430C-B964-E62AAF4C74AD" /* arm64 */ = {
+		"TEMP_21FB4D01-66DB-4305-B8B0-02CC34950C6C" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
 			sourceTree = "<group>";
 		};
-		"TEMP_EB8333F1-35BA-4BA8-9FF3-F1A783C97C07" /* x86_64 */ = {
+		"TEMP_57769F2E-2D9C-496F-8508-9FD52D36EE26" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);

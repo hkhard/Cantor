@@ -40,7 +40,7 @@ const H = Number(process.env.H || 1133)
   await page.waitForSelector('text=Glimmande Nymf')
   await shot('01-library')
 
-  await step('search filters', async () => {
+  await step('lib_04 search filters', async () => {
     await page.fill('input[type=search]', 'christ')
     await page.waitForTimeout(400)
     const n = await page.locator('ul.scores > li').count()
@@ -49,7 +49,7 @@ const H = Number(process.env.H || 1133)
     await page.waitForTimeout(300)
   })
 
-  await step('metadata editor saves', async () => {
+  await step('lib_03 metadata editor saves', async () => {
     await page.locator('ul.scores > li', { hasText: 'Glimmande Nymf' }).locator('button.info').click()
     await page.waitForSelector('.metasheet')
     await shot('02-meta')
@@ -64,7 +64,7 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('text=Bellman')
   })
 
-  await step('search by composer', async () => {
+  await step('lib_04 search by composer', async () => {
     await page.fill('input[type=search]', 'bellman')
     await page.waitForTimeout(400)
     const n = await page.locator('ul.scores > li').count()
@@ -73,7 +73,7 @@ const H = Number(process.env.H || 1133)
     await page.waitForTimeout(300)
   })
 
-  await step('create setlist and add', async () => {
+  await step('set_01 create setlist, add, reorder', async () => {
     await page.click('text=New setlist')
     await page.waitForSelector('.dlg input')
     await page.fill('.dlg input', 'Vårkonsert')
@@ -94,7 +94,7 @@ const H = Number(process.env.H || 1133)
     if (first !== '0:Glimmande Nymf') throw new Error('reorder failed ' + first)
   })
 
-  await step('open from setlist, next piece', async () => {
+  await step('set_01 open from setlist, next piece', async () => {
     await page.click('text=Play setlist')
     await page.waitForSelector('.top h2 >> text=Glimmande Nymf')
     await page.waitForSelector('.pdfhost canvas')
@@ -106,7 +106,7 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('.top h2 >> text=Glimmande Nymf')
   })
 
-  await step('page turn by tap and key while paused (follow must not snap back)', async () => {
+  await step('perf_02 page turn by tap and key while paused (follow must not snap back)', async () => {
     await page.waitForFunction(() => !/\/0$/.test(document.querySelector('.pageno')?.textContent ?? '/0'))
     const before = await page.locator('.pageno').textContent()
     await page.click('.pageturn.right')
@@ -119,7 +119,7 @@ const H = Number(process.env.H || 1133)
     if (parseInt(k) !== parseInt(before)) throw new Error(`key: ${a} -> ${k}`)
   })
 
-  await step('pitch pipe all + one', async () => {
+  await step('perf_03 pitch pipe all + one', async () => {
     await page.click('text=♪ Pitch')
     await page.click('.top button:has-text("Mixer")')
     await page.locator('.strip').nth(2).locator('button.pipe').click()
@@ -128,7 +128,7 @@ const H = Number(process.env.H || 1133)
     await shot('05-mixer')
   })
 
-  await step('custom preset saved per score', async () => {
+  await step('play_04 custom preset saved per score', async () => {
     await page.locator('.strip').nth(0).locator('button.m').click()
     await page.click('text=Save mix')
     await page.fill('.dlg input', 'Utan T1')
@@ -139,7 +139,7 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button:has-text("Hide mixer")')
   })
 
-  await step('page modes', async () => {
+  await step('view_02 page modes', async () => {
     for (const m of ['two', 'half', 'scroll', 'single']) {
       await page.click('.top button:has-text("•••")')
       await page.selectOption('.popover.more select >> nth=-1', m)
@@ -154,7 +154,7 @@ const H = Number(process.env.H || 1133)
     }
   })
 
-  await step('annotate: pen stroke, stamp, undo, layer', async () => {
+  await step('ann_01 annotate: pen stroke, stamp, undo, layer', async () => {
     await page.click('.top button:has-text("Annotate")')
     await page.waitForSelector('.annbar')
     const svg = page.locator('svg.annot').first()
@@ -194,14 +194,14 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button:has-text("Done")')
   })
 
-  await step('ANN-04 ink on PDF bar is bar-anchored and shows in notation', async () => {
+  await step('ann_04 ink on PDF bar is bar-anchored', async () => {
     // The pen stroke drawn on the PDF earlier landed on a bar (measure map).
     let d = await page.evaluate(() => window.__store.ann)
     const ink = d.items.find((a) => 'Ink' in a.item)
     if (!ink || !('Measure' in ink.anchor)) throw new Error('PDF stroke not bar-anchored: ' + JSON.stringify(ink?.anchor))
   })
 
-  await step('ANN-04 draw on notation, survives reflow', async () => {
+  await step('ann_04 draw on notation, survives reflow', async () => {
     await page.click('.seg button:has-text("Notation")')
     await page.waitForSelector('.score svg g.measure', { timeout: 20000 })
     await page.waitForTimeout(800)
@@ -276,7 +276,7 @@ const H = Number(process.env.H || 1133)
     await shot('14-notation-ink-on-pdf')
   })
 
-  await step('transpose + hide part (notation)', async () => {
+  await step('view_04 transpose + hide part (notation)', async () => {
     await page.click('.seg button:has-text("Notation")')
     await page.waitForSelector('.score svg', { timeout: 20000 })
     await page.click('.top button:has-text("•••")')
@@ -297,7 +297,7 @@ const H = Number(process.env.H || 1133)
     if (s.transpose !== 1 || s.hidden_parts[0] !== 0) throw new Error(JSON.stringify(s))
   })
 
-  await step('settings restored on reopen', async () => {
+  await step('play_04 settings restored on reopen', async () => {
     await page.click('.top button[aria-label="Library"]')
     await page.waitForSelector('text=New setlist')
     await page.click('[role=tab] >> text=All scores')
@@ -310,16 +310,197 @@ const H = Number(process.env.H || 1133)
     if (!/Notation/.test(view)) throw new Error('view not restored: ' + view)
   })
 
-  await step('performance mode', async () => {
+  await step('perf_01 performance mode locks editing, big turn zones', async () => {
+    await page.click('.top button:has-text("Original")')
+    await page.waitForTimeout(800)
+    await page.click('.top button:has-text("Annotate")')
+    await page.waitForSelector('.annbar')
     await page.click('.top button:has-text("•••")')
     await page.click('.popover.more button:has-text("Perform")')
     await page.waitForSelector('.perfexit')
     await shot('09-performance')
+    // Annotation tools gone, overlay not drawable: no accidental ink.
+    if (await page.locator('.annbar').count()) throw new Error('annotation toolbar visible in performance mode')
+    const active = await page.locator('svg.annot.active').count()
+    if (active) throw new Error('ink layer accepts drawing in performance mode')
+    const before = (await page.evaluate(() => window.__store.ann.items.length))
+    const vp = page.viewportSize()
+    await page.mouse.move(vp.width * 0.5, vp.height * 0.5)
+    await page.mouse.down()
+    await page.mouse.move(vp.width * 0.55, vp.height * 0.55)
+    await page.mouse.up()
+    if ((await page.evaluate(() => window.__store.ann.items.length)) !== before) throw new Error('stroke added in performance mode')
+    // Turn zones cover at least a third of the width each side.
+    const z = await page.locator('.turnzone.right').boundingBox()
+    if (z.width < vp.width * 0.3) throw new Error('turn zone too small ' + z.width)
+    const p0 = await page.locator('.pageno').textContent()
+    await page.locator('.turnzone.right').click()
+    await page.waitForTimeout(400)
+    const p1 = await page.locator('.pageno').textContent()
+    if (parseInt(p1) !== parseInt(p0) + 1) throw new Error(`turn zone: ${p0} -> ${p1}`)
     await page.click('.perfexit')
   })
 
-  await step('swedish', async () => {
+  await step('perf_02 pedal keys are configurable', async () => {
+    await page.click('.top button:has-text("•••")')
+    await page.click('.popover.more button:has-text("Pedal")')
+    // Make ArrowDown do nothing, then check it no longer turns.
+    const sel = page.locator('.popover.more .pedals label', { hasText: 'ArrowDown' }).locator('select')
+    await sel.selectOption('none')
+    await page.click('.top button:has-text("•••")')
+    const p0 = await page.locator('.pageno').textContent()
+    await page.keyboard.press('ArrowDown')
+    await page.waitForTimeout(300)
+    if ((await page.locator('.pageno').textContent()) !== p0) throw new Error('ArrowDown still turns after setting None')
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cantor.pedals')))
+    if (saved.ArrowDown !== 'none') throw new Error('pedal map not saved')
+  })
+
+  await step('set_02 share setlist as bundle, lib_09 as forScore set', async () => {
     await page.click('.top button[aria-label="Library"]')
+    await page.click('[role=tab] >> text=Vårkonsert')
+    await page.click('button:has-text("Share: Cantor")')
+    await page.click('.libbar button:has-text("forScore")')
+    await page.waitForTimeout(300)
+    const ex = await page.evaluate(() => window.__store.exports)
+    const kinds = ex.map((e) => e[0]).join(',')
+    if (!/setlist/.test(kinds) || !/4ss/.test(kinds)) throw new Error('exports ' + kinds)
+    await page.click('[role=tab] >> text=All scores')
+  })
+
+  await step('data_03 back up and restore a received backup', async () => {
+    await page.click('header button[aria-label="About Cantor"]')
+    await page.click('.about button:has-text("Back up now")')
+    await page.waitForSelector('.about [role=status]')
+    if ((await page.evaluate(() => window.__store.backups)) !== 1) throw new Error('backup not made')
+    await page.click('.about button.primary')
+    // A backup arrives via Files/AirDrop: the library asks before restoring.
+    await page.evaluate(() => {
+      window.__store.pending = ['Cantor 2026-11-20.cantorbackup']
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForSelector('.pending')
+    await shot('15-pending-backup')
+    await page.click('.pending button:has-text("Restore")')
+    await page.click('.dlg button.primary')
+    await page.waitForTimeout(400)
+    if ((await page.evaluate(() => window.__store.restored)) !== 'Cantor 2026-11-20.cantorbackup') throw new Error('not restored')
+    if (await page.locator('.pending').count()) throw new Error('prompt still shown')
+    await page.click('[role=tab] >> text=All scores')
+    await page.locator('ul.scores > li', { hasText: 'Glimmande Nymf' }).locator('button.open').click()
+    await page.waitForSelector('.top h2')
+  })
+
+  await step('data_01 offline: no request left the device', async () => {
+    if (page.__external.length) throw new Error('external requests: ' + page.__external.slice(0, 5).join(', '))
+  })
+
+  await step('view_03 phone width shows at least 2 bars per system', async () => {
+    // Engrave the same score in a phone-sized pane (390 px wide) with the
+    // app's own engraver and count bars on each system (line) of page 1.
+    const res = await page.evaluate(async (xml) => {
+      const { engrave } = await import('/src/lib/engrave.ts')
+      const e = await engrave(xml, 390, 760)
+      const host = document.createElement('div')
+      host.style.cssText = 'position:fixed;left:0;top:0;width:390px;height:760px'
+      host.innerHTML = e.render(1)
+      document.body.appendChild(host)
+      const systems = [...host.querySelectorAll('g.system')].map((s) => s.querySelectorAll('g.measure').length)
+      host.remove()
+      return systems
+    }, await page.evaluate(() => window.__xml))
+    if (!res.length) throw new Error('no systems engraved')
+    const min = Math.min(...res)
+    console.log('     bars per system at 390 px:', res.join(','))
+    if (min < 2) throw new Error('a system has fewer than 2 bars: ' + res.join(','))
+  })
+
+  await step('view_01 engraving matches its golden snapshot', async () => {
+    const fixture = require('fs').readFileSync(
+      path.join(process.env.CANTOR_REPO || path.join(__dirname, '../..'), 'fixtures/musicxml/satb_chorale_24.musicxml'),
+      'utf8',
+    )
+    // Golden = number of pages, systems and bars, and bar order, for a fixed
+    // pane. A change in Verovio or the layout settings shows up here.
+    const got = await page.evaluate(async (xml) => {
+      const { engrave } = await import('/src/lib/engrave.ts')
+      const e = await engrave(xml, 744, 1000)
+      const host = document.createElement('div')
+      const pages = []
+      for (let p = 1; p <= e.pages; p++) {
+        host.innerHTML = e.render(p)
+        pages.push([...host.querySelectorAll('g.system')].map((s) => s.querySelectorAll('g.measure').length))
+      }
+      return { pages: e.pages, systems: pages, bars: e.measurePage.size }
+    }, fixture)
+    const fs = require('fs')
+    // Golden lives in the repo (public fixture), next to the harness sources.
+    const golden = path.join(process.env.CANTOR_REPO || __dirname, 'tools/ui_harness/golden-engraving.json')
+    const want = fs.existsSync(golden) ? JSON.parse(fs.readFileSync(golden, 'utf8')) : null
+    if (process.env.UPDATE_GOLDEN || !want) {
+      fs.writeFileSync(golden, JSON.stringify(got, null, 1))
+      console.log('     golden written', JSON.stringify(got))
+      if (!want && !process.env.UPDATE_GOLDEN) throw new Error('no golden yet; written, rerun')
+    } else if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`layout changed: ${JSON.stringify(got)} vs ${JSON.stringify(want)}`)
+    // PNG snapshot of page 1, compared within tolerance (anti-aliasing and
+    // font hinting differ slightly between machines).
+    const { PNG } = require('pngjs')
+    const pixelmatch = require('pixelmatch')
+    const svg = await page.evaluate(async (xml) => {
+      const { engrave } = await import('/src/lib/engrave.ts')
+      return (await engrave(xml, 744, 1000)).render(1)
+    }, fixture)
+    const snap = await page.context().newPage()
+    await snap.setViewportSize({ width: 744, height: 1000 })
+    await snap.setContent(`<html><body style="margin:0;background:#fff">${svg}</body></html>`)
+    const png = PNG.sync.read(await snap.screenshot({ clip: { x: 0, y: 0, width: 744, height: 1000 } }))
+    await snap.close()
+    const goldenPng = path.join(process.env.CANTOR_REPO || path.join(__dirname, '../..'), 'tools/ui_harness/golden-engraving.png')
+    if (process.env.UPDATE_GOLDEN || !fs.existsSync(goldenPng)) {
+      fs.writeFileSync(goldenPng, PNG.sync.write(png))
+      if (!process.env.UPDATE_GOLDEN) throw new Error('no golden PNG yet; written, rerun')
+      return
+    }
+    const ref = PNG.sync.read(fs.readFileSync(goldenPng))
+    if (ref.width !== png.width || ref.height !== png.height) throw new Error(`snapshot size ${png.width}x${png.height} vs ${ref.width}x${ref.height}`)
+    const diff = pixelmatch(ref.data, png.data, null, png.width, png.height, { threshold: 0.2 })
+    const frac = diff / (png.width * png.height)
+    console.log(`     snapshot diff ${(frac * 100).toFixed(3)}% of pixels`)
+    if (frac > 0.005) throw new Error(`engraving differs from golden PNG in ${(frac * 100).toFixed(2)}% of pixels`)
+  })
+
+  await step('view_06 dark and sepia themes keep text contrast >= 4.5:1', async () => {
+    for (const skin of ['dark', 'sepia']) {
+      await page.evaluate((s) => {
+        localStorage.setItem('cantor.skin', s)
+      }, skin)
+      await page.reload()
+      await page.waitForSelector('ul.scores > li')
+      await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') })
+      const v = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['color-contrast'] })).violations.length)
+      if (v) throw new Error(`${skin}: ${v} contrast violations`)
+    }
+    await page.evaluate(() => localStorage.setItem('cantor.skin', 'system'))
+    await page.reload()
+    await page.waitForSelector('ul.scores > li')
+  })
+
+  await step('play_12 lock screen shows title and position (now playing updated from status)', async () => {
+    // The lock-screen card is set natively from the status poll; here we
+    // check the app polls status while playing so the card stays current.
+    await page.locator('ul.scores > li', { hasText: 'Glimmande Nymf' }).locator('button.open').click()
+    await page.waitForSelector('.transport .play')
+    const n0 = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'status').length)
+    await page.click('.transport .play')
+    await page.waitForTimeout(1200)
+    const n1 = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'status').length)
+    await page.click('.transport .play')
+    if (n1 - n0 < 5) throw new Error('status not polled while playing: ' + (n1 - n0))
+    await page.click('.top button[aria-label="Library"]')
+  })
+
+  await step('nfr_10 swedish', async () => {
+    if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
     await page.click('header button[aria-label="About Cantor"]')
     await page.selectOption('.about select', 'sv')
     await page.waitForSelector('text=Licenser')

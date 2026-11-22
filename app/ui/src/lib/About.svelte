@@ -1,8 +1,39 @@
 <script lang="ts">
   // NFR-09: About, with the licences of what Cantor is built on.
   import { t, i18n, setLang, textSize, setTextScale } from './i18n.svelte'
+  import { api } from './api'
+  import { confirmBox } from './prompts.svelte'
 
-  let { onclose }: { onclose: () => void } = $props()
+  let backupMsg = $state('')
+  let busy = $state(false)
+  let restoreInput: HTMLInputElement | undefined = $state()
+
+  async function makeBackup() {
+    busy = true
+    try {
+      backupMsg = t('backup.made', { name: await api.backupLibrary() })
+    } catch (e) {
+      backupMsg = t('backup.failed', { e: String(e) })
+    }
+    busy = false
+  }
+
+  async function restorePicked(e: Event) {
+    const input = e.target as HTMLInputElement
+    const f = input.files?.[0]
+    input.value = ''
+    if (!f || !(await confirmBox(t('backup.restoreConfirm')))) return
+    busy = true
+    try {
+      backupMsg = t('backup.restored', { n: await api.restoreLibrary(f) })
+      onrestored?.()
+    } catch (err) {
+      backupMsg = t('backup.failed', { e: String(err) })
+    }
+    busy = false
+  }
+
+  let { onclose, onrestored }: { onclose: () => void; onrestored?: () => void } = $props()
 
   const licences = [
     { name: 'Verovio', what: 'Notsättning / music engraving', licence: 'LGPL-3.0', url: 'https://www.verovio.org' },
@@ -38,6 +69,14 @@
       <option value="2">200 %</option>
     </select>
   </label>
+  <h4>{t('backup.title')}</h4>
+  <p class="hint">{t('backup.hint')}</p>
+  <div class="row">
+    <button onclick={makeBackup} disabled={busy}>{t('backup.make')}</button>
+    <button onclick={() => restoreInput?.click()} disabled={busy}>{t('backup.restore')}</button>
+    <input bind:this={restoreInput} type="file" accept=".cantorbackup" style="display:none" onchange={restorePicked} aria-label={t('backup.restore')} />
+  </div>
+  {#if backupMsg}<p role="status">{backupMsg}</p>{/if}
   <h4>{t('about.licences')}</h4>
   <ul>
     {#each licences as l}
@@ -95,7 +134,16 @@
     gap: 8px;
     align-items: center;
   }
-  button {
+  button.primary {
     align-self: flex-end;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .hint {
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
   }
 </style>

@@ -109,6 +109,11 @@ export const api = {
   /** Share: 'pdf' annotated PDF, '4sc' forScore score (id = score);
    *  'setlist' Cantor bundle, '4ss' forScore setlist (id = setlist). */
   exportItem: (kind: 'pdf' | '4sc' | 'setlist' | '4ss', id: string) => invoke<string>('export_item', { kind, id }),
+  /** DATA-03: whole-library backup (share sheet) and restore. */
+  backupLibrary: () => invoke<string>('backup_library'),
+  restoreLibrary: async (f: File) => invoke<number>('restore_library', new Uint8Array(await f.arrayBuffer())),
+  pendingBackups: () => invoke<string[]>('pending_backups'),
+  restorePending: (name: string, discard = false) => invoke<number>('restore_pending', { name, discard }),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),

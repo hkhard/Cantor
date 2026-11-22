@@ -59,6 +59,18 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Cantor Backup</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>se.nikielhard.cantor.backup</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>PDF</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
@@ -137,6 +149,24 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>cantorset</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Cantor Backup</string>
+			<key>UTTypeIdentifier</key>
+			<string>se.nikielhard.cantor.backup</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cantorbackup</string>
 				</array>
 			</dict>
 		</dict>

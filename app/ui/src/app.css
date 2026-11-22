@@ -202,7 +202,8 @@ select {
 }
 .top {
   position: relative;
-  z-index: 5;
+  /* Above the annotation toolbar, so its popovers are never covered. */
+  z-index: 6;
   display: flex;
   align-items: center;
   gap: 8px;

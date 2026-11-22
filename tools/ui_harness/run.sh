@@ -18,9 +18,9 @@ cp "$ROOT/scores/out/$SCORE.musicxml" "$OUT/Glimmande Nymf.musicxml"
 cp "$ROOT/scores/out/pdf/$SCORE.pdf" "$OUT/Glimmande Nymf.pdf"
 cp "$ROOT/scores/out/pdf/$SCORE.measures.json" "$OUT/Glimmande Nymf.measures.json"
 cd "$OUT"
-if [ ! -d node_modules/playwright ] || [ ! -d node_modules/axe-core ]; then
+if [ ! -d node_modules/playwright ] || [ ! -d node_modules/axe-core ] || [ ! -d node_modules/pixelmatch ]; then
   npm init -y >/dev/null
-  npm i -s playwright@1 axe-core@4
+  npm i -s playwright@1 axe-core@4 pngjs@7 pixelmatch@5
   npx playwright install webkit
 fi
 cd "$ROOT/app/ui"
@@ -32,6 +32,7 @@ npx vite --port $PORT --strictPort >"$OUT/vite.log" 2>&1 &
 VITE=$!
 trap 'kill $VITE 2>/dev/null' EXIT
 for _ in $(seq 1 40); do curl -sf "http://localhost:$PORT/" >/dev/null && break; sleep 0.5; done
+export CANTOR_REPO="$ROOT"
 status=0
 if [ "$WHAT" = all ] || [ "$WHAT" = harness ]; then node "$OUT/harness.js" || status=1; fi
 if [ "$WHAT" = all ] || [ "$WHAT" = a11y ]; then node "$OUT/a11y.js" || status=1; fi

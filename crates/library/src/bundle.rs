@@ -372,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn set02_export_is_deterministic() {
+    fn set_02_export_is_deterministic() {
         let (sl, sc) = sample();
         assert_eq!(
             export_bundle(&sl, &sc).unwrap(),
@@ -381,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn set02_round_trip_same_content_hash() {
+    fn set_02_round_trip_same_content_hash() {
         let (sl, sc) = sample();
         let b = export_bundle(&sl, &sc).unwrap();
         let h = content_hash(&b);
@@ -435,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn set02_tampered_file_fails() {
+    fn set_02_tampered_file_fails() {
         let (sl, sc) = sample();
         let b = export_bundle(&sl, &sc).unwrap();
         // Rebuild the zip with one file altered but the original manifest.
@@ -463,7 +463,7 @@ mod tests {
     }
 
     #[test]
-    fn set02_name_clash_gets_suffix() {
+    fn set_02_name_clash_gets_suffix() {
         let (sl, sc) = sample();
         let b = export_bundle(&sl, &sc).unwrap();
         let (dir, ann) = (tmp("lib"), tmp("ann"));

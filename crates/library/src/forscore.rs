@@ -498,7 +498,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lib09_write_4sc_round_trips() {
+    fn lib_09_write_4sc_round_trips() {
         let s = parse_4sc(&write_4sc("Que sera", b"%PDF-1.4 x")).unwrap();
         assert_eq!(s.title.as_deref(), Some("Que sera"));
         assert_eq!(s.file_name, "Que sera.pdf");
@@ -506,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn lib09_write_4ss_round_trips() {
+    fn lib_09_write_4ss_round_trips() {
         let items = vec![
             ("Ave".to_string(), b"%PDF a".to_vec()),
             ("Que".to_string(), b"%PDF q".to_vec()),
