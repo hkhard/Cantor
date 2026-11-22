@@ -179,7 +179,8 @@ pub fn build_timemap(score: &Score) -> Timemap {
                 if e.duration == 0 {
                     continue; // grace notes: no playback time yet
                 }
-                let Ok(midi) = u8::try_from(pitch.midi()) else {
+                // Transposing instruments sound at written + <transpose>.
+                let Ok(midi) = u8::try_from(pitch.midi() + m.transpose) else {
                     continue;
                 };
                 if midi > 127 {

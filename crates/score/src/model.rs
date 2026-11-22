@@ -54,6 +54,10 @@ pub struct Measure {
     /// Key signature in effect as `<key><fifths>` (sharps positive, flats
     /// negative), carried over from earlier measures.
     pub key_fifths: Option<i32>,
+    /// Semitones from written to sounding pitch for a transposing instrument
+    /// (MusicXML `<transpose>`: chromatic + 12 x octave-change), carried over
+    /// from earlier measures. 0 for concert-pitch parts. Playback adds it.
+    pub transpose: i32,
     /// Tempo changes `(offset in measure, quarter notes per minute)`.
     pub tempos: Vec<(Tick, f64)>,
     /// Repeats, endings and jumps (PLAY-02).

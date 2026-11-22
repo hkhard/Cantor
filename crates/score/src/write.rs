@@ -54,7 +54,7 @@ pub fn write_musicxml(score: &Score) -> String {
 
     for p in &score.parts {
         let _ = writeln!(x, "  <part id=\"{}\">", esc(&p.id));
-        let mut last = (None, None);
+        let mut last = (None, None, 0);
         for (i, m) in p.measures.iter().enumerate() {
             write_measure(&mut x, m, i == 0, &mut last);
         }
@@ -65,7 +65,7 @@ pub fn write_musicxml(score: &Score) -> String {
 }
 
 /// Last written (time signature, key fifths).
-type LastAttrs = (Option<(u32, u32)>, Option<i32>);
+type LastAttrs = (Option<(u32, u32)>, Option<i32>, i32);
 
 fn write_measure(x: &mut String, m: &Measure, first: bool, last: &mut LastAttrs) {
     let _ = write!(x, "    <measure number=\"{}\"", esc(&m.number));
@@ -85,7 +85,7 @@ fn write_measure(x: &mut String, m: &Measure, first: bool, last: &mut LastAttrs)
         }
         x.push_str("</barline>");
     }
-    if first || (m.time_signature, m.key_fifths) != *last {
+    if first || (m.time_signature, m.key_fifths, m.transpose) != *last {
         let _ = write!(x, "<attributes><divisions>{PPQ}</divisions>");
         if let Some(f) = m.key_fifths {
             let _ = write!(x, "<key><fifths>{f}</fifths></key>");
@@ -96,8 +96,23 @@ fn write_measure(x: &mut String, m: &Measure, first: bool, last: &mut LastAttrs)
                 "<time><beats>{b}</beats><beat-type>{bt}</beat-type></time>"
             );
         }
+        if m.transpose != 0 || last.2 != 0 {
+            // <transpose> with octaves split out, so the writer round-trips.
+            let oct = m.transpose.div_euclid(12);
+            let chrom = m.transpose.rem_euclid(12);
+            let (oct, chrom) = if chrom > 6 {
+                (oct + 1, chrom - 12)
+            } else {
+                (oct, chrom)
+            };
+            let _ = write!(x, "<transpose><chromatic>{chrom}</chromatic>");
+            if oct != 0 {
+                let _ = write!(x, "<octave-change>{oct}</octave-change>");
+            }
+            x.push_str("</transpose>");
+        }
         x.push_str("</attributes>");
-        *last = (m.time_signature, m.key_fifths);
+        *last = (m.time_signature, m.key_fifths, m.transpose);
     }
     write_sound_nav(x, nav);
     for &(off, bpm) in &m.tempos {
@@ -340,6 +355,7 @@ impl Score {
                         implicit: m.implicit,
                         time_signature: m.time_signature,
                         key_fifths: m.key_fifths,
+                        transpose: m.transpose,
                         ..Measure::default()
                     })
                     .unwrap_or_default()

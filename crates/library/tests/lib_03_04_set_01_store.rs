@@ -195,6 +195,7 @@ fn play_04_custom_presets_and_settings_persist() {
         }],
         transpose: -2,
         hidden_parts: vec![3],
+        concert_pitch: true,
     };
     s.set_settings("1:A", st.clone());
     s.save().unwrap();

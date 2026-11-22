@@ -15,5 +15,5 @@ pub use model::{
     Syllabic, Tick, PPQ,
 };
 pub use parse::{musicxml_bytes, parse_musicxml, parse_mxl, parse_score_file, ParseError};
-pub use transpose::{musicxml_transposed, transposed_fifths};
+pub use transpose::{musicxml_concert_pitch, musicxml_transposed, transposed_fifths};
 pub use write::write_musicxml;

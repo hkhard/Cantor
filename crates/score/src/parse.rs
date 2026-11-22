@@ -290,6 +290,8 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
     let mut divisions: u64 = 1;
     let mut time_sig: Option<(u32, u32)> = None;
     let mut key_fifths: Option<i32> = None;
+    // Written-to-sounding interval of a transposing instrument (`<transpose>`).
+    let mut transpose: i32 = 0;
     // Volta numbers open across measures (ending start .. stop/discontinue).
     let mut open_ending: Vec<u32> = Vec::new();
     // Dynamic velocity in effect per staff, carried across measures.
@@ -323,6 +325,16 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                             return Err(ctx.err("<divisions> must be positive"));
                         }
                         divisions = d;
+                    }
+                    if let Some(t) = child.child("transpose") {
+                        let n = |k: &str| {
+                            t.child_text(k)
+                                .and_then(|v| v.trim().parse::<i32>().ok())
+                                .unwrap_or(0)
+                        };
+                        transpose = n("chromatic")
+                            + 12 * n("octave-change")
+                            + if t.child("double").is_some() { -12 } else { 0 };
                     }
                     if let Some(f) = child.child("key").and_then(|k| k.child_text("fifths")) {
                         key_fifths = Some(
@@ -501,6 +513,7 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
             implicit,
             time_signature: time_sig,
             key_fifths,
+            transpose,
             tempos,
             nav,
             swing,

@@ -226,3 +226,149 @@ pub fn musicxml_transposed(xml: &str, semitones: i32) -> Result<String, ParseErr
     out.push_str(&xml[last..]);
     Ok(out)
 }
+
+/// VIEW-05 concert pitch: rewrite the written notes of transposing parts
+/// (MusicXML `<transpose>`, e.g. a B-flat clarinet or a tenor written an
+/// octave up) to the pitches that sound, and drop the `<transpose>` elements,
+/// so notation and playback show the same notes. Parts without `<transpose>`
+/// are untouched; a document without any is returned unchanged.
+pub fn musicxml_concert_pitch(xml: &str) -> Result<String, ParseError> {
+    if !xml.contains("<transpose") {
+        return Ok(xml.to_string());
+    }
+    parse_musicxml(xml.as_bytes())?;
+    let xml_err = |e: &dyn std::fmt::Display| ParseError::Xml(e.to_string());
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(false);
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut stack: Vec<String> = Vec::new();
+    let mut text = String::new();
+    // Current transposition of the part and its <transpose> fields.
+    let mut semis = 0i32;
+    let mut tr_start = 0usize;
+    let mut tr_fields: Vec<(String, String)> = Vec::new();
+    let mut fifths = 0i32;
+    let mut content_start = 0usize;
+    let mut pitch_start = 0usize;
+    let mut pitch_text: Vec<(String, String)> = Vec::new();
+    let mut note_alter: Option<i32> = None;
+    loop {
+        let before = reader.buffer_position() as usize;
+        let ev = reader.read_event().map_err(|e| xml_err(&e))?;
+        let after = reader.buffer_position() as usize;
+        match ev {
+            XmlEvent::Start(e) => {
+                let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                match name.as_str() {
+                    "part" => {
+                        semis = 0;
+                        fifths = 0;
+                    }
+                    "note" => note_alter = None,
+                    "pitch" => {
+                        pitch_start = before;
+                        pitch_text.clear();
+                    }
+                    "transpose" => {
+                        tr_start = before;
+                        tr_fields.clear();
+                    }
+                    _ => {}
+                }
+                content_start = after;
+                text.clear();
+                stack.push(name);
+            }
+            XmlEvent::Text(t) => text.push_str(&t.unescape().map_err(|e| xml_err(&e))?),
+            XmlEvent::End(_) => {
+                let name = stack.pop().unwrap_or_default();
+                let parent = stack.last().map(String::as_str);
+                match (name.as_str(), parent) {
+                    (child, Some("transpose")) => {
+                        tr_fields.push((child.to_string(), std::mem::take(&mut text)));
+                    }
+                    ("transpose", _) => {
+                        let n = |k: &str| {
+                            tr_fields
+                                .iter()
+                                .find(|(f, _)| f == k)
+                                .and_then(|(_, v)| v.trim().parse::<i32>().ok())
+                                .unwrap_or(0)
+                        };
+                        let double = tr_fields.iter().any(|(f, _)| f == "double");
+                        semis =
+                            n("chromatic") + 12 * n("octave-change") - if double { 12 } else { 0 };
+                        // Remove the element (and the whitespace before it on its line).
+                        edits.push((tr_start, after, String::new()));
+                    }
+                    ("fifths", Some("key")) => {
+                        if let Ok(f) = text.trim().parse::<i32>() {
+                            fifths = f;
+                            if semis != 0 {
+                                edits.push((
+                                    content_start,
+                                    before,
+                                    transposed_fifths(f, semis).to_string(),
+                                ));
+                            }
+                        }
+                    }
+                    ("pitch", _) if semis != 0 => {
+                        let get = |k: &str| {
+                            pitch_text
+                                .iter()
+                                .find(|(n, _)| n == k)
+                                .map(|(_, v)| v.trim())
+                        };
+                        let step = get("step").and_then(Step::parse).unwrap_or(Step::C);
+                        let alter = get("alter")
+                            .and_then(|a| a.parse::<f64>().ok())
+                            .map_or(0, |a| a.round() as i32);
+                        let octave = get("octave").and_then(|o| o.parse().ok()).unwrap_or(4);
+                        let p = transpose_pitch(
+                            Pitch {
+                                step,
+                                alter,
+                                octave,
+                            },
+                            fifths,
+                            semis,
+                        );
+                        note_alter = Some(p.alter);
+                        let mut out = format!("<pitch><step>{}</step>", step_name(p.step));
+                        if p.alter != 0 {
+                            out.push_str(&format!("<alter>{}</alter>", p.alter));
+                        }
+                        out.push_str(&format!("<octave>{}</octave></pitch>", p.octave));
+                        edits.push((pitch_start, after, out));
+                    }
+                    (child, Some("pitch")) => {
+                        pitch_text.push((child.to_string(), std::mem::take(&mut text)));
+                    }
+                    ("accidental", Some("note")) if semis != 0 => {
+                        if let Some(a) = note_alter {
+                            edits.push((content_start, before, accidental_name(a).into()));
+                        }
+                    }
+                    _ => {}
+                }
+                text.clear();
+            }
+            XmlEvent::Eof => break,
+            _ => {}
+        }
+    }
+    edits.sort_by_key(|e| e.0);
+    let mut out = String::with_capacity(xml.len());
+    let mut last = 0;
+    for (start, end, rep) in edits {
+        if start < last {
+            continue;
+        }
+        out.push_str(&xml[last..start]);
+        out.push_str(&rep);
+        last = end;
+    }
+    out.push_str(&xml[last..]);
+    Ok(out)
+}

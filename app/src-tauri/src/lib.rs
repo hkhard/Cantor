@@ -338,6 +338,8 @@ struct Opened {
     /// Box of each written measure on the PDF pages (LIB-05), when it was
     /// recognised with the same measure count as the MusicXML.
     measure_boxes: Option<Vec<serde_json::Value>>,
+    /// Has transposing instruments (`<transpose>`): offer the concert pitch toggle.
+    has_transposing: bool,
 }
 
 #[derive(Serialize)]
@@ -958,6 +960,7 @@ fn open_score(
     file: String,
     choir: Option<String>,
     transpose: Option<i32>,
+    concert: Option<bool>,
     paths: State<'_, Paths>,
     player: State<'_, Shared>,
     remote_slot: State<'_, remote::SharedEngine>,
@@ -983,6 +986,7 @@ fn open_score(
             sample_rate: 0,
             pdf_url,
             measure_boxes: None,
+            has_transposing: false,
         });
     };
     let bytes = std::fs::read(entry.dir.join(&score_file)).map_err(|e| e.to_string())?;
@@ -992,6 +996,14 @@ fn open_score(
     let mut musicxml = cantor_lyrics::clean_omr_musicxml(&String::from_utf8_lossy(
         &cantor_score::musicxml_bytes(&bytes).map_err(|e| e.to_string())?,
     ));
+    // VIEW-05: transposing instruments shown at concert pitch on request
+    // (sound is concert pitch either way).
+    let has_transposing = musicxml.contains("<transpose");
+    if concert.unwrap_or(false) && has_transposing {
+        if let Ok(x) = cantor_score::musicxml_concert_pitch(&musicxml) {
+            musicxml = x;
+        }
+    }
     // VIEW-05: transpose both what sounds and what is shown.
     let transpose = transpose.unwrap_or(0).clamp(-12, 12);
     if transpose != 0 {
@@ -1045,6 +1057,7 @@ fn open_score(
     Ok(Opened {
         pdf_url,
         measure_boxes,
+        has_transposing,
         title,
         musicxml,
         channels: plan

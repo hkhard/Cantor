@@ -120,6 +120,8 @@ pub struct ScoreSettings {
     pub presets: Vec<Preset>,
     pub transpose: i32,
     pub hidden_parts: Vec<usize>,
+    /// VIEW-05: show transposing instruments at concert pitch.
+    pub concert_pitch: bool,
 }
 
 impl Default for ScoreSettings {
@@ -133,6 +135,7 @@ impl Default for ScoreSettings {
             presets: Vec::new(),
             transpose: 0,
             hidden_parts: Vec::new(),
+            concert_pitch: false,
         }
     }
 }

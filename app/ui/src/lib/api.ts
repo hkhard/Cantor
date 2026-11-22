@@ -34,6 +34,8 @@ export interface Opened {
   pdf_url: string | null
   /** Written measure -> box on the PDF page, when the map matches. */
   measure_boxes: { page: number; x: number; y: number; w: number; h: number }[] | null
+  /** Has transposing instruments: offer the concert pitch toggle. */
+  has_transposing: boolean
 }
 
 export interface Status {
@@ -86,6 +88,7 @@ export interface ScoreSettings {
   presets: Preset[]
   transpose: number
   hidden_parts: number[]
+  concert_pitch: boolean
 }
 
 export function emptyMetadata(title = ''): Metadata {
@@ -94,8 +97,8 @@ export function emptyMetadata(title = ''): Metadata {
 
 export const api = {
   listScores: () => invoke<ScoreEntry[]>('list_scores'),
-  openScore: (file: string, choir?: string, transpose?: number) =>
-    invoke<Opened>('open_score', { file, choir, transpose }),
+  openScore: (file: string, choir?: string, transpose?: number, concert?: boolean) =>
+    invoke<Opened>('open_score', { file, choir, transpose, concert }),
   libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[] }>('library_data'),
   setMetadata: (id: string, metadata: Metadata) => invoke<void>('set_metadata', { id, metadata }),
   search: (query: string) => invoke<string[]>('search_scores', { query }),

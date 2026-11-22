@@ -262,7 +262,7 @@
       currentEntry = entry
       if (!choir && settings && settings.choir !== 'auto') choir = settings.choir
       if (settings && choir) settings.choir = choir as ScoreSettings['choir']
-      opened = await api.openScore(entry.file, choir, settings?.transpose ?? 0)
+      opened = await api.openScore(entry.file, choir, settings?.transpose ?? 0, settings?.concert_pitch ?? false)
       parts = opened.musicxml ? partNames(opened.musicxml) : []
       strips = opened.channels.map(() => ({ volume_db: 0, mute: false, solo: false }))
       mine = null
@@ -745,6 +745,20 @@
                 {#if settings?.transpose}<button onclick={() => setTranspose(0)}>0</button>{/if}
               </span>
             </div>
+            {#if opened.has_transposing}
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  checked={settings?.concert_pitch ?? false}
+                  onchange={async () => {
+                    if (!settings || !currentEntry) return
+                    settings.concert_pitch = !settings.concert_pitch
+                    persist()
+                    await open(currentEntry, opened?.choir === 'auto' ? undefined : opened?.choir, setCtx ?? undefined)
+                  }}
+                /> {t('read.concertPitch')}</label
+              >
+            {/if}
             {#if parts.length > 1}
               <div class="col">
                 <span>{t('read.parts')}</span>

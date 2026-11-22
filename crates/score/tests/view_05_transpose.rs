@@ -183,3 +183,73 @@ fn view_05_text_transpose_preserves_other_markup() {
 fn view_05_text_transpose_rejects_garbage() {
     assert!(musicxml_transposed("<nope", 1).is_err());
 }
+
+/// A B-flat clarinet part: written D5 sounds C5 (`<transpose>` chromatic -2),
+/// and a tenor line written an octave up (octave-change -1).
+const CLARINET: &str = r#"<?xml version="1.0"?><score-partwise version="4.0">
+<part-list><score-part id="P1"><part-name>Clarinet in B-flat</part-name></score-part>
+<score-part id="P2"><part-name>Tenor</part-name></score-part></part-list>
+<part id="P1"><measure number="1"><attributes><divisions>1</divisions>
+<transpose><diatonic>-1</diatonic><chromatic>-2</chromatic></transpose></attributes>
+<note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration></note></measure>
+<measure number="2"><note><pitch><step>E</step><octave>5</octave></pitch><duration>1</duration></note></measure></part>
+<part id="P2"><measure number="1"><attributes><divisions>1</divisions>
+<transpose><diatonic>0</diatonic><chromatic>0</chromatic><octave-change>-1</octave-change></transpose></attributes>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note></measure>
+<measure number="2"><note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note></measure></part>
+</score-partwise>"#;
+
+#[test]
+fn view_05_transposing_instrument_sounds_at_concert_pitch() {
+    let s = parse_musicxml(CLARINET.as_bytes()).unwrap();
+    let sounding: Vec<Vec<i32>> = s
+        .parts
+        .iter()
+        .map(|p| {
+            p.measures
+                .iter()
+                .flat_map(|m| {
+                    m.events
+                        .iter()
+                        .filter_map(move |e| e.kind.midi().map(|k| k + m.transpose))
+                })
+                .collect()
+        })
+        .collect();
+    // Written D5 (74) sounds C5 (72); E5 (76) sounds D5 (74), carried over.
+    assert_eq!(sounding[0], vec![72, 74]);
+    // Written C4 (60) sounds C3 (48) in both bars.
+    assert_eq!(sounding[1], vec![48, 48]);
+}
+
+#[test]
+fn view_05_concert_pitch_view_rewrites_written_pitches() {
+    // Concert pitch display: the written notes become the sounding ones and
+    // the <transpose> element goes, so the notation and the sound agree.
+    let concert = cantor_score::musicxml_concert_pitch(CLARINET).unwrap();
+    assert!(!concert.contains("<transpose>"), "{concert}");
+    let s = parse_musicxml(concert.as_bytes()).unwrap();
+    let written: Vec<i32> = s.parts[0]
+        .measures
+        .iter()
+        .flat_map(|m| m.events.iter().filter_map(|e| e.kind.midi()))
+        .collect();
+    assert_eq!(written, vec![72, 74]);
+    assert!(s.parts[0].measures.iter().all(|m| m.transpose == 0));
+    // Without any <transpose> the text is returned unchanged.
+    assert_eq!(cantor_score::musicxml_concert_pitch(SONG).unwrap(), SONG);
+}
+
+#[test]
+fn view_05_transpose_survives_write_and_parse() {
+    let s = parse_musicxml(CLARINET.as_bytes()).unwrap();
+    let back = parse_musicxml(write_musicxml(&s).as_bytes()).unwrap();
+    let t = |s: &Score| {
+        s.parts
+            .iter()
+            .map(|p| p.measures.iter().map(|m| m.transpose).collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(t(&back), t(&s));
+    assert_eq!(t(&s), vec![vec![-2, -2], vec![-12, -12]]);
+}
