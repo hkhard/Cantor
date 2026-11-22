@@ -7,7 +7,7 @@ let toolkitPromise: Promise<VerovioToolkit> | null = null
 
 function toolkit(): Promise<VerovioToolkit> {
   if (!toolkitPromise) {
-    toolkitPromise = createVerovioModule().then((m: unknown) => new VerovioToolkit(m))
+    toolkitPromise = createVerovioModule().then((m) => new VerovioToolkit(m as never))
   }
   return toolkitPromise
 }

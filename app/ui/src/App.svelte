@@ -2,6 +2,10 @@
   import { onMount, tick } from 'svelte'
   import { api, type ChannelInfo, type Opened, type ScoreEntry, type Strip } from './lib/api'
   import { engrave, type Engraved } from './lib/engrave'
+  import Appearance from './lib/Appearance.svelte'
+  import PdfView from './lib/PdfView.svelte'
+  import { scoreFileUrl } from './lib/pdf'
+  import Icon from './lib/Icon.svelte'
 
   let scores: ScoreEntry[] = $state([])
   let opened: Opened | null = $state(null)
@@ -18,6 +22,10 @@
   let mine: number | null = $state(null)
   let follow = $state(true)
   let mixerOpen = $state(true)
+  let appearanceOpen = $state(false)
+  /** 'pdf' = the original page, 'notation' = engraved from MusicXML. */
+  let view: 'pdf' | 'notation' = $state('notation')
+  let playingMeasure = $state(-1)
 
   let scoreEl: HTMLDivElement | undefined = $state()
   let currentMeasure = -1
@@ -52,13 +60,16 @@
       opened = await api.openScore(entry.file, choir)
       strips = opened.channels.map(() => ({ volume_db: 0, mute: false, solo: false }))
       mine = null
+      view = opened.pdf_url ? 'pdf' : 'notation'
+      playingMeasure = -1
       playing = false
       position = 0
       tempo = 100
       loading = 'Sätter noterna …'
       await tick()
-      const w = scoreEl?.clientWidth ?? 1000
-      const h = scoreEl?.clientHeight ?? 1300
+      // In PDF view the notation pane is not mounted: size from the window.
+      const w = scoreEl?.clientWidth ?? Math.max(600, window.innerWidth - (mixerOpen ? 320 : 0))
+      const h = scoreEl?.clientHeight ?? Math.max(600, window.innerHeight - 140)
       engraved = await engrave(opened.musicxml, w, h)
       page = 1
       currentMeasure = -1
@@ -116,7 +127,8 @@
   }
 
   async function updateCursor() {
-    if (!engraved) return
+    playingMeasure = measureAt(position)
+    if (!engraved || view !== 'notation') return
     const m = measureAt(position)
     if (m === currentMeasure) return
     currentMeasure = m
@@ -243,6 +255,27 @@
     return c.role.toLowerCase()
   }
 
+  /** Play from the first time a written measure sounds (repeats unfolded). */
+  async function seekMeasure(written: number) {
+    const first = opened?.measures.find((m) => m[1] === written)
+    if (!first) return
+    await api.seek(first[0])
+    position = first[0]
+    currentMeasure = -1
+    updateCursor()
+  }
+
+  async function switchView(v: 'pdf' | 'notation') {
+    view = v
+    currentMeasure = -1
+    if (v === 'notation' && engraved) {
+      await tick()
+      svg = engraved.render(page)
+      await tick()
+      updateCursor()
+    }
+  }
+
   function onKey(e: KeyboardEvent) {
     if (!opened) return
     if (e.code === 'Space') {
@@ -258,8 +291,12 @@
 {#if !opened}
   <main class="library">
     <header>
-      <h1>Cantor</h1>
-      <p class="sub">Noter som spelar alla stämmor</p>
+      <img class="mark" src="/cantor-mark.svg" alt="" width="64" height="64" />
+      <div class="titles">
+        <h1>Cantor</h1>
+        <p class="sub">Noter som spelar alla stämmor</p>
+      </div>
+      <Appearance />
     </header>
     {#if error}<p class="error">{error}</p>{/if}
     {#if loading}<p class="loading">{loading}</p>{/if}
@@ -272,8 +309,8 @@
   </main>
 {:else}
   <main class="reader">
-    <nav class="top">
-      <button class="icon" onclick={close} aria-label="Bibliotek">‹ Bibliotek</button>
+    <nav class="top glass">
+      <button class="icon" onclick={close} aria-label="Bibliotek"><Icon name="back" size={20} /> Bibliotek</button>
       <h2>{opened.title}</h2>
       <label class="choir"
         >Kör
@@ -284,11 +321,36 @@
           <option value="female">Damkör</option>
         </select>
       </label>
-      <button class="icon" onclick={() => (mixerOpen = !mixerOpen)}>{mixerOpen ? 'Dölj mixer' : 'Mixer'}</button>
+      {#if opened.pdf_url}
+        <div class="seg" role="group" aria-label="Visning">
+          <button class:on={view === 'pdf'} onclick={() => switchView('pdf')}>Original</button>
+          <button class:on={view === 'notation'} onclick={() => switchView('notation')}>Notbild</button>
+        </div>
+      {/if}
+      <button class="icon" class:active={appearanceOpen} onclick={() => (appearanceOpen = !appearanceOpen)} aria-label="Utseende"
+        ><Icon name="appearance" /></button
+      >
+      <button class="icon" class:active={mixerOpen} onclick={() => (mixerOpen = !mixerOpen)}
+        ><Icon name="sliders" /> {mixerOpen ? 'Dölj mixer' : 'Mixer'}</button
+      >
+      {#if appearanceOpen}
+        <div class="popover glass"><Appearance /></div>
+      {/if}
     </nav>
 
     <div class="body">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      {#if view === 'pdf' && opened.pdf_url}
+        <div class="score pdf">
+          <PdfView
+            url={scoreFileUrl(opened.pdf_url)}
+            boxes={opened.measure_boxes}
+            measure={playingMeasure}
+            {follow}
+            onseek={seekMeasure}
+          />
+        </div>
+      {:else}
       <div class="score" bind:this={scoreEl} onclick={tapScore}>
         {#if loading}<p class="loading">{loading}</p>{/if}
         {#if error}<p class="error">{error}</p>{/if}
@@ -298,9 +360,10 @@
           <button class="pageturn right" onclick={(e) => { e.stopPropagation(); turn(1) }} aria-label="Nästa sida"></button>
         {/if}
       </div>
+      {/if}
 
       {#if mixerOpen}
-        <aside class="mixer">
+        <aside class="mixer glass">
           <div class="presets">
             <button onclick={() => preset('my_part')} disabled={mine === null}>Min stämma</button>
             <button onclick={() => preset('without_me')} disabled={mine === null}>Utan mig</button>
@@ -330,9 +393,9 @@
       {/if}
     </div>
 
-    <footer class="transport">
-      <button class="icon" onclick={toStart} aria-label="Till början">⏮</button>
-      <button class="play" onclick={toggle} aria-label={playing ? 'Paus' : 'Spela'}>{playing ? '❚❚' : '▶'}</button>
+    <footer class="transport glass">
+      <button class="icon" onclick={toStart} aria-label="Till början"><Icon name="start" /></button>
+      <button class="play" onclick={toggle} aria-label={playing ? 'Paus' : 'Spela'}><Icon name={playing ? 'pause' : 'play'} size={24} /></button>
       <span class="time">{fmt(position)}</span>
       <input class="scrub" type="range" min="0" max={opened.duration} step="0.1" value={position} onchange={scrub} aria-label="Position" />
       <span class="time">{fmt(opened.duration)}</span>
@@ -341,7 +404,7 @@
         <input type="range" min="25" max="200" step="5" value={tempo} oninput={setTempo} />
       </label>
       <label class="follow"><input type="checkbox" bind:checked={follow} /> Följ</label>
-      {#if engraved}<span class="page">{page}/{engraved.pages}</span>{/if}
+      {#if engraved && view === 'notation'}<span class="page">{page}/{engraved.pages}</span>{/if}
     </footer>
   </main>
 {/if}

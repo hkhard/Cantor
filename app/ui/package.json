@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",
+    "pdfjs-dist": "^5.7.284",
     "verovio": "^6.4.1"
   }
 }

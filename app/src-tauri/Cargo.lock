@@ -301,6 +301,7 @@ name = "cantor-app"
 version = "0.1.0"
 dependencies = [
  "cantor-audio",
+ "cantor-lyrics",
  "cantor-score",
  "cantor-timeline",
  "cpal",
@@ -319,6 +320,14 @@ dependencies = [
  "cantor-score",
  "cantor-timeline",
  "rustysynth",
+]
+
+[[package]]
+name = "cantor-lyrics"
+version = "0.1.0"
+dependencies = [
+ "cantor-score",
+ "cantor-timeline",
 ]
 
 [[package]]

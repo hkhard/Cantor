@@ -57,6 +57,12 @@ struct Opened {
     duration: f64,
     choir: String,
     sample_rate: u32,
+    /// Original PDF next to the score (`<name>.pdf`), if any: the page the
+    /// singer reads. Fetched through the `cantor` URI scheme.
+    pdf_url: Option<String>,
+    /// Box of each written measure on the PDF pages (LIB-05), when it was
+    /// recognised with the same measure count as the MusicXML.
+    measure_boxes: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Serialize)]
@@ -130,10 +136,11 @@ fn open_score(
     }
     let bytes = std::fs::read(paths.scores.join(&file)).map_err(|e| e.to_string())?;
     let score = cantor_score::parse_score_file(&bytes).map_err(|e| e.to_string())?;
-    let musicxml = String::from_utf8_lossy(
+    // OMR files: drop OCR text that is not lyrics (dynamics, credits) and
+    // chord symbols made from misread text before showing them.
+    let musicxml = cantor_lyrics::clean_omr_musicxml(&String::from_utf8_lossy(
         &cantor_score::musicxml_bytes(&bytes).map_err(|e| e.to_string())?,
-    )
-    .into_owned();
+    ));
     let tm = cantor_timeline::build_timemap(&score);
     let title = file
         .rsplit_once('.')
@@ -169,7 +176,18 @@ fn open_score(
         Some(Choir::Mixed) => "mixed",
         None => "auto",
     };
+    let stem = file.rsplit_once('.').map_or(file.as_str(), |(t, _)| t).to_string();
+    let pdf_path = paths.scores.join(format!("{stem}.pdf"));
+    let pdf_url = pdf_path
+        .exists()
+        .then(|| format!("{stem}.pdf"));
+    let measure_boxes = std::fs::read(paths.scores.join(format!("{stem}.measures.json")))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Vec<serde_json::Value>>(&b).ok())
+        .filter(|b| b.len() == score.measure_count());
     Ok(Opened {
+        pdf_url,
+        measure_boxes,
         title,
         musicxml,
         channels: plan
@@ -289,6 +307,25 @@ fn apply_preset(
     })
 }
 
+/// Minimal %XX decoding for file names in cantor:// URLs.
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 fn resource_paths(app: &tauri::App) -> Paths {
     let res = app
         .path()
@@ -334,6 +371,23 @@ pub fn run() {
             app.manage(paths);
             app.manage(Shared::default());
             Ok(())
+        })
+        .register_uri_scheme_protocol("cantor", |ctx, req| {
+            // cantor://localhost/<file>.pdf -> bytes of a bundled score file.
+            let paths = ctx.app_handle().state::<Paths>();
+            let name = percent_decode(req.uri().path().trim_start_matches('/'));
+            let ok = !name.contains('/') && !name.contains("..") && name.ends_with(".pdf");
+            match ok.then(|| std::fs::read(paths.scores.join(&name)).ok()).flatten() {
+                Some(bytes) => tauri::http::Response::builder()
+                    .header("Content-Type", "application/pdf")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(bytes)
+                    .unwrap(),
+                None => tauri::http::Response::builder()
+                    .status(404)
+                    .body(Vec::new())
+                    .unwrap(),
+            }
         })
         .invoke_handler(tauri::generate_handler![
             list_scores,

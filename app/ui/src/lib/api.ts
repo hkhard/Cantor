@@ -23,6 +23,10 @@ export interface Opened {
   duration: number
   choir: 'male' | 'female' | 'mixed' | 'auto'
   sample_rate: number
+  /** Original PDF file name, served over the cantor:// scheme. */
+  pdf_url: string | null
+  /** Written measure -> box on the PDF page, when the map matches. */
+  measure_boxes: { page: number; x: number; y: number; w: number; h: number }[] | null
 }
 
 export interface Status {

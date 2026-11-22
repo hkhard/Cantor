@@ -22,6 +22,7 @@
 		BE686E6D16D9FED26E1678DA /* CoreMIDI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5546B4873004DA93EA2CA0F5 /* CoreMIDI.framework */; };
 		E1F29A21F9A9249D5090D91B /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C09ADEAA95206A808FAFB82 /* libapp.a */; };
 		E99A5E408FE872D94442CB6D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */; };
+		C24B43E9972BED2B193B73E0 /* Cantor.icon in Resources */ = {isa = PBXBuildFile; fileRef = D2A8643C7653A0E3D9DB5AFE /* Cantor.icon */; };
 		F88675384658814571651652 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 936589A28830A2BC9A4B0411 /* UIKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -36,6 +37,7 @@
 		5546B4873004DA93EA2CA0F5 /* CoreMIDI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMIDI.framework; path = System/Library/Frameworks/CoreMIDI.framework; sourceTree = SDKROOT; };
 		5547730EBDF6EC342909782B /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D2A8643C7653A0E3D9DB5AFE /* Cantor.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Cantor.icon; sourceTree = "<group>"; };
 		6C09ADEAA95206A808FAFB82 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		715F8714E0D0184083A1CB57 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		8C0857B713169D568B67D355 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
@@ -149,6 +151,7 @@
 			children = (
 				2E44A71E6478D1B37E3CFD97 /* assets */,
 				5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */,
+				D2A8643C7653A0E3D9DB5AFE /* Cantor.icon */,
 				3E8673E7F53042CD0C5E0DDC /* LaunchScreen.storyboard */,
 				F3E40A6D37F2C4D25BFD63A8 /* cantor-app_iOS */,
 				81D3AB78FFFB9C0167EB3288 /* Externals */,
@@ -244,6 +247,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E99A5E408FE872D94442CB6D /* Assets.xcassets in Resources */,
+				C24B43E9972BED2B193B73E0 /* Cantor.icon in Resources */,
 				054C2193769ED25925BB3AD9 /* LaunchScreen.storyboard in Resources */,
 				2BF2DC39E1B45A0A8D9C82E8 /* assets in Resources */,
 			);
@@ -350,7 +354,7 @@
 				ARCHS = (
 					arm64,
 				);
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Cantor;
 				CODE_SIGN_ENTITLEMENTS = "cantor-app_iOS/cantor-app_iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = "33ZQ6Q226L";
@@ -382,7 +386,7 @@
 				ARCHS = (
 					arm64,
 				);
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Cantor;
 				CODE_SIGN_ENTITLEMENTS = "cantor-app_iOS/cantor-app_iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_TEAM = "33ZQ6Q226L";

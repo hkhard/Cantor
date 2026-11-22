@@ -1,0 +1,91 @@
+{
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "srgb:0.11765,0.22745,0.48235,1.00000",
+          "srgb:0.05098,0.10588,0.24314,1.00000"
+        ],
+        "orientation" : {
+          "start" : {
+            "x" : 0,
+            "y" : 0
+          },
+          "stop" : {
+            "x" : 1,
+            "y" : 1
+          }
+        }
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "solid" : "srgb:0.05490,0.07843,0.14118,1.00000"
+      }
+    }
+  ],
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "3a-wave-inner.svg",
+          "name" : "3a-wave-inner"
+        },
+        {
+          "image-name" : "3b-wave-outer.svg",
+          "name" : "3b-wave-outer",
+          "opacity" : 0.5
+        }
+      ],
+      "name" : "Waves",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "2-note-head.svg",
+          "name" : "2-note-head"
+        }
+      ],
+      "name" : "Note head",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "1-c.svg",
+          "name" : "1-c"
+        }
+      ],
+      "name" : "C",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "iOS"
+    ]
+  }
+}

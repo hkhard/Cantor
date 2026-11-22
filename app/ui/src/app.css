@@ -1,23 +1,14 @@
+/* Cantor UI. All colours/shapes come from skin tokens (src/lib/skins.ts),
+   applied as CSS custom properties on <html>. Never use raw colours here. */
+
 :root {
-  --bg: #f7f5f0;
-  --ink: #1d1b18;
-  --muted: #77716a;
-  --accent: #b8562b;
-  --panel: #ffffff;
-  --line: #e2ddd4;
-  --soprano: #c2410c;
-  --alto: #a16207;
-  --tenor: #15803d;
-  --bass: #1d4ed8;
-  --voice: #7c3aed;
-  --piano: #475569;
-  --instrument: #475569;
-  font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;
+  font-family: var(--font-ui);
   color: var(--ink);
   background: var(--bg);
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -32,44 +23,134 @@ body,
   overflow: hidden;
 }
 
+body {
+  background: var(--bg-gradient), var(--bg);
+  transition: background 0.4s var(--ease), color 0.4s var(--ease);
+}
+
+/* ---------- Materials ---------- */
+
+/* Liquid-glass surface: translucent fill, blur + saturate of what is behind,
+   a bright top rim and a soft drop shadow. */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 var(--glass-edge),
+    var(--glass-shadow);
+}
+
+/* ---------- Controls ---------- */
+
 button {
   font: inherit;
   color: inherit;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: var(--control);
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
   padding: 8px 14px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition:
+    background 0.15s var(--ease),
+    transform 0.15s var(--ease),
+    opacity 0.15s;
 }
-
+button:active {
+  transform: scale(0.96);
+}
 button:disabled {
   opacity: 0.4;
 }
 
+input[type='range'] {
+  accent-color: var(--accent);
+}
+
+select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 4px 8px;
+}
+
+.icon {
+  background: transparent;
+  color: var(--accent);
+  padding: 8px 10px;
+}
+.icon.active {
+  background: var(--accent-soft);
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--control);
+  border: 1px solid var(--line);
+}
+.segmented button {
+  border-radius: var(--radius-pill);
+  background: transparent;
+  padding: 6px 14px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+.segmented button.on {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
 .error {
-  color: #b91c1c;
+  color: var(--danger);
   padding: 0 24px;
 }
-
 .loading {
-  color: var(--muted);
+  color: var(--ink-muted);
   padding: 0 24px;
 }
 
-/* Library */
+/* ---------- Library ---------- */
+
 .library {
   height: 100%;
   overflow-y: auto;
   padding: calc(env(safe-area-inset-top) + 24px) 32px 32px;
 }
+.library header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.library .mark {
+  border-radius: 22.5%;
+  box-shadow: var(--glass-shadow);
+}
+.library .titles {
+  flex: 1;
+}
 .library h1 {
-  font-family: 'New York', Georgia, serif;
+  font-family: var(--font-display);
   font-size: 44px;
   margin: 0;
+  line-height: 1;
 }
 .library .sub {
-  color: var(--muted);
-  margin: 4px 0 24px;
+  color: var(--ink-muted);
+  margin: 6px 0 0;
 }
 .scores {
   list-style: none;
@@ -77,82 +158,111 @@ button:disabled {
   margin: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 .scores button {
   width: 100%;
-  min-height: 72px;
+  min-height: 84px;
+  justify-content: flex-start;
   text-align: left;
   font-size: 18px;
-  font-family: 'New York', Georgia, serif;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family: var(--font-display);
+  border-radius: var(--radius-m);
+  padding: 14px 18px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow);
 }
 .note {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 13px;
   margin-top: 24px;
 }
 
-/* Reader */
+/* ---------- Reader ---------- */
+
 .reader {
   height: 100%;
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 6px) 10px calc(env(safe-area-inset-bottom) + 8px);
 }
 .top {
+  position: relative;
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-l);
 }
 .top h2 {
   flex: 1;
-  margin: 0;
+  margin: 0 6px;
   font-size: 18px;
-  font-family: 'New York', Georgia, serif;
+  font-family: var(--font-display);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.icon {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-}
 .choir {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 14px;
 }
 .choir select {
-  font: inherit;
   margin-left: 4px;
+}
+.popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 8px;
+  padding: 10px;
+  border-radius: var(--radius-l);
+  background: var(--glass-bg-strong);
 }
 
 .body {
   flex: 1;
   display: flex;
+  gap: 8px;
   min-height: 0;
 }
 .score {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: white;
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-radius: var(--radius-m);
+  box-shadow: var(--paper-shadow);
+  transition: background 0.4s var(--ease);
 }
 .score > svg {
   width: 100%;
   height: 100%;
 }
+/* Recolour Verovio engraving to the skin's paper ink. */
+/* Verovio leaves fill unset (default black); fill inherits, so set it here. */
+.score svg.definition-scale {
+  color: var(--paper-ink);
+  fill: currentColor;
+}
+.score svg [fill='#000000'] {
+  fill: var(--paper-ink);
+}
 .score rect.cursor {
-  fill: rgba(184, 86, 43, 0.12);
-  stroke: rgba(184, 86, 43, 0.55);
+  fill: var(--cursor-fill);
+  stroke: var(--cursor-stroke);
   stroke-width: 12;
 }
 .score g.measure.playing g.note use,
 .score g.measure.playing g.note path {
-  fill: var(--accent);
+  fill: var(--note-playing);
 }
 .pageturn {
   position: absolute;
@@ -163,6 +273,9 @@ button:disabled {
   border: none;
   border-radius: 0;
 }
+.pageturn:active {
+  transform: none;
+}
 .pageturn.left {
   left: 0;
 }
@@ -172,8 +285,7 @@ button:disabled {
 
 .mixer {
   width: 300px;
-  border-left: 1px solid var(--line);
-  background: var(--panel);
+  border-radius: var(--radius-l);
   overflow-y: auto;
   padding: 12px;
   display: flex;
@@ -194,10 +306,11 @@ button:disabled {
   grid-template-columns: 1fr 40px 40px;
   grid-template-rows: auto auto;
   gap: 4px 6px;
-  padding: 8px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  border-left: 6px solid var(--role, var(--muted));
+  padding: 8px 10px;
+  border-radius: var(--radius-m);
+  background: var(--control);
+  border: 1px solid transparent;
+  border-left: 5px solid var(--role, var(--ink-muted));
 }
 .strip.soprano {
   --role: var(--soprano);
@@ -219,8 +332,9 @@ button:disabled {
   --role: var(--piano);
 }
 .strip.mine {
-  background: #fdf1ea;
+  background: var(--accent-soft);
   border-color: var(--accent);
+  border-left-color: var(--role, var(--accent));
 }
 .strip .name {
   grid-column: 1;
@@ -228,15 +342,16 @@ button:disabled {
   padding: 0;
   text-align: left;
   background: transparent;
-  display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
 }
 .strip .label {
   font-weight: 600;
 }
 .strip .inst {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .strip input[type='range'] {
   grid-column: 1;
@@ -251,13 +366,15 @@ button:disabled {
   font-weight: 700;
 }
 .strip .m.on {
-  background: #fde68a;
+  background: var(--mute-on);
+  color: var(--on-toggle-ink);
 }
 .strip .s.on {
-  background: #bbf7d0;
+  background: var(--solo-on);
+  color: var(--on-toggle-ink);
 }
 .hint {
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 12px;
 }
 
@@ -265,36 +382,59 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px calc(env(safe-area-inset-bottom) + 8px);
-  border-top: 1px solid var(--line);
-  background: var(--panel);
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
 }
 .transport .play {
   width: 56px;
   height: 44px;
-  font-size: 18px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
-  color: white;
-  border: none;
+  color: var(--accent-ink);
+  box-shadow: 0 4px 14px var(--accent-soft);
 }
 .transport .scrub {
   flex: 1;
-  accent-color: var(--accent);
 }
 .time,
 .page {
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 14px;
 }
 .tempo,
 .follow {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--ink-muted);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 .tempo input {
   width: 120px;
+}
+.follow input {
+  accent-color: var(--accent);
+}
+
+/* View toggle: Original (PDF) / Notbild */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.seg button {
+  border: none;
+  border-radius: 0;
+  padding: 6px 12px;
+  background: transparent;
+  font-size: 14px;
+}
+.seg button.on {
+  background: var(--accent);
+  color: white;
+}
+.score.pdf {
+  background: transparent;
 }
