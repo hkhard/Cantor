@@ -27,6 +27,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87a0cf66fd1eb2fb7b822cb78370d82303750809bc6ba855f3f58e517d3238db"
 
 [[package]]
+name = "cantor-annotations"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cantor-audio"
 version = "0.1.0"
 dependencies = [
@@ -42,6 +50,8 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "plist",
+ "serde",
+ "serde_json",
  "thiserror",
  "unicode-normalization",
 ]
