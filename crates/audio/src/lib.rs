@@ -463,3 +463,74 @@ impl<S: Synth> Engine<S> {
         }
     }
 }
+
+/// Render the whole score offline with the current mixer and tempo, as a
+/// 16-bit stereo WAV (PLAY-11). Metronome, count-in and loop are left out of
+/// the file (they are rehearsal aids, not the music); `tail_sec` of silence
+/// after the last bar lets reverb and releases ring out. Live playback state
+/// (position, playing, loop, click) is restored afterwards.
+pub fn export_wav<S: Synth>(e: &mut Engine<S>, tail_sec: f64) -> Vec<u8> {
+    let saved = (
+        e.position(),
+        e.is_playing(),
+        e.loop_range,
+        e.metronome,
+        e.count_in,
+    );
+    e.pause();
+    e.loop_range = None;
+    e.metronome = false;
+    e.count_in = false;
+    e.seek(0.0);
+    e.play();
+
+    let sr = e.sample_rate;
+    let music = (e.duration / e.tempo_scale * sr as f64).round() as usize;
+    let total = music + (tail_sec.max(0.0) * sr as f64).round() as usize;
+    let mut pcm: Vec<u8> = Vec::with_capacity(44 + total * 4);
+    pcm.extend_from_slice(&wav_header(sr, total as u32));
+    let block = 1024;
+    let (mut l, mut r) = (vec![0.0f32; block], vec![0.0f32; block]);
+    let mut done = 0;
+    while done < total {
+        let n = block.min(total - done);
+        e.render(&mut l[..n], &mut r[..n]);
+        for i in 0..n {
+            for x in [l[i], r[i]] {
+                let v = (x.clamp(-1.0, 1.0) * 32767.0).round() as i16;
+                pcm.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        done += n;
+    }
+
+    e.pause();
+    e.loop_range = saved.2;
+    e.metronome = saved.3;
+    e.count_in = saved.4;
+    e.seek(saved.0);
+    if saved.1 {
+        e.play();
+    }
+    pcm
+}
+
+/// 44-byte PCM WAV header, 16-bit stereo.
+fn wav_header(sample_rate: u32, frames: u32) -> [u8; 44] {
+    let data = frames * 4;
+    let mut h = [0u8; 44];
+    h[0..4].copy_from_slice(b"RIFF");
+    h[4..8].copy_from_slice(&(36 + data).to_le_bytes());
+    h[8..12].copy_from_slice(b"WAVE");
+    h[12..16].copy_from_slice(b"fmt ");
+    h[16..20].copy_from_slice(&16u32.to_le_bytes());
+    h[20..22].copy_from_slice(&1u16.to_le_bytes()); // PCM
+    h[22..24].copy_from_slice(&2u16.to_le_bytes()); // stereo
+    h[24..28].copy_from_slice(&sample_rate.to_le_bytes());
+    h[28..32].copy_from_slice(&(sample_rate * 4).to_le_bytes());
+    h[32..34].copy_from_slice(&4u16.to_le_bytes());
+    h[34..36].copy_from_slice(&16u16.to_le_bytes());
+    h[36..40].copy_from_slice(b"data");
+    h[40..44].copy_from_slice(&data.to_le_bytes());
+    h
+}
