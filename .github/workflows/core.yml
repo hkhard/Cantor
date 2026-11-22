@@ -31,6 +31,8 @@ jobs:
       - run: cargo test --workspace
       - name: Traceability (NFR-11)
         run: bash tools/trace.sh
+      - name: Coverage >= 85% per core crate (NFR-11)
+        run: bash tools/coverage.sh
 
   ui:
     name: UI acceptance + accessibility (WebKit, iPad mini size)
