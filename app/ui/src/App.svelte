@@ -5,6 +5,7 @@
   import Appearance from './lib/Appearance.svelte'
   import PdfView from './lib/PdfView.svelte'
   import Library from './lib/Library.svelte'
+  import TrackPanel from './lib/TrackPanel.svelte'
   import { scoreFileUrl, type PageMode } from './lib/pdf'
   import { t } from './lib/i18n.svelte'
   import { ask } from './lib/prompts.svelte'
@@ -320,9 +321,10 @@
       tempo = settings?.tempo_percent ?? 100
       if (tempo !== 100 && opened.channels.length) api.setTempo(tempo / 100)
       if (!opened.musicxml) {
-        // PDF only: show the page, no sound or notation.
+        // PDF only: show the page, no notation; a backing track still plays.
         engraved = null
         svg = ''
+        if (opened.channels.length) startPolling()
         return
       }
       loading = t('read.engraving')
@@ -369,6 +371,8 @@
         const st = await api.status()
         playing = st.playing
         position = st.position
+        // PERF-04: page turns from the backing track's markers.
+        for (const p of st.turns ?? []) gotoPage(p)
         updateCursor()
       } catch {
         /* score closed */
@@ -704,7 +708,17 @@
   // left/right halves of the screen page-turn zones; editing is locked.
   let performance = $state(false)
 
-  let pdfView: { turn: (d: number) => void } | undefined = $state()
+  let pdfView: { turn: (d: number) => void; goto: (p: number) => void; pageInfo: () => { page: number; pages: number } } | undefined = $state()
+  function gotoPage(p: number) {
+    if (view === 'pdf' && pdfView) pdfView.goto(p)
+    else if (engraved && p >= 1 && p <= engraved.pages && p !== page) {
+      page = p
+      svg = engraved.render(p)
+    }
+  }
+  function currentPage(): number {
+    return view === 'pdf' && pdfView ? pdfView.pageInfo().page : page
+  }
   function turnAny(d: number) {
     if (view === 'pdf' && pdfView) pdfView.turn(d)
     else turn(d)
@@ -837,6 +851,17 @@
                 <option value="scroll">{t('read.pageScroll')}</option>
               </select>
             </label>
+          {/if}
+          {#if currentEntry}
+            <TrackPanel
+              file={currentEntry.file}
+              track={opened.track}
+              page={currentPage()}
+              {position}
+              onchanged={async () => {
+                if (currentEntry) await open(currentEntry, opened?.choir === 'auto' ? undefined : opened?.choir, setCtx ?? undefined)
+              }}
+            />
           {/if}
           <div class="row">
             <button onclick={() => (pedalsOpen = !pedalsOpen)} class:on={pedalsOpen}>{t('read.pedal')}</button>

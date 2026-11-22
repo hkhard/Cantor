@@ -106,6 +106,11 @@
     }
   }
 
+  /** PERF-04: show a page (turn marker on the backing track). */
+  export function goto(p: number) {
+    show(p)
+  }
+
   export function turn(d: number) {
     if (mode === 'half') {
       if (d > 0) {

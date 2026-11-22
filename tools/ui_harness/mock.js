@@ -71,7 +71,9 @@ exports.setup = async function setup(page, dir) {
           musicxml: file === '1:Mine' ? '' : xml,
           channels:
             file === '1:Mine'
-              ? []
+              ? store.track
+                ? [{ label: 'Backing track', role: 'Track', program: 0, instrument: 'M4A', pan: 0 }]
+                : []
               : [
                   { label: 'Tenor 1', role: 'Tenor', program: 56, instrument: 'Trumpet', pan: -0.4 },
                   { label: 'Tenor 2', role: 'Tenor', program: 60, instrument: 'French Horn', pan: -0.1 },
@@ -84,9 +86,31 @@ exports.setup = async function setup(page, dir) {
           sample_rate: 48000,
           pdf_url: file === '0:Christmas' ? null : '0/Glimmande Nymf.pdf',
           measure_boxes: file === '0:Glimmande Nymf' ? boxes : null,
+          track: store.track && file === '1:Mine' ? { offset_sec: store.track.offset_sec, markers: store.track.markers, duration_sec: 30 } : null,
           _transpose: transpose,
         }),
-        status: () => ({ playing, position: pos, duration: 60, tempo: 1 }),
+        status: () => {
+          // PERF-04: markers fire as the mock clock passes them.
+          if (playing) pos += 0.25
+          const turns = []
+          const t = store.track
+          if (t && playing) {
+            for (const [at, pg] of t.markers) if (!t.fired.has(at) && pos + t.offset_sec >= at) {
+              t.fired.add(at)
+              turns.push(pg)
+            }
+          }
+          return { playing, position: pos, duration: 60, tempo: 1, track_position: t ? pos + t.offset_sec : null, turns }
+        },
+        attach_track: () => {
+          store.track = { offset_sec: 0, markers: [], duration_sec: 30, fired: new Set() }
+        },
+        remove_track: () => {
+          store.track = null
+        },
+        set_track_info: ({ offsetSec, markers }) => {
+          store.track = { ...store.track, offset_sec: offsetSec, markers, fired: new Set() }
+        },
         play: () => {
           playing = true
         },

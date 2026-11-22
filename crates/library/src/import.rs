@@ -25,12 +25,16 @@ pub struct LibraryEntry {
     pub dir: PathBuf,
     pub score_file: Option<String>,
     pub pdf_file: Option<String>,
+    /// PERF-04 backing track `<stem>.track.<ext>` (audio recording).
+    pub track_file: Option<String>,
 }
 
 /// Folder (inside a library dir) holding the original forScore files.
 pub const ORIGINALS_DIR: &str = ".forscore";
 
 const SCORE_EXT: &[&str] = &["mxl", "musicxml", "xml"];
+/// Audio formats a backing track can have (decoded by cantor-audio).
+pub const TRACK_EXT: &[&str] = &["m4a", "mp3", "wav", "flac", "aac", "aif", "aiff"];
 
 /// File-name-safe stem: path components and reserved characters removed.
 pub(crate) fn safe_stem(name: &str) -> String {
@@ -189,6 +193,23 @@ pub fn list_library(dirs: &[&Path]) -> Vec<LibraryEntry> {
                 continue;
             }
             let ext = ext.to_lowercase();
+            // "<stem>.track.<audio>" is the backing track of <stem>.
+            if let Some(owner) = stem.strip_suffix(".track") {
+                if TRACK_EXT.contains(&ext.as_str()) {
+                    let key = format!("{}\u{0}{}", dir.display(), owner);
+                    map.entry(key)
+                        .or_insert_with(|| LibraryEntry {
+                            title: owner.replace('_', " ").trim().to_string(),
+                            stem: owner.to_string(),
+                            dir: dir.to_path_buf(),
+                            score_file: None,
+                            pdf_file: None,
+                            track_file: None,
+                        })
+                        .track_file = Some(n.clone());
+                }
+                continue;
+            }
             let is_score = SCORE_EXT.contains(&ext.as_str());
             if !is_score && ext != "pdf" {
                 continue;
@@ -200,6 +221,7 @@ pub fn list_library(dirs: &[&Path]) -> Vec<LibraryEntry> {
                 dir: dir.to_path_buf(),
                 score_file: None,
                 pdf_file: None,
+                track_file: None,
             });
             if is_score {
                 // Prefer .mxl over .musicxml over .xml.
@@ -212,7 +234,11 @@ pub fn list_library(dirs: &[&Path]) -> Vec<LibraryEntry> {
             }
         }
     }
-    let mut out: Vec<LibraryEntry> = map.into_values().collect();
+    // A recording alone is not a score.
+    let mut out: Vec<LibraryEntry> = map
+        .into_values()
+        .filter(|e| e.score_file.is_some() || e.pdf_file.is_some())
+        .collect();
     out.sort_by_key(|e| e.title.to_lowercase());
     out
 }

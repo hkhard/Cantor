@@ -528,6 +528,42 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button[aria-label="Library"]')
   })
 
+  await step('perf_04 backing track turns the pages of a PDF-only score', async () => {
+    if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
+    await page.click('[role=tab] >> text=All scores')
+    await page.locator('ul.scores > li', { hasText: 'Min egen' }).locator('button.open').click()
+    await page.waitForSelector('.pdfhost canvas')
+    // Attach a recording through the ••• menu.
+    await page.click('.top button[aria-haspopup="dialog"]')
+    await page.setInputFiles('.popover.more .track input[type=file]', { name: 'take1.m4a', mimeType: 'audio/mp4', buffer: Buffer.from('....ftypM4A ') })
+    await page.waitForSelector('.transport .play')
+    // Mark two turns through the panel (the button marks "next page at the
+    // current time"), then move them to known times.
+    if (!(await page.locator('.popover.more').count())) await page.click('.top button[aria-haspopup="dialog"]')
+    await page.waitForSelector('.popover.more .track')
+    await page.click('.popover.more .track button:has-text("Turn to page")')
+    await page.waitForTimeout(200)
+    const saved = await page.evaluate(() => window.__store.track.markers)
+    if (saved.length !== 1 || saved[0][1] !== 2) throw new Error('marker not saved: ' + JSON.stringify(saved))
+    await shot('17-track-panel')
+    await page.evaluate(() => {
+      window.__store.track.markers = [[0.5, 2], [1.0, 3]]
+      window.__store.track.fired = new Set()
+    })
+    await page.click('.top button[aria-haspopup="dialog"]')
+    const p0 = await page.locator('.pageno').textContent()
+    await page.click('.transport .play')
+    await page.waitForFunction(() => /^3/.test(document.querySelector('.pageno')?.textContent ?? ''), null, { timeout: 5000 })
+    await page.click('.transport .play')
+    const p1 = await page.locator('.pageno').textContent()
+    if (!/^1/.test(p0) || !/^3/.test(p1)) throw new Error(`pages ${p0} -> ${p1}`)
+    // The recording shows as a mixer channel.
+    await page.click('.top button:has-text("Mixer")')
+    await page.waitForSelector('.strip >> text=Backing track')
+    await page.click('.top button:has-text("Hide mixer")')
+    await page.click('.top button[aria-label="Library"]')
+  })
+
   await step('nfr_10 swedish', async () => {
     if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
     await page.click('header button[aria-label="About Cantor"]')

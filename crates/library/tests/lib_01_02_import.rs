@@ -41,6 +41,7 @@ fn lib_01_musicxml_imported_and_listed_as_playable() {
             dir: d.clone(),
             score_file: Some("Que medley.musicxml".into()),
             pdf_file: None,
+            track_file: None,
         }]
     );
 }
@@ -126,4 +127,24 @@ fn lib_07_original_forscore_file_kept_next_to_the_pdf() {
     assert_eq!(kept, bytes);
     // Still one library entry (the kept original is not a second score).
     assert_eq!(list_library(&[d.as_path()]).len(), 1);
+}
+
+#[test]
+fn perf_04_backing_track_is_part_of_its_score() {
+    // A recording named "<stem>.track.<ext>" belongs to the score <stem>; it
+    // is not a score of its own.
+    let d = tmp("track");
+    std::fs::write(d.join("Olaf.pdf"), b"%PDF-1.4").unwrap();
+    std::fs::write(d.join("Olaf.track.m4a"), b"....ftypM4A ").unwrap();
+    std::fs::write(d.join("Olaf.track.json"), b"{}").unwrap();
+    let lib = list_library(&[d.as_path()]);
+    assert_eq!(lib.len(), 1);
+    assert_eq!(lib[0].track_file.as_deref(), Some("Olaf.track.m4a"));
+}
+
+#[test]
+fn perf_04_track_without_score_is_not_listed() {
+    let d = tmp("trackonly");
+    std::fs::write(d.join("Lonely.track.wav"), b"RIFF").unwrap();
+    assert!(list_library(&[d.as_path()]).is_empty());
 }

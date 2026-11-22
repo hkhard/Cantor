@@ -156,6 +156,14 @@ const sv = {
   'fix.up': 'Upp',
   'fix.down': 'Ned',
   'fix.rest': 'Gör till paus',
+  'trk.title': 'Inspelning',
+  'trk.hint': 'Lägg till en inspelning (M4A, MP3, WAV) som spelas med noterna och vänder sidorna.',
+  'trk.add': 'Lägg till inspelning …',
+  'trk.replace': 'Byt inspelning …',
+  'trk.remove': 'Ta bort inspelning',
+  'trk.offset': 'Start i inspelningen (s)',
+  'trk.addTurn': 'Vänd till sida {page} här',
+  'trk.turnAt': '{time}: sida {page}',
   'pdf.openFailed': 'Kunde inte öppna PDF: {e}',
 } as const
 
@@ -314,6 +322,14 @@ const en: Record<Key, string> = {
   'fix.up': 'Up',
   'fix.down': 'Down',
   'fix.rest': 'Make a rest',
+  'trk.title': 'Recording',
+  'trk.hint': 'Add a recording (M4A, MP3, WAV) that plays with the score and turns the pages.',
+  'trk.add': 'Add recording …',
+  'trk.replace': 'Replace recording …',
+  'trk.remove': 'Remove recording',
+  'trk.offset': 'Start in the recording (s)',
+  'trk.addTurn': 'Turn to page {page} here',
+  'trk.turnAt': '{time}: page {page}',
   'pdf.openFailed': 'Could not open PDF: {e}',
 }
 

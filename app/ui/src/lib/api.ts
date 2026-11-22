@@ -36,6 +36,8 @@ export interface Opened {
   measure_boxes: { page: number; x: number; y: number; w: number; h: number }[] | null
   /** Has transposing instruments: offer the concert pitch toggle. */
   has_transposing: boolean
+  /** PERF-04: the score's backing track, if any. */
+  track: TrackInfo | null
 }
 
 export interface Status {
@@ -43,6 +45,17 @@ export interface Status {
   position: number
   duration: number
   tempo: number
+  /** PERF-04: position on the backing track. */
+  track_position: number | null
+  /** PERF-04: pages of turn markers that fired since the last poll. */
+  turns: number[]
+}
+
+/** PERF-04 backing track settings. */
+export interface TrackInfo {
+  offset_sec: number
+  markers: [number, number][]
+  duration_sec: number
 }
 
 export interface Strip {
@@ -123,6 +136,14 @@ export const api = {
   /** LIB-06: correct one note of an imported score and save it. */
   correctNote: (file: string, part: number, measure: number, note: number, edit: 'up' | 'down' | 'rest') =>
     invoke<void>('correct_note', { file, part, measure, note, edit }),
+  /** PERF-04: attach a recording to a score as its backing track. */
+  attachTrack: async (file: string, f: File) =>
+    invoke<void>('attach_track', new Uint8Array(await f.arrayBuffer()), {
+      headers: { 'x-score': encodeURIComponent(file), 'x-name': encodeURIComponent(f.name) },
+    }),
+  removeTrack: (file: string) => invoke<void>('remove_track', { file }),
+  setTrackInfo: (file: string, offsetSec: number, markers: [number, number][]) =>
+    invoke<void>('set_track_info', { file, offsetSec, markers }),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
   play: () => invoke<void>('play'),
   pause: () => invoke<void>('pause'),

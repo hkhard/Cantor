@@ -38,10 +38,37 @@ impl Paths {
         let (d, stem) = id.split_once(':').ok_or("bad score id")?;
         let d: usize = d.parse().map_err(|_| "bad score id")?;
         let dir = self.dirs().get(d).copied().ok_or("bad score id")?;
-        cantor_library::import::list_library(&[dir])
+        let mut e = cantor_library::import::list_library(&[dir])
             .into_iter()
             .find(|e| e.stem == stem)
-            .ok_or_else(|| format!("{stem}: finns inte i biblioteket"))
+            .ok_or_else(|| format!("{stem}: finns inte i biblioteket"))?;
+        // A bundled score's backing track lives in the user folder (the
+        // bundle is read-only): `<stem>.track.<ext>` there belongs to it.
+        if d == 0 && e.track_file.is_none() {
+            if let Ok(rd) = std::fs::read_dir(&self.user) {
+                for f in rd.flatten() {
+                    let n = f.file_name().to_string_lossy().to_string();
+                    if let Some((st, ext)) = n.rsplit_once('.') {
+                        if st == format!("{stem}.track")
+                            && cantor_library::import::TRACK_EXT
+                                .contains(&ext.to_lowercase().as_str())
+                        {
+                            e.track_file = Some(n);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(e)
+    }
+
+    /// Directory a score's track (and track settings) live in.
+    fn track_dir(&self, id: &str, e: &cantor_library::import::LibraryEntry) -> PathBuf {
+        if id.starts_with("1:") {
+            e.dir.clone()
+        } else {
+            self.user.clone()
+        }
     }
 }
 
@@ -295,6 +322,8 @@ struct RenderSource {
     title: String,
     timemap: cantor_timeline::Timemap,
     plan: cantor_timeline::channels::ChannelPlan,
+    /// The backing track, so exports include it.
+    backing: Option<cantor_audio::BackingTrack>,
 }
 
 type Shared = Mutex<Player>;
@@ -341,6 +370,112 @@ struct Opened {
     measure_boxes: Option<Vec<serde_json::Value>>,
     /// Has transposing instruments (`<transpose>`): offer the concert pitch toggle.
     has_transposing: bool,
+    /// PERF-04 backing track settings, when the score has a recording.
+    track: Option<TrackInfo>,
+}
+
+/// PERF-04: settings of a score's backing track, kept in `<stem>.track.json`.
+#[derive(Serialize, serde::Deserialize, Clone, Default)]
+struct TrackInfo {
+    /// Track second at score second 0 (the recording's lead-in).
+    #[serde(default)]
+    offset_sec: f64,
+    /// Page turns on the track timeline: `(track second, page)`.
+    #[serde(default)]
+    markers: Vec<(f64, u32)>,
+    /// Length of the recording in seconds (filled when opened).
+    #[serde(default)]
+    duration_sec: f64,
+}
+
+fn load_track_info(
+    paths: &Paths,
+    id: &str,
+    entry: &cantor_library::import::LibraryEntry,
+) -> TrackInfo {
+    std::fs::read(
+        paths
+            .track_dir(id, entry)
+            .join(format!("{}.track.json", entry.stem)),
+    )
+    .ok()
+    .and_then(|b| serde_json::from_slice(&b).ok())
+    .unwrap_or_default()
+}
+
+/// Build the engine for an opened score: synth, score channels, and the
+/// backing track as an extra channel. Returns the mixer channels, the
+/// duration and the sample rate.
+#[allow(clippy::too_many_arguments)]
+fn start_engine(
+    paths: &Paths,
+    player: &State<'_, Shared>,
+    remote_slot: &State<'_, remote::SharedEngine>,
+    entry: &cantor_library::import::LibraryEntry,
+    tm: &cantor_timeline::Timemap,
+    plan: &cantor_timeline::channels::ChannelPlan,
+    track: Option<&String>,
+    info: &TrackInfo,
+    track_dir: &std::path::Path,
+) -> Result<(Vec<ChannelInfo>, f64, u32), String> {
+    let mut p = player.lock().unwrap();
+    // Stop the old stream before opening a new one.
+    p.stream = None;
+    let sr = audio::output_sample_rate().unwrap_or(48_000);
+    let synth = SoundFontSynth::open(&paths.soundfont, sr)?;
+    let mut engine = Engine::new(synth, tm, plan, sr);
+    let mut channels: Vec<ChannelInfo> = plan
+        .channels
+        .iter()
+        .map(|c| ChannelInfo {
+            label: c.label.clone(),
+            role: format!("{:?}", c.role),
+            program: c.program,
+            instrument: gm_name(c.program).to_string(),
+            pan: c.pan,
+        })
+        .collect();
+    let mut backing = None;
+    if let Some(t) = track {
+        match cantor_audio::decode_file(&track_dir.join(t), sr) {
+            Ok(clip) => {
+                let bt = cantor_audio::BackingTrack::new(clip)
+                    .with_offset(info.offset_sec)
+                    .with_markers(
+                        info.markers
+                            .iter()
+                            .map(|&(at_sec, page)| cantor_audio::TurnMarker { at_sec, page })
+                            .collect(),
+                    );
+                backing = Some(bt.clone());
+                engine.set_backing_track(bt);
+                channels.push(ChannelInfo {
+                    label: cantor_audio::BACKING_TRACK_LABEL.into(),
+                    role: "Track".into(),
+                    program: 0,
+                    instrument: t
+                        .rsplit_once('.')
+                        .map(|(_, e)| e.to_uppercase())
+                        .unwrap_or_default(),
+                    pan: 0.0,
+                });
+            }
+            Err(e) => log::warn!("backing track {t}: {e}"),
+        }
+    }
+    let duration = engine.duration();
+    let engine = Arc::new(Mutex::new(engine));
+    p.stream = Some(audio::Output::start(engine.clone())?);
+    *remote_slot.lock().unwrap() = Some(engine.clone());
+    p.engine = Some(engine);
+    p.channels = channels.len();
+    p.render = Some(RenderSource {
+        title: entry.title.clone(),
+        timemap: tm.clone(),
+        plan: plan.clone(),
+        backing,
+    });
+    Ok((channels, duration, sr))
 }
 
 #[derive(Serialize)]
@@ -349,6 +484,10 @@ struct Status {
     position: f64,
     duration: f64,
     tempo: f64,
+    /// PERF-04: position on the backing track (seconds), when there is one.
+    track_position: Option<f64>,
+    /// PERF-04: page-turn markers that fired since the last poll (pages).
+    turns: Vec<u32>,
 }
 
 fn gm_name(p: u8) -> &'static str {
@@ -519,6 +658,7 @@ async fn export_audio(
             paths.soundfont.clone(),
             tempo,
             mix,
+            src.backing.clone(),
         );
         (
             jobs.into_iter()
@@ -531,10 +671,17 @@ async fn export_audio(
     let out = out_dir.clone();
     let names = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, String> {
         let mut names = Vec::new();
-        for ((name, part), (tm, plan, sf, tempo, mix)) in jobs {
+        for ((name, part), (tm, plan, sf, tempo, mix, backing)) in jobs {
             let sr = 44_100;
             let synth = SoundFontSynth::open(&sf, sr)?;
             let mut e = Engine::new(synth, &tm, &plan, sr);
+            if let Some(mut bt) = backing {
+                // The live track was decoded at the device rate; match the export.
+                if bt.clip.sample_rate != sr {
+                    bt.clip = std::sync::Arc::new(bt.clip.resampled(sr));
+                }
+                e.set_backing_track(bt);
+            }
             e.set_tempo_scale(tempo);
             match part {
                 Some(i) => e.mixer_mut().apply(Preset::MyPart(i)),
@@ -768,6 +915,97 @@ fn correct_note(
     if target != path {
         let _ = std::fs::remove_file(&path);
     }
+    Ok(())
+}
+
+/// PERF-04: attach a recording (raw bytes, name in `x-name`) to a score as
+/// its backing track, `<stem>.track.<ext>`. Replaces an earlier track.
+#[tauri::command]
+fn attach_track(request: tauri::ipc::Request<'_>, paths: State<'_, Paths>) -> Result<(), String> {
+    let h = |k: &str| {
+        request
+            .headers()
+            .get(k)
+            .and_then(|v| v.to_str().ok())
+            .map(percent_decode)
+    };
+    let file = h("x-score").ok_or("missing score")?;
+    let name = h("x-name").ok_or("missing file name")?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected raw file bytes".into());
+    };
+    let ext = name
+        .rsplit_once('.')
+        .map(|(_, e)| e.to_lowercase())
+        .unwrap_or_default();
+    if !cantor_library::import::TRACK_EXT.contains(&ext.as_str()) {
+        return Err(format!(
+            "{name}: Cantor plays M4A, MP3, WAV, FLAC and AIFF recordings"
+        ));
+    }
+    // Check it decodes before keeping it.
+    cantor_audio::decode_audio(bytes, Some(&ext), 44_100).map_err(|e| format!("{name}: {e}"))?;
+    let e = paths.entry(&file)?;
+    // Bundled scores: the track goes to the user folder under the same name,
+    // so it still belongs to the score (later folders win in the listing).
+    let dir = if file.starts_with("1:") {
+        e.dir.clone()
+    } else {
+        paths.user.clone()
+    };
+    if let Some(old) = &e.track_file {
+        let _ = std::fs::remove_file(e.dir.join(old));
+    }
+    std::fs::write(dir.join(format!("{}.track.{ext}", e.stem)), bytes)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// PERF-04: remove a score's backing track (and its settings).
+#[tauri::command]
+fn remove_track(file: String, paths: State<'_, Paths>) -> Result<(), String> {
+    let e = paths.entry(&file)?;
+    let dir = paths.track_dir(&file, &e);
+    if let Some(t) = &e.track_file {
+        std::fs::remove_file(dir.join(t)).map_err(|e| e.to_string())?;
+    }
+    let _ = std::fs::remove_file(dir.join(format!("{}.track.json", e.stem)));
+    Ok(())
+}
+
+/// PERF-04: save offset and page-turn markers, and apply them live.
+#[tauri::command]
+fn set_track_info(
+    file: String,
+    offset_sec: f64,
+    markers: Vec<(f64, u32)>,
+    paths: State<'_, Paths>,
+    player: State<'_, Shared>,
+) -> Result<(), String> {
+    let e = paths.entry(&file)?;
+    let mut info = load_track_info(&paths, &file, &e);
+    info.offset_sec = offset_sec;
+    info.markers = markers.clone();
+    info.markers.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let dir = if file.starts_with("1:") {
+        e.dir.clone()
+    } else {
+        paths.user.clone()
+    };
+    std::fs::write(
+        dir.join(format!("{}.track.json", e.stem)),
+        serde_json::to_vec_pretty(&info).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    let _ = with_engine(&player, |eng| {
+        eng.set_backing_offset(offset_sec);
+        eng.set_turn_markers(
+            markers
+                .iter()
+                .map(|&(at_sec, page)| cantor_audio::TurnMarker { at_sec, page })
+                .collect(),
+        );
+    });
     Ok(())
 }
 
@@ -1037,8 +1275,38 @@ fn open_score(
     let entry = paths.entry(&file)?;
     let dir_index = file.split(':').next().unwrap_or("0").to_string();
     let pdf_url = entry.pdf_file.as_ref().map(|f| format!("{dir_index}/{f}"));
+    let track_info = load_track_info(&paths, &file, &entry);
     let Some(score_file) = entry.score_file.clone() else {
-        // PDF only (e.g. a forScore .4sc): readable, no sound until converted.
+        // PDF only (e.g. a forScore .4sc): readable; plays its backing track
+        // if one was added (PERF-04), no notes until converted.
+        if let Some(track) = &entry.track_file {
+            let tm = cantor_timeline::Timemap::default();
+            let plan = cantor_timeline::channels::ChannelPlan::default();
+            let (channels, duration, sr) = start_engine(
+                &paths,
+                &player,
+                &remote_slot,
+                &entry,
+                &tm,
+                &plan,
+                Some(track),
+                &track_info,
+                &paths.track_dir(&file, &entry),
+            )?;
+            return Ok(Opened {
+                title: entry.title,
+                musicxml: String::new(),
+                channels,
+                measures: Vec::new(),
+                duration,
+                choir: "auto".into(),
+                sample_rate: sr,
+                pdf_url,
+                measure_boxes: None,
+                has_transposing: false,
+                track: Some(track_info),
+            });
+        }
         let mut p = player.lock().unwrap();
         p.stream = None;
         p.engine = None;
@@ -1056,6 +1324,7 @@ fn open_score(
             pdf_url,
             measure_boxes: None,
             has_transposing: false,
+            track: None,
         });
     };
     let bytes = std::fs::read(entry.dir.join(&score_file)).map_err(|e| e.to_string())?;
@@ -1091,21 +1360,17 @@ fn open_score(
     };
     let plan = plan_channels_for(&score, &tm, choir);
 
-    let mut p = player.lock().unwrap();
-    // Stop the old stream before opening a new one.
-    p.stream = None;
-    let sr = audio::output_sample_rate().unwrap_or(48_000);
-    let synth = SoundFontSynth::open(&paths.soundfont, sr)?;
-    let engine = Arc::new(Mutex::new(Engine::new(synth, &tm, &plan, sr)));
-    p.stream = Some(audio::Output::start(engine.clone())?);
-    *remote_slot.lock().unwrap() = Some(engine.clone());
-    p.engine = Some(engine);
-    p.channels = plan.channels.len();
-    p.render = Some(RenderSource {
-        title: title.clone(),
-        timemap: tm.clone(),
-        plan: plan.clone(),
-    });
+    let (channels, duration, sr) = start_engine(
+        &paths,
+        &player,
+        &remote_slot,
+        &entry,
+        &tm,
+        &plan,
+        entry.track_file.as_ref(),
+        &track_info,
+        &paths.track_dir(&file, &entry),
+    )?;
 
     let measures = tm
         .measure_starts
@@ -1129,21 +1394,12 @@ fn open_score(
         has_transposing,
         title,
         musicxml,
-        channels: plan
-            .channels
-            .iter()
-            .map(|c| ChannelInfo {
-                label: c.label.clone(),
-                role: format!("{:?}", c.role),
-                program: c.program,
-                instrument: gm_name(c.program).to_string(),
-                pan: c.pan,
-            })
-            .collect(),
+        channels,
         measures,
-        duration: tm.duration_sec,
+        duration,
         choir: choir_name.into(),
         sample_rate: sr,
+        track: entry.track_file.as_ref().map(|_| track_info.clone()),
     })
 }
 
@@ -1227,6 +1483,12 @@ fn status(player: State<'_, Shared>) -> Result<Status, String> {
         position: e.position(),
         duration: e.duration(),
         tempo: e.tempo_scale(),
+        track_position: e.backing_channel().map(|_| e.track_position()),
+        turns: e
+            .take_fired_markers()
+            .into_iter()
+            .map(|(m, _)| m.page)
+            .collect(),
     })?;
     // Lock screen card, refreshed about once a second while polled.
     thread_local!(static LAST: std::cell::Cell<(bool, i64)> = const { std::cell::Cell::new((false, -1)) });
@@ -1420,7 +1682,10 @@ pub fn run() {
             pending_backups,
             restore_pending,
             perf_mark,
-            correct_note
+            correct_note,
+            attach_track,
+            remove_track,
+            set_track_info
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")
