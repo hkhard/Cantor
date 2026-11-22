@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
+# The Tauri app has its own workspace (it needs the built UI at compile time).
+exclude = ["app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

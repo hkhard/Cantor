@@ -20,7 +20,12 @@ fn main() {
         "/../../assets/sf2/GeneralUser-GS.sf2"
     );
     let sr = 44_100;
-    let mut e = Engine::new(SoundFontSynth::open(sf.as_ref(), sr).unwrap(), &tm, &plan, sr);
+    let mut e = Engine::new(
+        SoundFontSynth::open(sf.as_ref(), sr).unwrap(),
+        &tm,
+        &plan,
+        sr,
+    );
     if let Some(solo) = a.get(3).and_then(|x| x.parse::<usize>().ok()) {
         e.mixer_mut().set_solo(solo, true);
     }
@@ -45,7 +50,8 @@ fn main() {
     let mut w = hound::WavWriter::create(&a[2], spec).unwrap();
     for i in 0..n {
         for x in [l[i], r[i]] {
-            w.write_sample((x.clamp(-1.0, 1.0) * 32767.0) as i16).unwrap();
+            w.write_sample((x.clamp(-1.0, 1.0) * 32767.0) as i16)
+                .unwrap();
         }
     }
     w.finalize().unwrap();

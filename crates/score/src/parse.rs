@@ -40,6 +40,21 @@ pub fn parse_score_file(bytes: &[u8]) -> Result<Score, ParseError> {
 
 /// Parse a compressed MusicXML (`.mxl`) container.
 pub fn parse_mxl(bytes: &[u8]) -> Result<Score, ParseError> {
+    parse_musicxml(&mxl_rootfile(bytes)?)
+}
+
+/// The uncompressed MusicXML document of a score file: `.mxl` containers are
+/// unpacked, plain MusicXML is returned as is. Used to feed engravers that
+/// want plain XML.
+pub fn musicxml_bytes(bytes: &[u8]) -> Result<Vec<u8>, ParseError> {
+    if bytes.starts_with(b"PK\x03\x04") {
+        mxl_rootfile(bytes)
+    } else {
+        Ok(bytes.to_vec())
+    }
+}
+
+fn mxl_rootfile(bytes: &[u8]) -> Result<Vec<u8>, ParseError> {
     let mxl = |e: &dyn std::fmt::Display| ParseError::Mxl(e.to_string());
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| mxl(&e))?;
     let mut read = |name: &str| -> Result<Vec<u8>, ParseError> {
@@ -79,7 +94,7 @@ pub fn parse_mxl(bytes: &[u8]) -> Result<Score, ParseError> {
     let mut f = zip.by_name(&rootfile).map_err(|e| mxl(&e))?;
     let mut xml = Vec::new();
     f.read_to_end(&mut xml).map_err(|e| mxl(&e))?;
-    parse_musicxml(&xml)
+    Ok(xml)
 }
 
 /// Parse an uncompressed MusicXML document.

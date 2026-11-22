@@ -101,6 +101,20 @@ fn lib_01_parses_mxl_container() {
     assert_eq!(s.parts[1].name, "Bass");
 }
 
+/// The view (Verovio) gets plain MusicXML from either file kind.
+#[test]
+fn lib_01_musicxml_bytes_unpacks_mxl_and_passes_xml_through() {
+    let mxl = make_mxl("score/Tenor Bass.xml", TWO_PARTS, true);
+    assert_eq!(
+        cantor_score::musicxml_bytes(&mxl).unwrap(),
+        TWO_PARTS.as_bytes()
+    );
+    assert_eq!(
+        cantor_score::musicxml_bytes(TWO_PARTS.as_bytes()).unwrap(),
+        TWO_PARTS.as_bytes()
+    );
+}
+
 #[test]
 fn lib_01_mxl_without_container_falls_back_to_single_xml() {
     let mxl = make_mxl("piece.musicxml", TWO_PARTS, false);

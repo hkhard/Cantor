@@ -1,0 +1,300 @@
+:root {
+  --bg: #f7f5f0;
+  --ink: #1d1b18;
+  --muted: #77716a;
+  --accent: #b8562b;
+  --panel: #ffffff;
+  --line: #e2ddd4;
+  --soprano: #c2410c;
+  --alto: #a16207;
+  --tenor: #15803d;
+  --bass: #1d4ed8;
+  --voice: #7c3aed;
+  --piano: #475569;
+  --instrument: #475569;
+  font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.4;
+}
+
+.error {
+  color: #b91c1c;
+  padding: 0 24px;
+}
+
+.loading {
+  color: var(--muted);
+  padding: 0 24px;
+}
+
+/* Library */
+.library {
+  height: 100%;
+  overflow-y: auto;
+  padding: calc(env(safe-area-inset-top) + 24px) 32px 32px;
+}
+.library h1 {
+  font-family: 'New York', Georgia, serif;
+  font-size: 44px;
+  margin: 0;
+}
+.library .sub {
+  color: var(--muted);
+  margin: 4px 0 24px;
+}
+.scores {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.scores button {
+  width: 100%;
+  min-height: 72px;
+  text-align: left;
+  font-size: 18px;
+  font-family: 'New York', Georgia, serif;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.note {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 24px;
+}
+
+/* Reader */
+.reader {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.top h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+  font-family: 'New York', Georgia, serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.icon {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+}
+.choir {
+  color: var(--muted);
+  font-size: 14px;
+}
+.choir select {
+  font: inherit;
+  margin-left: 4px;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.score {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: white;
+}
+.score > svg {
+  width: 100%;
+  height: 100%;
+}
+.score rect.cursor {
+  fill: rgba(184, 86, 43, 0.12);
+  stroke: rgba(184, 86, 43, 0.55);
+  stroke-width: 12;
+}
+.score g.measure.playing g.note use,
+.score g.measure.playing g.note path {
+  fill: var(--accent);
+}
+.pageturn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14%;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+.pageturn.left {
+  left: 0;
+}
+.pageturn.right {
+  right: 0;
+}
+
+.mixer {
+  width: 300px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.presets {
+  display: flex;
+  gap: 6px;
+}
+.presets button {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 13px;
+}
+.strip {
+  display: grid;
+  grid-template-columns: 1fr 40px 40px;
+  grid-template-rows: auto auto;
+  gap: 4px 6px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-left: 6px solid var(--role, var(--muted));
+}
+.strip.soprano {
+  --role: var(--soprano);
+}
+.strip.alto {
+  --role: var(--alto);
+}
+.strip.tenor {
+  --role: var(--tenor);
+}
+.strip.bass {
+  --role: var(--bass);
+}
+.strip.voice {
+  --role: var(--voice);
+}
+.strip.piano,
+.strip.instrument {
+  --role: var(--piano);
+}
+.strip.mine {
+  background: #fdf1ea;
+  border-color: var(--accent);
+}
+.strip .name {
+  grid-column: 1;
+  border: none;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+.strip .label {
+  font-weight: 600;
+}
+.strip .inst {
+  font-size: 12px;
+  color: var(--muted);
+}
+.strip input[type='range'] {
+  grid-column: 1;
+  grid-row: 2;
+  width: 100%;
+  accent-color: var(--role);
+}
+.strip .m,
+.strip .s {
+  grid-row: 1 / span 2;
+  padding: 0;
+  font-weight: 700;
+}
+.strip .m.on {
+  background: #fde68a;
+}
+.strip .s.on {
+  background: #bbf7d0;
+}
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px calc(env(safe-area-inset-bottom) + 8px);
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.transport .play {
+  width: 56px;
+  height: 44px;
+  font-size: 18px;
+  background: var(--accent);
+  color: white;
+  border: none;
+}
+.transport .scrub {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.time,
+.page {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 14px;
+}
+.tempo,
+.follow {
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tempo input {
+  width: 120px;
+}

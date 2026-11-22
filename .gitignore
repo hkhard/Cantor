@@ -7,3 +7,11 @@ scores/
 
 # Python venvs for tools
 tools/**/.venv/
+
+# Tauri app build output and bundled private scores
+app/src-tauri/target/
+app/src-tauri/gen/schemas/
+app/src-tauri/resources/scores/
+app/ui/dist/
+# Copied into the iOS project on every build (contains the private scores)
+app/src-tauri/gen/apple/assets/
