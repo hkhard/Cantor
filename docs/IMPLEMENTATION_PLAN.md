@@ -407,7 +407,8 @@ tests (NFR-11: 100% of P0 criteria automated).
     - Result: every P0 has an automated test except the three parked singing requirements (VOX-02, VOX-06, VOX-07).
   - **forScore extras:** what Cantor still needs and why is in `docs/forscore-samples-needed.md`: text and stamp annotations, bookmarks, links, attachments, metadata, setlist placeholders and start pages, and `.4sb` backups. Imported `.4sc` and `.4ss` files are now kept unchanged in a hidden `.forscore/` folder, so a later version can import those fields without the user exporting again (`lib_07_original_forscore_file_kept_next_to_the_pdf`).
   - **Bug found:** the annotation toolbar covered the "•••" menu, so "Framförande" could not be tapped while annotating. Fixed.
-  - **Not verified on the device:** backup and restore through the real share sheet, and the Files app. NFR-01 on an A14 iPad and NFR-03/04 (60 fps, first page < 1.5 s, memory ≤ 400 MB) still need measuring on the iPad.
+  - **Measured on the iPad mini (A17 Pro, 2026-11-22):** a `perf_mark` probe writes to Documents/.perf.log, which is not backed up. "Do you hear" (13 engraved pages, 139 bars, the largest sample) took 568 ms to engrave and 765 ms from tap to first page (NFR-03 limit 1.5 s). Memory footprint was 109 MB with the score and the 30 MB SoundFont loaded (NFR-04 limit 400 MB). Not a 100-page score: no such sample exists.
+  - **Not verified on the device:** backup and restore through the real share sheet and the Files app, 60 fps scrolling (not measured), NFR-01 on an A14 iPad (only the Mac and the A17 Pro were available), and a run with the network off.
 
 ## 8. Future features (parked)
 
