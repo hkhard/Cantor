@@ -1140,39 +1140,58 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button:has-text("•••")')
   })
 
-  await step('perf_05 swipe turns a page with a fold; vertical drag does not', async () => {
+  await step('perf_05 drag turns a page like a book: the leading edge folds under the finger', async () => {
     await page.setViewportSize({ width: W, height: H })
     await page.waitForTimeout(600)
     const pane = page.locator('.pdfhost')
     const b = await pane.boundingBox()
     const pg = () => page.locator('.pageno').innerText()
     const before = await pg()
-    // Watch for the fold: a rotateY transform on the pane during the swipe.
-    await page.evaluate(() => {
-      window.__folded = false
-      const el = document.querySelector('.score.pdf')
-      const t0 = performance.now()
-      const tick = () => {
-        if (/matrix3d|rotate/.test(getComputedStyle(el).transform)) window.__folded = true
-        if (performance.now() - t0 < 800) requestAnimationFrame(tick)
-      }
-      requestAnimationFrame(tick)
-    })
-    const sw = async (x0, x1, y0, y1) => {
-      await page.mouse.move(x0, y0)
-      await page.mouse.down()
-      for (let i = 1; i <= 6; i++) await page.mouse.move(x0 + ((x1 - x0) * i) / 6, y0 + ((y1 - y0) * i) / 6)
-      await page.mouse.up()
-      await page.waitForTimeout(500)
-    }
     const cy = b.y + b.height / 2
-    await sw(b.x + b.width * 0.7, b.x + b.width * 0.3, cy, cy)
-    const after = await pg()
-    if (after === before) throw new Error(`swipe left did not turn (${before})`)
-    if (!(await page.evaluate(() => window.__folded))) throw new Error('no fold animation')
-    await sw(b.x + b.width * 0.3, b.x + b.width * 0.7, cy, cy)
-    if ((await pg()) !== before) throw new Error('swipe right did not go back')
-    await sw(b.x + b.width / 2, b.x + b.width / 2 + 20, b.y + 100, b.y + 400)
+    // Halfway through a drag the page edge is folded back: the flap spans
+    // from the finger to the fold, the lifted part is covered.
+    await page.mouse.move(b.x + b.width * 0.9, cy)
+    await page.mouse.down()
+    for (let i = 1; i <= 8; i++) await page.mouse.move(b.x + b.width * (0.9 - 0.05 * i), cy)
+    const mid = await page.evaluate(() => {
+      const flap = document.querySelector('.pagefold .pf-flap')?.getBoundingClientRect()
+      const cover = document.querySelector('.pagefold .pf-cover')?.getBoundingClientRect()
+      const pane = document.querySelector('.pagefold').getBoundingClientRect()
+      return flap && cover ? { fl: flap.left, fr: flap.right, cl: cover.left, cr: cover.right, pl: pane.left, pw: pane.width } : null
+    })
+    if (!mid) throw new Error('no fold while dragging')
+    // The page edge started at the pane's right edge and moved with the
+    // finger: 0.4 of the pdf pane's width to the left.
+    const finger = mid.pl + mid.pw - b.width * 0.4
+    if (Math.abs(mid.cr - (mid.pl + mid.pw)) > 2) throw new Error('cover not anchored at the page edge')
+    if (Math.abs(mid.fl - finger) > 12) throw new Error(`flap does not start at the finger: ${JSON.stringify(mid)}`)
+    if (Math.abs(mid.fr - mid.cl) > 2) throw new Error('flap and cover do not meet at the fold')
+    await shot('52-page-fold')
+    await page.mouse.up()
+    await page.waitForTimeout(600)
+    if ((await pg()) === before) throw new Error(`drag past a quarter did not turn (${before})`)
+    if (await page.locator('.pagefold').count()) throw new Error('fold left behind')
+    // Back: drag to the right.
+    await page.mouse.move(b.x + b.width * 0.1, cy)
+    await page.mouse.down()
+    for (let i = 1; i <= 8; i++) await page.mouse.move(b.x + b.width * (0.1 + 0.07 * i), cy)
+    await page.mouse.up()
+    await page.waitForTimeout(600)
+    if ((await pg()) !== before) throw new Error('drag right did not go back')
+    // A short drag falls back without turning.
+    await page.mouse.move(b.x + b.width * 0.8, cy)
+    await page.mouse.down()
+    for (let i = 1; i <= 4; i++) await page.mouse.move(b.x + b.width * (0.8 - 0.02 * i), cy)
+    await page.waitForTimeout(200)
+    await page.mouse.up()
+    await page.waitForTimeout(600)
+    if ((await pg()) !== before) throw new Error('a short drag turned the page')
+    // A vertical drag does nothing.
+    await page.mouse.move(b.x + b.width / 2, b.y + 100)
+    await page.mouse.down()
+    for (let i = 1; i <= 6; i++) await page.mouse.move(b.x + b.width / 2 + 3 * i, b.y + 100 + 50 * i)
+    await page.mouse.up()
+    await page.waitForTimeout(400)
     if ((await pg()) !== before) throw new Error('vertical drag turned the page')
   })
 

@@ -880,3 +880,49 @@ select {
     animation: none;
   }
 }
+
+/* PERF-05: book-style page turn (lib/swipe.ts). The cover hides the lifted
+   part of the page (paper underneath), the flap is the back of the sheet
+   folded over, curling towards the fold; the shade is the flap's shadow. */
+.pagefold {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  overflow: hidden;
+}
+.pagefold > div {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  will-change: transform;
+}
+.pf-cover {
+  background: var(--paper);
+}
+.pf-flap {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--paper) 78%, var(--paper-ink)) 0%,
+    var(--paper) 35%,
+    color-mix(in srgb, var(--paper) 90%, var(--paper-ink)) 100%
+  );
+  box-shadow: 0 0 1.5rem rgba(0, 0, 0, 0.25);
+}
+.pagefold[data-dir='prev'] .pf-flap {
+  background: linear-gradient(
+    to left,
+    color-mix(in srgb, var(--paper) 78%, var(--paper-ink)) 0%,
+    var(--paper) 35%,
+    color-mix(in srgb, var(--paper) 90%, var(--paper-ink)) 100%
+  );
+}
+.pf-shade {
+  width: 6% !important;
+  background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28));
+}
+.pagefold[data-dir='prev'] .pf-shade {
+  background: linear-gradient(to left, transparent, rgba(0, 0, 0, 0.28));
+}
