@@ -16,6 +16,7 @@ export interface ScoreEntry {
 export interface ChannelInfo {
   label: string
   role: string
+  number?: number
   program: number
   instrument: string
   pan: number
@@ -25,6 +26,7 @@ export interface Opened {
   title: string
   musicxml: string
   channels: ChannelInfo[]
+  voice_choir?: string
   /** [start seconds, written measure index] per played measure */
   measures: [number, number][]
   duration: number
@@ -102,6 +104,8 @@ export interface ScoreSettings {
   transpose: number
   hidden_parts: number[]
   concert_pitch: boolean
+  programs?: (number | null)[]
+  voice_set?: string | null
 }
 
 export function emptyMetadata(title = ''): Metadata {
@@ -113,6 +117,14 @@ export const api = {
   openScore: (file: string, choir?: string, transpose?: number, concert?: boolean) =>
     invoke<Opened>('open_score', { file, choir, transpose, concert }),
   libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[]; home?: HomeView }>('library_data'),
+  /** PLAY-09: instruments and voice sets. */
+  instruments: () => invoke<[number, string][]>('instruments'),
+  setInstrument: (file: string, index: number, program: number | null) => invoke<void>('set_instrument', { file, index, program }),
+  voiceSets: () => invoke<{ sets: VoiceSet[]; defaults: Record<string, string> }>('voice_sets'),
+  applyVoiceSet: (id: string, file: string | null, defaultFor?: string) =>
+    invoke<void>('apply_voice_set', { id, file, defaultFor: defaultFor ?? null }),
+  saveVoiceSet: (set: VoiceSet) => invoke<string>('save_voice_set', { set }),
+  removeVoiceSet: (id: string) => invoke<void>('remove_voice_set', { id }),
   /** LIB-05: MusicXML-only + PDF-only scores that look like the same piece. */
   pairSuggestions: () => invoke<[string, string][]>('pair_suggestions'),
   combineScores: (score: string, pdf: string, dismiss = false) => invoke<void>('combine_scores', { score, pdf, dismiss }),
@@ -199,4 +211,13 @@ export type HomeGroup = 'setlists' | 'genre' | 'tags' | 'composer' | 'arranger' 
 export interface HomeView {
   group: HomeGroup
   tab: string
+}
+
+/** PLAY-09: instruments for a whole choir (GM programs per role, per divisi line). */
+export interface VoiceSet {
+  id: string
+  name_sv: string
+  name_en: string
+  choir: string
+  roles: Record<string, number[]>
 }

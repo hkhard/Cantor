@@ -355,10 +355,168 @@ struct ScoreEntry {
     user: bool,
 }
 
+/// PLAY-09: the instrument of each voice. In order: the instrument chosen for
+/// this channel of this score, else the score's voice set, else the default
+/// voice set for the choir type (mixed/male/female, from the user's choice,
+/// the title, or which voices the score has).
+fn apply_instruments(
+    paths: &Paths,
+    file: &str,
+    plan: &mut cantor_timeline::channels::ChannelPlan,
+    choir: Option<Choir>,
+) -> &'static str {
+    use cantor_timeline::channels::Role;
+    let st = store(paths);
+    let settings = st.settings(file).cloned().unwrap_or_default();
+    let roles: Vec<Role> = plan.channels.iter().map(|c| c.role).collect();
+    let choir_key = match choir {
+        Some(Choir::Male) => "male",
+        Some(Choir::Female) => "female",
+        Some(Choir::Mixed) => "mixed",
+        None => {
+            let has = |r: Role| roles.contains(&r);
+            if has(Role::Soprano) && (has(Role::Tenor) || has(Role::Bass)) {
+                "mixed"
+            } else if has(Role::Tenor) || has(Role::Bass) {
+                "male"
+            } else if has(Role::Soprano) || has(Role::Alto) {
+                "female"
+            } else {
+                "mixed"
+            }
+        }
+    };
+    let set = settings
+        .voice_set
+        .as_deref()
+        .and_then(|id| st.voice_sets().into_iter().find(|v| v.id == id))
+        .or_else(|| st.default_voice_set(choir_key));
+    for (i, c) in plan.channels.iter_mut().enumerate() {
+        if let Some(Some(p)) = settings.programs.get(i) {
+            if *p < 128 {
+                c.program = *p;
+                continue;
+            }
+        }
+        let key = match c.role {
+            Role::Soprano => "soprano",
+            Role::Alto => "alto",
+            Role::Tenor => "tenor",
+            Role::Bass => "bass",
+            Role::Voice => "voice",
+            Role::Piano => "piano",
+            Role::Instrument => "instrument",
+        };
+        if let Some(p) = set.as_ref().and_then(|v| v.program_for(key, c.number)) {
+            c.program = p;
+        }
+    }
+    choir_key
+}
+
+/// PLAY-09: change one voice's instrument now (also while playing) and
+/// remember it for this score. `None` forgets the choice; the voice gets
+/// its voice set's instrument when the score is opened again.
+#[tauri::command]
+fn set_instrument(
+    file: String,
+    index: usize,
+    program: Option<u8>,
+    paths: State<'_, Paths>,
+    player: State<'_, Shared>,
+) -> Result<(), String> {
+    let program = program.filter(|p| *p < 128);
+    let mut st = store(&paths);
+    let s = st.settings_mut(&file);
+    if s.programs.len() <= index {
+        s.programs.resize(index + 1, None);
+    }
+    s.programs[index] = program;
+    save_store(&st)?;
+    if let Some(p) = program {
+        with_engine(&player, |e| {
+            e.set_program(index, p);
+        })?;
+    }
+    Ok(())
+}
+
+/// PLAY-09: all voice sets (built-in and own) and the default per choir type.
+#[derive(Serialize)]
+struct VoiceSets {
+    sets: Vec<cantor_library::store::VoiceSet>,
+    defaults: std::collections::BTreeMap<String, String>,
+}
+
+#[tauri::command]
+fn voice_sets(paths: State<'_, Paths>) -> VoiceSets {
+    let st = store(&paths);
+    let defaults = ["mixed", "male", "female"]
+        .iter()
+        .filter_map(|c| st.default_voice_set(c).map(|v| (c.to_string(), v.id)))
+        .collect();
+    VoiceSets {
+        sets: st.voice_sets(),
+        defaults,
+    }
+}
+
+/// PLAY-09: use a voice set for this score (clears per-voice choices), or,
+/// with `default_for`, make it the default for a choir type.
+#[tauri::command]
+fn apply_voice_set(
+    file: Option<String>,
+    id: String,
+    default_for: Option<String>,
+    paths: State<'_, Paths>,
+) -> Result<(), String> {
+    let mut st = store(&paths);
+    if !st.voice_sets().iter().any(|v| v.id == id) {
+        return Err(format!("unknown voice set {id}"));
+    }
+    if let Some(c) = default_for {
+        st.set_default_voice_set(&c, &id);
+    }
+    if let Some(f) = file {
+        let s = st.settings_mut(&f);
+        s.voice_set = Some(id);
+        s.programs.clear();
+    }
+    save_store(&st)
+}
+
+/// PLAY-09: save the current instruments of an open score as an own voice
+/// set (one program per role, from its first line of each role).
+#[tauri::command]
+fn save_voice_set(
+    set: cantor_library::store::VoiceSet,
+    paths: State<'_, Paths>,
+) -> Result<String, String> {
+    let mut st = store(&paths);
+    let id = st.save_voice_set(set);
+    save_store(&st)?;
+    Ok(id)
+}
+
+#[tauri::command]
+fn remove_voice_set(id: String, paths: State<'_, Paths>) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.remove_voice_set(&id);
+    save_store(&st)
+}
+
+/// General MIDI instruments (0-based program, English name) for pickers.
+#[tauri::command]
+fn instruments() -> Vec<(u8, &'static str)> {
+    (0..128u8).map(|p| (p, gm_full_name(p))).collect()
+}
+
 #[derive(Serialize)]
 struct ChannelInfo {
     label: String,
     role: String,
+    /// Divisi number within its role (1, 2 ...), 0 when the role has one line.
+    number: u8,
     program: u8,
     instrument: String,
     pan: f32,
@@ -375,6 +533,9 @@ struct Opened {
     measures: Vec<(f64, usize)>,
     duration: f64,
     choir: String,
+    /// PLAY-09: choir type the instruments were chosen for ("mixed",
+    /// "male", "female"; detected from the voices when `choir` is "auto").
+    voice_choir: String,
     sample_rate: u32,
     /// Original PDF next to the score (`<name>.pdf`), if any: the page the
     /// singer reads. Fetched through the `cantor` URI scheme.
@@ -444,8 +605,9 @@ fn start_engine(
         .map(|c| ChannelInfo {
             label: c.label.clone(),
             role: format!("{:?}", c.role),
+            number: c.number,
             program: c.program,
-            instrument: gm_name(c.program).to_string(),
+            instrument: gm_full_name(c.program).to_string(),
             pan: c.pan,
         })
         .collect();
@@ -466,6 +628,7 @@ fn start_engine(
                 channels.push(ChannelInfo {
                     label: cantor_audio::BACKING_TRACK_LABEL.into(),
                     role: "Track".into(),
+                    number: 0,
                     program: 0,
                     instrument: t
                         .rsplit_once('.')
@@ -504,37 +667,140 @@ struct Status {
     turns: Vec<u32>,
 }
 
-fn gm_name(p: u8) -> &'static str {
-    match p {
-        0 => "Grand Piano",
-        11 => "Vibraphone",
-        13 => "Xylophone",
-        19 => "Church Organ",
-        24 => "Nylon Guitar",
-        32 => "Acoustic Bass",
-        40 => "Violin",
-        41 => "Viola",
-        42 => "Cello",
-        43 => "Contrabass",
-        52 => "Choir Aahs",
-        53 => "Voice Oohs",
-        56 => "Trumpet",
-        57 => "Trombone",
-        58 => "Tuba",
-        60 => "French Horn",
-        61 => "Brass Section",
-        65 => "Alto Sax",
-        66 => "Tenor Sax",
-        68 => "Oboe",
-        69 => "English Horn",
-        70 => "Bassoon",
-        71 => "Clarinet",
-        72 => "Piccolo",
-        73 => "Flute",
-        74 => "Recorder",
-        79 => "Ocarina",
-        _ => "Instrument",
-    }
+/// The 128 General MIDI instrument names (program 0-based).
+const GM_NAMES: [&str; 128] = [
+    "Acoustic Grand Piano",
+    "Bright Acoustic Piano",
+    "Electric Grand Piano",
+    "Honky-tonk Piano",
+    "Electric Piano 1",
+    "Electric Piano 2",
+    "Harpsichord",
+    "Clavinet",
+    "Celesta",
+    "Glockenspiel",
+    "Music Box",
+    "Vibraphone",
+    "Marimba",
+    "Xylophone",
+    "Tubular Bells",
+    "Dulcimer",
+    "Drawbar Organ",
+    "Percussive Organ",
+    "Rock Organ",
+    "Church Organ",
+    "Reed Organ",
+    "Accordion",
+    "Harmonica",
+    "Tango Accordion",
+    "Acoustic Guitar (nylon)",
+    "Acoustic Guitar (steel)",
+    "Electric Guitar (jazz)",
+    "Electric Guitar (clean)",
+    "Electric Guitar (muted)",
+    "Overdriven Guitar",
+    "Distortion Guitar",
+    "Guitar Harmonics",
+    "Acoustic Bass",
+    "Electric Bass (finger)",
+    "Electric Bass (pick)",
+    "Fretless Bass",
+    "Slap Bass 1",
+    "Slap Bass 2",
+    "Synth Bass 1",
+    "Synth Bass 2",
+    "Violin",
+    "Viola",
+    "Cello",
+    "Contrabass",
+    "Tremolo Strings",
+    "Pizzicato Strings",
+    "Orchestral Harp",
+    "Timpani",
+    "String Ensemble 1",
+    "String Ensemble 2",
+    "Synth Strings 1",
+    "Synth Strings 2",
+    "Choir Aahs",
+    "Voice Oohs",
+    "Synth Voice",
+    "Orchestra Hit",
+    "Trumpet",
+    "Trombone",
+    "Tuba",
+    "Muted Trumpet",
+    "French Horn",
+    "Brass Section",
+    "Synth Brass 1",
+    "Synth Brass 2",
+    "Soprano Sax",
+    "Alto Sax",
+    "Tenor Sax",
+    "Baritone Sax",
+    "Oboe",
+    "English Horn",
+    "Bassoon",
+    "Clarinet",
+    "Piccolo",
+    "Flute",
+    "Recorder",
+    "Pan Flute",
+    "Blown Bottle",
+    "Shakuhachi",
+    "Whistle",
+    "Ocarina",
+    "Lead 1 (square)",
+    "Lead 2 (sawtooth)",
+    "Lead 3 (calliope)",
+    "Lead 4 (chiff)",
+    "Lead 5 (charang)",
+    "Lead 6 (voice)",
+    "Lead 7 (fifths)",
+    "Lead 8 (bass + lead)",
+    "Pad 1 (new age)",
+    "Pad 2 (warm)",
+    "Pad 3 (polysynth)",
+    "Pad 4 (choir)",
+    "Pad 5 (bowed)",
+    "Pad 6 (metallic)",
+    "Pad 7 (halo)",
+    "Pad 8 (sweep)",
+    "FX 1 (rain)",
+    "FX 2 (soundtrack)",
+    "FX 3 (crystal)",
+    "FX 4 (atmosphere)",
+    "FX 5 (brightness)",
+    "FX 6 (goblins)",
+    "FX 7 (echoes)",
+    "FX 8 (sci-fi)",
+    "Sitar",
+    "Banjo",
+    "Shamisen",
+    "Koto",
+    "Kalimba",
+    "Bagpipe",
+    "Fiddle",
+    "Shanai",
+    "Tinkle Bell",
+    "Agogo",
+    "Steel Drums",
+    "Woodblock",
+    "Taiko Drum",
+    "Melodic Tom",
+    "Synth Drum",
+    "Reverse Cymbal",
+    "Guitar Fret Noise",
+    "Breath Noise",
+    "Seashore",
+    "Bird Tweet",
+    "Telephone Ring",
+    "Helicopter",
+    "Applause",
+    "Gunshot",
+];
+
+fn gm_full_name(p: u8) -> &'static str {
+    GM_NAMES[(p as usize).min(127)]
 }
 
 #[tauri::command]
@@ -1642,6 +1908,7 @@ fn open_score(
                 measures: Vec::new(),
                 duration,
                 choir: "auto".into(),
+                voice_choir: "mixed".into(),
                 sample_rate: sr,
                 pdf_url,
                 measure_boxes: None,
@@ -1662,6 +1929,7 @@ fn open_score(
             measures: Vec::new(),
             duration: 0.0,
             choir: "auto".into(),
+            voice_choir: "mixed".into(),
             sample_rate: 0,
             pdf_url,
             measure_boxes: None,
@@ -1700,7 +1968,10 @@ fn open_score(
         Some("mixed") => Some(Choir::Mixed),
         _ => choir_from_title(&title),
     };
-    let plan = plan_channels_for(&score, &tm, choir);
+    let mut plan = plan_channels_for(&score, &tm, choir);
+    // The choir type actually used (also when detected from the voices),
+    // so the UI offers the right voice sets and defaults.
+    let voice_choir = apply_instruments(&paths, &file, &mut plan, choir);
 
     let (channels, duration, sr) = start_engine(
         &paths,
@@ -1737,6 +2008,7 @@ fn open_score(
         measures,
         duration,
         choir: choir_name.into(),
+        voice_choir: voice_choir.into(),
         sample_rate: sr,
         track: entry.track_file.as_ref().map(|_| track_info.clone()),
     })
@@ -2031,6 +2303,12 @@ pub fn run() {
             sync_folder_name,
             set_order,
             set_home_view,
+            set_instrument,
+            voice_sets,
+            apply_voice_set,
+            save_voice_set,
+            remove_voice_set,
+            instruments,
             pair_suggestions,
             combine_scores,
             pdf_url_of,
@@ -2176,5 +2454,69 @@ mod lib_05_app {
         let e = cantor_library::import::list_library(&[d.as_path()]).remove(0);
         assert!(measure_map(&e).is_none());
         assert!(!d.join("lacrymosa.measures.json").exists());
+    }
+}
+
+#[cfg(test)]
+mod play_09_app {
+    use super::*;
+
+    #[test]
+    fn play_09_instrument_order_own_choice_then_voice_set_then_default() {
+        let d = std::env::temp_dir().join(format!("cantor-p9-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let paths = Paths {
+            scores: d.clone(),
+            user: d.clone(),
+            soundfont: d.join("x.sf2"),
+        };
+        let x = std::fs::read(format!(
+            "{}/../../fixtures/scores/mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.mxl",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        let score = cantor_score::parse_score_file(&x).unwrap();
+        let tm = cantor_timeline::build_timemap(&score);
+        let plan0 = plan_channels_for(&score, &tm, None);
+        let role = |p: &cantor_timeline::channels::ChannelPlan,
+                    r: cantor_timeline::channels::Role| {
+            p.channels.iter().position(|c| c.role == r).unwrap()
+        };
+        // Default (no choices): the classic set, detected as a mixed choir.
+        let mut plan = plan0.clone();
+        assert_eq!(apply_instruments(&paths, "1:l", &mut plan, None), "mixed");
+        let bass = role(&plan, cantor_timeline::channels::Role::Bass);
+        assert_eq!(plan.channels[bass].program, 42);
+        // Default set for mixed choirs = organ: bass on organ (GM 20, 0-based).
+        let mut st = store(&paths);
+        st.set_default_voice_set("mixed", "organ");
+        st.save().unwrap();
+        let mut plan = plan0.clone();
+        apply_instruments(&paths, "1:l", &mut plan, None);
+        assert_eq!(plan.channels[bass].program, 20);
+        // The score's own set wins over the default.
+        let mut st = store(&paths);
+        st.settings_mut("1:l").voice_set = Some("choir-aahs".into());
+        st.save().unwrap();
+        let mut plan = plan0.clone();
+        apply_instruments(&paths, "1:l", &mut plan, None);
+        assert!(plan
+            .channels
+            .iter()
+            .filter(|c| c.role.is_vocal())
+            .all(|c| c.program == 52));
+        // A voice's own choice wins over everything.
+        let mut st = store(&paths);
+        let s = st.settings_mut("1:l");
+        s.programs = vec![None; bass + 1];
+        s.programs[bass] = Some(71);
+        st.save().unwrap();
+        let mut plan = plan0.clone();
+        apply_instruments(&paths, "1:l", &mut plan, None);
+        assert_eq!(plan.channels[bass].program, 71);
+        // The piano part is left alone by choir sets.
+        let piano = role(&plan, cantor_timeline::channels::Role::Piano);
+        assert_eq!(plan.channels[piano].program, plan0.channels[piano].program);
     }
 }

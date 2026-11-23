@@ -125,6 +125,38 @@ exports.setup = async function setup(page, dir) {
         save_score_settings: ({ id, settings }) => {
           store.settings[id] = settings
         },
+        instruments: () => Array.from({ length: 128 }, (_, p) => [p, ['Acoustic Grand Piano', 'Bright Acoustic Piano'][p] ?? (p === 19 ? 'Church Organ' : p === 52 ? 'Choir Aahs' : `GM ${p}`)]),
+        voice_sets: () => ({
+          sets: [
+            { id: 'classic', name_sv: 'Klassisk', name_en: 'Classic (distinct colours)', choir: '', roles: {} },
+            { id: 'choir-aahs', name_sv: 'Kör (aah)', name_en: 'Choir aahs', choir: '', roles: { tenor: [52], bass: [52] } },
+            { id: 'organ', name_sv: 'Orgel', name_en: 'Organ', choir: '', roles: { tenor: [19], bass: [20] } },
+            ...(store.ownSets ?? []),
+          ],
+          defaults: { mixed: 'classic', male: store.defaultMale ?? 'classic', female: 'classic' },
+        }),
+        apply_voice_set: ({ id, file, defaultFor }) => {
+          if (defaultFor === 'male') store.defaultMale = id
+          if (file) {
+            const s = (store.settings[file] ??= defSettings())
+            s.voice_set = id
+            s.programs = []
+          }
+        },
+        save_voice_set: ({ set }) => {
+          const id = 'own-' + ((store.ownSets ?? []).length + 1)
+          store.ownSets = [...(store.ownSets ?? []), { ...set, id }]
+          return id
+        },
+        remove_voice_set: ({ id }) => {
+          store.ownSets = (store.ownSets ?? []).filter((v) => v.id !== id)
+        },
+        set_instrument: ({ file, index, program }) => {
+          const s = (store.settings[file] ??= defSettings())
+          s.programs = s.programs ?? []
+          s.programs[index] = program
+          store.instrumentCalls = [...(store.instrumentCalls ?? []), [file, index, program]]
+        },
         open_score: ({ file, transpose }) => ({
           title: file.split(':')[1],
           musicxml: file === '1:Mine' ? '' : xml,
@@ -138,10 +170,18 @@ exports.setup = async function setup(page, dir) {
                   { label: 'Tenor 2', role: 'Tenor', program: 60, instrument: 'French Horn', pan: -0.1 },
                   { label: 'Bas 1', role: 'Bass', program: 42, instrument: 'Cello', pan: 0.1 },
                   { label: 'Bas 2', role: 'Bass', program: 70, instrument: 'Bassoon', pan: 0.4 },
-                ],
+                ].map((c, i) => {
+                  // Same order as the backend: own choice, else the score's voice set.
+                  const s = store.settings[file]
+                  const own = s?.programs?.[i]
+                  const set = s?.voice_set === 'choir-aahs' ? 52 : s?.voice_set === 'organ' ? 19 : null
+                  const p = own ?? set ?? c.program
+                  return { ...c, program: p, instrument: p === 52 ? 'Choir Aahs' : p === 19 ? 'Church Organ' : c.instrument }
+                }),
           measures: boxes.map((_, i) => [i * 2, i]),
           duration: boxes.length * 2,
           choir: 'auto',
+          voice_choir: 'male',
           sample_rate: 48000,
           pdf_url: file === '0:Christmas' ? null : '0/Glimmande Nymf.pdf',
           measure_boxes: file === '0:Glimmande Nymf' ? boxes : null,

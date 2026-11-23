@@ -354,6 +354,23 @@ impl<S: Synth> Engine<S> {
         self.resync_backing();
     }
 
+    /// PLAY-09: General MIDI program (0-based) of mixer channel `i`.
+    pub fn program(&self, i: usize) -> Option<u8> {
+        self.programs.get(i).copied()
+    }
+
+    /// PLAY-09: change the instrument of mixer channel `i` (GM program,
+    /// 0-based), also while playing: sounding notes finish on the old sound.
+    /// Returns false (and sends nothing) for an unknown channel or program.
+    pub fn set_program(&mut self, i: usize, program: u8) -> bool {
+        if program > 127 || i >= self.programs.len() {
+            return false;
+        }
+        self.programs[i] = program;
+        self.synth.message(midi_channel(i), 0xC0, program, 0);
+        true
+    }
+
     /// 1.0 = as written, 0.5 = half speed (PLAY-06: 25% to 200%).
     pub fn set_tempo_scale(&mut self, s: f64) {
         self.origin = self.position();

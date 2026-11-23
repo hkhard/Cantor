@@ -1,0 +1,5 @@
+# Scores bundled into the app as read-only demos, one path per line
+# (relative to the repository; a score's .mxl/.musicxml plus its .pdf and
+# .measures.json next to it are taken). Decision 2026-11-23: Lacrymosa only,
+# until the product owner says otherwise. Only public files belong here.
+fixtures/scores/mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.mxl

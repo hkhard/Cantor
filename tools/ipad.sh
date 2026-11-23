@@ -4,30 +4,16 @@
 #   tools/ipad.sh sim            build + run on the iPad Pro 13" simulator
 #   tools/ipad.sh device [UDID]  signed build + install on a connected iPad
 #
-# Demo scores are copied from scores/out (private, git-ignored) into the app
-# bundle at build time. Without them the library is empty.
+# Demo scores: those listed in tools/demo-scores.txt (public fixtures).
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$ROOT/app/src-tauri"
 
-mkdir -p "$APP/resources/scores"
-if compgen -G "$ROOT/scores/out/*.mxl" > /dev/null; then
-  cp "$ROOT"/scores/out/*.mxl "$APP/resources/scores/"
-  for f in "$ROOT"/scores/out/*.musicxml; do
-    stem="$(basename "$f" .musicxml)"
-    # Prefer the .mxl when both exist.
-    [ -e "$ROOT/scores/out/$stem.mxl" ] || cp "$f" "$APP/resources/scores/"
-  done
-fi
-# Original PDFs and their measure maps (cantor-omr example export_pdf_maps).
-if compgen -G "$ROOT/scores/out/pdf/*" > /dev/null; then
-  cp "$ROOT"/scores/out/pdf/* "$APP/resources/scores/"
-fi
-# Clean MusicXML/MXL files placed directly in scores/ (no OMR needed).
-for f in "$ROOT"/scores/*.mxl "$ROOT"/scores/*.musicxml; do
-  [ -e "$f" ] && cp "$f" "$APP/resources/scores/"
-done
+# Demo scores bundled into the app: only what tools/demo-scores.txt lists
+# (decision 2026-11-23: Lacrymosa only, until the product owner says
+# otherwise). The folder is emptied first, so nothing else slips in.
+bash "$ROOT/tools/bundle_demo_scores.sh"
 
 cd "$APP"
 case "${1:-sim}" in

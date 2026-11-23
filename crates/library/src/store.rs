@@ -137,6 +137,183 @@ impl Default for HomeView {
     }
 }
 
+/// PLAY-09: a "voice set": which instrument plays each choir voice. Roles
+/// are "soprano", "alto", "tenor", "bass", "voice", "piano", "instrument";
+/// each has a list of GM programs (0-based) for divisi lines 1, 2, ... (the
+/// last one repeats). Roles left out keep the default instrument.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VoiceSet {
+    pub id: String,
+    pub name_sv: String,
+    pub name_en: String,
+    /// "mixed", "male", "female", or "" for any choir.
+    pub choir: String,
+    pub roles: BTreeMap<String, Vec<u8>>,
+}
+
+impl VoiceSet {
+    /// Program for divisi line `number` (1-based) of `role`, if the set
+    /// says.
+    pub fn program_for(&self, role: &str, number: u8) -> Option<u8> {
+        let v = self.roles.get(role)?;
+        let i = (number.max(1) as usize - 1).min(v.len().checked_sub(1)?);
+        v.get(i).copied()
+    }
+}
+
+fn vs(id: &str, sv: &str, en: &str, choir: &str, roles: &[(&str, &[u8])]) -> VoiceSet {
+    VoiceSet {
+        id: id.into(),
+        name_sv: sv.into(),
+        name_en: en.into(),
+        choir: choir.into(),
+        roles: roles
+            .iter()
+            .map(|(r, p)| (r.to_string(), p.to_vec()))
+            .collect(),
+    }
+}
+
+/// The voice sets Cantor ships with (GM programs, 0-based). "Classic" is
+/// the built-in choice of `cantor_timeline::channels::voice_program`:
+/// neighbouring voices get different instrument families.
+pub fn builtin_voice_sets() -> Vec<VoiceSet> {
+    let all = |p: u8| -> Vec<(&'static str, Vec<u8>)> {
+        ["soprano", "alto", "tenor", "bass", "voice"]
+            .iter()
+            .map(|r| (*r, vec![p]))
+            .collect()
+    };
+    let one = |id: &str, sv: &str, en: &str, p: u8| {
+        let r = all(p);
+        let refs: Vec<(&str, &[u8])> = r.iter().map(|(a, b)| (*a, b.as_slice())).collect();
+        vs(id, sv, en, "", &refs)
+    };
+    vec![
+        vs(
+            "classic",
+            "Klassisk (olika färger)",
+            "Classic (distinct colours)",
+            "",
+            &[
+                ("soprano", &[73, 68, 72, 79, 13]),
+                ("alto", &[71, 65, 74, 66, 11]),
+                ("tenor", &[56, 60, 57, 61, 69]),
+                ("bass", &[42, 70, 58, 32, 43]),
+                ("voice", &[73]),
+            ],
+        ),
+        one("choir-aahs", "Kör (aah)", "Choir aahs", 52),
+        one("voice-oohs", "Röster (ooh)", "Voice oohs", 53),
+        one("piano", "Piano", "Piano", 0),
+        vs(
+            "organ",
+            "Orgel",
+            "Organ",
+            "",
+            &[
+                ("soprano", &[19]),
+                ("alto", &[20]),
+                ("tenor", &[19]),
+                ("bass", &[20]),
+                ("voice", &[19]),
+            ],
+        ),
+        vs(
+            "strings-mixed",
+            "Stråkar (SATB)",
+            "Strings (SATB)",
+            "mixed",
+            &[
+                ("soprano", &[40, 40]),
+                ("alto", &[40, 41]),
+                ("tenor", &[41, 42]),
+                ("bass", &[42, 43]),
+                ("voice", &[40]),
+            ],
+        ),
+        vs(
+            "strings-male",
+            "Stråkar (TTBB)",
+            "Strings (TTBB)",
+            "male",
+            &[
+                ("soprano", &[40]),
+                ("alto", &[41]),
+                ("tenor", &[41, 42]),
+                ("bass", &[42, 43]),
+                ("voice", &[42]),
+            ],
+        ),
+        vs(
+            "strings-female",
+            "Stråkar (SSAA)",
+            "Strings (SSAA)",
+            "female",
+            &[
+                ("soprano", &[40, 40]),
+                ("alto", &[41, 41]),
+                ("tenor", &[42]),
+                ("bass", &[42]),
+                ("voice", &[40]),
+            ],
+        ),
+        vs(
+            "woodwinds-mixed",
+            "Träblås (SATB)",
+            "Woodwinds (SATB)",
+            "mixed",
+            &[
+                ("soprano", &[73, 68]),
+                ("alto", &[68, 71]),
+                ("tenor", &[71, 69]),
+                ("bass", &[70]),
+                ("voice", &[73]),
+            ],
+        ),
+        vs(
+            "woodwinds-female",
+            "Träblås (SSAA)",
+            "Woodwinds (SSAA)",
+            "female",
+            &[
+                ("soprano", &[73, 72]),
+                ("alto", &[68, 71]),
+                ("tenor", &[71]),
+                ("bass", &[70]),
+                ("voice", &[73]),
+            ],
+        ),
+        vs(
+            "brass-male",
+            "Bleckblås (TTBB)",
+            "Brass (TTBB)",
+            "male",
+            &[
+                ("soprano", &[56]),
+                ("alto", &[60]),
+                ("tenor", &[56, 60]),
+                ("bass", &[57, 58]),
+                ("voice", &[60]),
+            ],
+        ),
+        vs(
+            "brass-mixed",
+            "Bleckblås (SATB)",
+            "Brass (SATB)",
+            "mixed",
+            &[
+                ("soprano", &[56]),
+                ("alto", &[60]),
+                ("tenor", &[57]),
+                ("bass", &[58]),
+                ("voice", &[56]),
+            ],
+        ),
+    ]
+}
+
 /// Per-score playback/view settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -152,6 +329,12 @@ pub struct ScoreSettings {
     pub hidden_parts: Vec<usize>,
     /// VIEW-05: show transposing instruments at concert pitch.
     pub concert_pitch: bool,
+    /// PLAY-09: instrument (GM program, 0-based) chosen per mixer channel;
+    /// `None` = the default for that voice.
+    pub programs: Vec<Option<u8>>,
+    /// PLAY-09: voice set used for this score (`None` = the default for its
+    /// choir type).
+    pub voice_set: Option<String>,
 }
 
 impl Default for ScoreSettings {
@@ -166,6 +349,8 @@ impl Default for ScoreSettings {
             transpose: 0,
             hidden_parts: Vec::new(),
             concert_pitch: false,
+            programs: Vec::new(),
+            voice_set: None,
         }
     }
 }
@@ -187,6 +372,10 @@ struct Data {
     seeded: std::collections::BTreeSet<String>,
     /// The library's start view.
     home: HomeView,
+    /// PLAY-09: the user's own voice sets.
+    voice_sets: Vec<VoiceSet>,
+    /// Default voice set id per choir type ("mixed", "male", "female").
+    default_voice_sets: BTreeMap<String, String>,
     /// "score|pdf" pairs the user chose not to combine.
     dismissed_pairs: std::collections::BTreeSet<String>,
 }
@@ -345,6 +534,60 @@ impl Store {
     }
     pub fn set_settings(&mut self, id: &str, s: ScoreSettings) {
         self.data.settings.insert(id.to_string(), s);
+    }
+
+    // --- voice sets (PLAY-09) ---
+    /// Built-in sets first, then the user's own.
+    pub fn voice_sets(&self) -> Vec<VoiceSet> {
+        let mut v = builtin_voice_sets();
+        v.extend(self.data.voice_sets.iter().cloned());
+        v
+    }
+    /// Save (new: empty id) or replace an own voice set; returns its id.
+    pub fn save_voice_set(&mut self, mut set: VoiceSet) -> String {
+        if set.id.is_empty() || builtin_voice_sets().iter().any(|b| b.id == set.id) {
+            let n = self.data.voice_sets.len() + 1;
+            let mut k = n;
+            while self
+                .data
+                .voice_sets
+                .iter()
+                .any(|v| v.id == format!("own-{k}"))
+            {
+                k += 1;
+            }
+            set.id = format!("own-{k}");
+        }
+        let id = set.id.clone();
+        match self.data.voice_sets.iter_mut().find(|v| v.id == id) {
+            Some(v) => *v = set,
+            None => self.data.voice_sets.push(set),
+        }
+        id
+    }
+    pub fn remove_voice_set(&mut self, id: &str) {
+        self.data.voice_sets.retain(|v| v.id != id);
+        self.data.default_voice_sets.retain(|_, v| v != id);
+    }
+    pub fn set_default_voice_set(&mut self, choir: &str, id: &str) {
+        self.data
+            .default_voice_sets
+            .insert(choir.to_string(), id.to_string());
+    }
+    /// The default set for a choir type; "classic" when none was chosen or
+    /// the chosen one is gone.
+    pub fn default_voice_set(&self, choir: &str) -> Option<VoiceSet> {
+        let all = self.voice_sets();
+        let id = self
+            .data
+            .default_voice_sets
+            .get(choir)
+            .map(String::as_str)
+            .unwrap_or("classic");
+        all.iter()
+            .find(|v| v.id == id)
+            .or_else(|| all.iter().find(|v| v.id == "classic"))
+            .cloned()
     }
 
     // --- combine suggestions (LIB-05) ---

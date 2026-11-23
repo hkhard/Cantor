@@ -383,6 +383,34 @@ const H = Number(process.env.H || 1133)
     await shot('05-mixer')
   })
 
+  await step('play_09 choose an instrument per voice and a voice set for the choir', async () => {
+    if (!(await page.locator('aside.mixer').count())) await page.locator('.top button:has(svg)').last().click()
+    await page.waitForSelector('aside.mixer')
+    await page.click('aside.mixer button.vstoggle')
+    await page.waitForSelector('.instsel select')
+    await shot('34-voices')
+    // One voice: Bas 1 -> Church Organ (GM 19); saved for this score.
+    await page.locator('.instsel', { hasText: 'Bas 1' }).locator('select').selectOption('19')
+    const calls = await page.evaluate(() => window.__store.instrumentCalls)
+    const last = calls?.at(-1)
+    if (!last || last[1] !== 2 || last[2] !== 19) throw new Error('set_instrument ' + JSON.stringify(calls))
+    if (!(await page.locator('.strip', { hasText: 'Bas 1' }).innerText()).includes('Church Organ')) throw new Error('strip not updated')
+    // A whole voice set: Choir aahs for every voice; the score reopens with it.
+    await page.locator('.vsbar select').selectOption('choir-aahs')
+    await page.waitForFunction(() => [...document.querySelectorAll('.strip .inst')].every((e) => e.textContent === 'Choir Aahs'))
+    // Make it the default for male choirs, and save the current mix as an own set.
+    await page.click('.vsbar button:has-text("Make default")')
+    if ((await page.evaluate(() => window.__store.defaultMale)) !== 'choir-aahs') throw new Error('default not saved')
+    await page.click('.vsbar button:has-text("Save as set")')
+    await page.waitForSelector('.dlg input')
+    await page.fill('.dlg input', 'Vår TTBB')
+    await page.click('.dlg button.primary')
+    await page.waitForFunction(() => (window.__store.ownSets ?? []).some((v) => v.name_en === 'Vår TTBB' && v.roles.tenor?.length === 2))
+    // Back to Classic for the steps that follow.
+    await page.locator('.vsbar select').selectOption('classic')
+    await page.waitForTimeout(300)
+  })
+
   await step('play_04 custom preset saved per score', async () => {
     await page.locator('.strip').nth(0).locator('button.m').click()
     await page.click('text=Save mix')

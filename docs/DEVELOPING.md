@@ -99,9 +99,10 @@ xcrun devicectl device process launch --device <UDID> <bundle id>
 
 ### Notes on the iPad build
 
-- **Demo scores:** `tools/ipad.sh` copies private scores from `scores/out`
-  into `resources/scores` (git-ignored). Without them the library starts
-  empty, and you import scores through Files or AirDrop.
+- **Demo scores:** `tools/bundle_demo_scores.sh` (run by `tools/ipad.sh`)
+  fills `resources/scores` with exactly what `tools/demo-scores.txt` lists.
+  Today that is Lacrymosa only. Run it before a manual `cargo tauri ios build`.
+  Everything else is imported through Files or AirDrop.
 - **Linking frameworks:** Apple frameworks used from Rust must be listed in
   `gen/apple/project.yml`, because the Rust code is a static library. Check
   the result with:

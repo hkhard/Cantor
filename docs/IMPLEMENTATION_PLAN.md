@@ -600,6 +600,26 @@ tests (NFR-11: 100% of P0 criteria automated).
       - Box height covers the whole system, not single staves.
       - Not yet checked on the iPad.
 
+  - **Instruments per voice, and voice sets for choir types (PLAY-09, 2026-11-23):**
+    - **In the mixer:** "Instruments" opens a picker per voice: all 128 General MIDI instruments, grouped by family. The change sounds at once, also while playing, and is remembered per score.
+    - **Voice sets** give instruments for a whole choir at once, with separate instruments for divisi lines.
+      - **Built in:**
+        - Classic (distinct colours, the old default)
+        - Choir aahs, Voice oohs, Piano, Organ
+        - Strings for SATB, TTBB and SSAA
+        - Woodwinds for SATB and SSAA
+        - Brass for SATB and TTBB
+      - **Own sets:** "Save as set" saves the current mixer as your own set; own sets can be removed.
+      - **Defaults:** each choir type (mixed, male, female) has a default set ("Make default for male choir"). Choosing a set for a score reopens it with that set.
+    - **Order:** a voice's own choice, then the score's set, then the default set for its choir type (from the user's choice, the title, or which voices the score has). Piano and other instrument parts are untouched by choir sets.
+    - **Tests:**
+      - `play_09_change_instrument_of_a_voice` (engine)
+      - `play_09_instruments_per_score_and_voice_sets` (store)
+      - `play_09_instrument_order_own_choice_then_voice_set_then_default` (app, on Lacrymosa)
+      - UI scenario `play_09 …`
+    - **Not verified:** how the sets sound on the iPad (GeneralUser GS samples). The built-in sets are a first proposal to adjust by ear.
+  - **Demo scores (2026-11-23):** app builds bundle only what `tools/demo-scores.txt` lists. Today that is Lacrymosa only (public domain), with its PDF and a measure map from its layout. `tools/bundle_demo_scores.sh` empties the folder first, and `tools/ipad.sh` uses it.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.

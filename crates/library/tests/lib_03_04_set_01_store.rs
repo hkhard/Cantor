@@ -196,6 +196,8 @@ fn play_04_custom_presets_and_settings_persist() {
         transpose: -2,
         hidden_parts: vec![3],
         concert_pitch: true,
+        programs: vec![None, Some(52)],
+        voice_set: Some("organ".into()),
     };
     s.set_settings("1:A", st.clone());
     s.save().unwrap();
@@ -377,4 +379,86 @@ fn lib_04_home_view_defaults_to_all_scores_and_persists() {
     });
     assert_eq!(s.home_view().group, "setlists");
     assert_eq!(s.home_view().tab, "");
+}
+
+#[test]
+fn play_09_instruments_per_score_and_voice_sets() {
+    use cantor_library::store::{builtin_voice_sets, VoiceSet};
+    let d = std::env::temp_dir().join(format!("cantor-vs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let mut s = Store::open(&d);
+    // Per score: instrument chosen for mixer channel 1.
+    s.settings_mut("1:x").programs = vec![None, Some(19)];
+    // Built-in sets exist for every choir type, cover S/A/T/B, and the GM
+    // programs are valid.
+    let b = builtin_voice_sets();
+    for choir in ["mixed", "male", "female"] {
+        assert!(
+            b.iter()
+                .filter(|v| v.choir == choir || v.choir.is_empty())
+                .count()
+                >= 4,
+            "{choir}"
+        );
+    }
+    for v in &b {
+        assert!(!v.name_sv.is_empty() && !v.name_en.is_empty());
+        for r in ["soprano", "alto", "tenor", "bass"] {
+            let p = v
+                .program_for(r, 1)
+                .unwrap_or_else(|| panic!("{} has no {r}", v.id));
+            assert!(p < 128);
+        }
+    }
+    // Divisi: a second tenor gets a different instrument when the set has one.
+    let classic = b.iter().find(|v| v.id == "classic").unwrap();
+    assert_ne!(
+        classic.program_for("tenor", 1),
+        classic.program_for("tenor", 2)
+    );
+    // An "all one sound" set (choir aahs) uses it for every voice.
+    let aahs = b.iter().find(|v| v.id == "choir-aahs").unwrap();
+    assert_eq!(aahs.program_for("soprano", 1), Some(52));
+    assert_eq!(aahs.program_for("bass", 3), Some(52));
+    // Own sets: saved, listed with the built-ins, chosen as default per
+    // choir type, removable; ids never clash with built-ins.
+    let mine = VoiceSet {
+        id: String::new(),
+        name_sv: "Vår kör".into(),
+        name_en: "Our choir".into(),
+        choir: "male".into(),
+        roles: [("tenor".into(), vec![71, 72]), ("bass".into(), vec![70])]
+            .into_iter()
+            .collect(),
+    };
+    let id = s.save_voice_set(mine.clone());
+    assert!(!id.is_empty() && !b.iter().any(|v| v.id == id));
+    s.set_default_voice_set("male", &id);
+    s.save().unwrap();
+    let mut s = Store::open(&d);
+    assert_eq!(s.settings("1:x").unwrap().programs, vec![None, Some(19)]);
+    let all = s.voice_sets();
+    let got = all.iter().find(|v| v.id == id).unwrap();
+    assert_eq!(got.name_en, "Our choir");
+    assert_eq!(got.program_for("tenor", 2), Some(72));
+    // Roles the set leaves out fall back to the classic choice.
+    assert_eq!(got.program_for("soprano", 1), None);
+    assert_eq!(
+        s.default_voice_set("male").map(|v| v.id.clone()),
+        Some(id.clone())
+    );
+    assert_eq!(
+        s.default_voice_set("mixed").map(|v| v.id.clone()),
+        Some("classic".into())
+    );
+    s.remove_voice_set(&id);
+    assert!(!s.voice_sets().iter().any(|v| v.id == id));
+    assert_eq!(
+        s.default_voice_set("male").map(|v| v.id.clone()),
+        Some("classic".into())
+    );
+    // Built-ins cannot be removed.
+    s.remove_voice_set("classic");
+    assert!(s.voice_sets().iter().any(|v| v.id == "classic"));
 }

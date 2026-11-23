@@ -6,6 +6,7 @@
   import PdfView from './lib/PdfView.svelte'
   import Library from './lib/Library.svelte'
   import TrackPanel from './lib/TrackPanel.svelte'
+  import VoicePanel from './lib/VoicePanel.svelte'
   import { scoreFileUrl, type PageMode } from './lib/pdf'
   import { t } from './lib/i18n.svelte'
   import { ask } from './lib/prompts.svelte'
@@ -33,6 +34,8 @@
   // On narrow screens (iPad mini portrait) the mixer starts closed so the
   // music gets the full width.
   let mixerOpen = $state(window.innerWidth >= 1000)
+  /** PLAY-09: the instrument / voice-set panel inside the mixer. */
+  let voicesOpen = $state(false)
   let appearanceOpen = $state(false)
   /** 'pdf' = the original page, 'notation' = engraved from MusicXML. */
   let view: 'pdf' | 'notation' = $state('notation')
@@ -1029,6 +1032,17 @@
               <button class="pipe" onclick={() => api.pitchPipe(i)} aria-label="{t('mix.pipe')} {c.label}">♪</button>
             </div>
           {/each}
+          <button class="chip vstoggle" aria-expanded={voicesOpen} onclick={() => (voicesOpen = !voicesOpen)}>{t('vs.edit')}</button>
+          {#if voicesOpen && currentEntry}
+            {#key currentEntry.file}
+              <VoicePanel
+                file={currentEntry.file}
+                bind:channels={opened.channels}
+                choir={opened.voice_choir ?? opened.choir}
+                onreload={() => currentEntry && open(currentEntry, undefined, setCtx ?? undefined)}
+              />
+            {/key}
+          {/if}
           <p class="hint">{t('mix.hint')}</p>
         </aside>
       {/if}
