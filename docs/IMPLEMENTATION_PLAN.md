@@ -661,6 +661,18 @@ tests (NFR-11: 100% of P0 criteria automated).
 - **iPhone fixes (product owner report 2026-11-23):** "•••" did nothing on the iPhone: the menu opened inside the header, which scrolls sideways on a phone, so it was clipped and covered. It is now a solid full-width panel under the header (glass over printed music is unreadable). A PDF without notes (an imported .4sc) showed a long "PDF only: no notes to play …" text in the bottom bar and the "bars not linked" note on the page; on a phone the bar now holds only the Practice/Performance toggle and the note is not shown. "On My iPad" in Getting started says "iPhone" on a phone. Harness `view_08 …` now also checks that ••• opens a panel that is on top and fully on screen, and that a PDF-only score shows only the toggle and nothing over the music. Harness 52 ok, a11y 0.
 - **Swipe at the first and last page (PERF-05, product owner report 2026-11-23, iPhone and iPad):** a swipe past the last page folded the page and then showed the same page again (and the same before the first). The swipe now asks whether there is a page that way: if not, there is no fold, only a short rubber-band pull that springs back, and nothing turns; the release does not count as a tap. Harness `perf_05 …` now checks no fold and no turn before page 1 and after the last page. Harness 52 ok, a11y 0.
 
+- **PLAY-05 chord-written parts split per singer.** `TimedNote` now has
+  `chord_index`/`chord_size`; a vocal voice whose onsets are ≥60% k-note
+  chords (k = 2, 3) becomes k mixer lines, and `ChannelPlan::channels_of`
+  routes a unison note to every line (the audio engine plays all of them).
+  Titles naming a layout (STB, SAB, SSA, TTBB) pick roles. Tests:
+  `play_05_satb_written_as_chords…`, `play_05_ttbb_chords…`,
+  `play_05_stb_and_sab_layouts…`, `play_05_unison_passage…`,
+  `play_05_piano_chords_are_not_split`, all pass. Lacrymosa, the SATB chorale
+  and three private OMR scores plan the same lines as before. Not verified:
+  listening on device, crossing voices inside a chord (always ordered by
+  pitch), passages where the chord share varies section by section.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.

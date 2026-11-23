@@ -138,21 +138,23 @@ impl<S: Synth> Engine<S> {
     pub fn new(synth: S, tm: &Timemap, plan: &ChannelPlan, sample_rate: u32) -> Self {
         let mut events = Vec::with_capacity(tm.notes.len() * 2);
         for n in &tm.notes {
-            let ch = plan.channel_of(n);
-            events.push(Ev {
-                sec: n.sec_on,
-                velocity: n.velocity,
-                on: 1,
-                channel: ch,
-                key: n.pitch,
-            });
-            events.push(Ev {
-                sec: n.sec_off,
-                velocity: 0,
-                on: 0,
-                channel: ch,
-                key: n.pitch,
-            });
+            // A unison in a chord voice sounds on every singer's line.
+            for ch in plan.channels_of(n) {
+                events.push(Ev {
+                    sec: n.sec_on,
+                    velocity: n.velocity,
+                    on: 1,
+                    channel: ch,
+                    key: n.pitch,
+                });
+                events.push(Ev {
+                    sec: n.sec_off,
+                    velocity: 0,
+                    on: 0,
+                    channel: ch,
+                    key: n.pitch,
+                });
+            }
         }
         events.sort_by(|a, b| a.sec.total_cmp(&b.sec).then(a.on.cmp(&b.on)));
         // Span of each written measure on its first pass (for A-B loops).

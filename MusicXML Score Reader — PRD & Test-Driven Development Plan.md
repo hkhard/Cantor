@@ -110,7 +110,7 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | PLAY-02 | P0 | Honour repeats, voltas, D.C./D.S./Coda/Fine, ties, tuplets, grace notes, tempo and meter changes | Unfolded measure order equals expected order for every navigation fixture |
 | PLAY-03 | P0 | Per-part channel: volume (−∞ to +6 dB), pan, mute, solo | Solo isolates one part; mute+solo rules follow DAW conventions (tests per truth table) |
 | PLAY-04 | P0 | Level presets: "My part" (selected part 0 dB, others −12 dB), "Without me" (selected muted), "Balanced" | Applying a preset sets exactly the expected gains; user can save custom presets per score |
-| PLAY-05 | P0 | Per-voice control inside one staff (e.g. S and A sharing a staff) | Voice 1 and voice 2 of a staff appear as separate mixer channels |
+| PLAY-05 | P0 | Per-voice control inside one staff (e.g. S and A sharing a staff) | Voice 1 and voice 2 of a staff appear as separate mixer channels. Two or three singers written as chords in one voice (SATB on two staves, TTBB, SSA, STB, SAB) also split into one line each, top note to the top line; a lone note in such a voice is a unison on all its lines. Instrument chords are never split |
 | PLAY-06 | P0 | Tempo 25–200% without pitch change; count-in; metronome click | Tempo change mid-playback applies on the next beat, no glitch |
 | PLAY-07 | P0 | Loop A–B by measure range | Loop wraps sample-accurately (≤ 1 audio buffer jitter) |
 | PLAY-08 | P0 | Follow-along cursor and auto page turn | Cursor highlights the sounding note; page turns before the last system ends |

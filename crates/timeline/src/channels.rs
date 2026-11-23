@@ -162,11 +162,31 @@ pub struct ChannelPlan {
     pub channels: Vec<Channel>,
     /// (part, staff, voice) -> channel index.
     pub routes: BTreeMap<(usize, u32, u32), usize>,
+    /// (part, staff, voice) written as chords for several singers -> their
+    /// channels, top line first (PLAY-05). Takes precedence over `routes`.
+    pub chord_routes: BTreeMap<(usize, u32, u32), Vec<usize>>,
 }
 
 impl ChannelPlan {
-    /// Channel that plays this note.
+    /// Channel that plays this note (the first of `channels_of`).
     pub fn channel_of(&self, n: &TimedNote) -> usize {
+        self.channels_of(n)[0]
+    }
+
+    /// Every channel that plays this note. A chord shared by k singers goes
+    /// top note to the top line; a lone note in such a voice is a unison and
+    /// sounds on all its lines.
+    pub fn channels_of(&self, n: &TimedNote) -> Vec<usize> {
+        if let Some(chs) = self.chord_routes.get(&(n.part, n.staff, n.voice)) {
+            if (n.chord_size as usize) < chs.len() {
+                return chs.clone();
+            }
+            return vec![chs[(n.chord_index as usize).min(chs.len() - 1)]];
+        }
+        vec![self.single_channel_of(n)]
+    }
+
+    fn single_channel_of(&self, n: &TimedNote) -> usize {
         self.routes
             .get(&(n.part, n.staff, n.voice))
             .copied()
@@ -179,6 +199,51 @@ impl ChannelPlan {
 /// an OMR artefact (stray chord tone, cue note) and joins the nearest line.
 const MINOR_VOICE_SHARE: f64 = 0.4;
 const MIN_LINE_NOTES: usize = 4;
+/// Share of a voice's onsets that must be k-note chords to split it into k
+/// sung lines (PLAY-05).
+const CHORD_SPLIT_SHARE: f64 = 0.6;
+
+/// Voice layout named in a title ("SATB", "STB", "SAB", "TTBB", "SSA"), top
+/// line first. A baritone line ("SAB") is sung by the basses.
+pub fn layout_from_title(title: &str) -> Option<Vec<Role>> {
+    for w in title.split(|c: char| !c.is_alphanumeric()) {
+        if w.len() < 2 || !w.chars().all(|c| "SATB".contains(c)) {
+            continue;
+        }
+        return Some(
+            w.chars()
+                .map(|c| match c {
+                    'S' => Role::Soprano,
+                    'A' => Role::Alto,
+                    'T' => Role::Tenor,
+                    _ => Role::Bass,
+                })
+                .collect(),
+        );
+    }
+    None
+}
+
+/// Number of singers a voice's chords stand for: k when at least
+/// `CHORD_SPLIT_SHARE` of its onsets are k-note chords (k = 2 or 3), else 1.
+fn chord_singers(notes: &[(u8, u8, u8)]) -> u8 {
+    let mut onsets: BTreeMap<u8, usize> = BTreeMap::new();
+    let mut total = 0usize;
+    for &(_, idx, size) in notes {
+        if idx == 0 {
+            *onsets.entry(size).or_default() += 1;
+            total += 1;
+        }
+    }
+    let Some((&k, &c)) = onsets.iter().max_by_key(|(_, &c)| c) else {
+        return 1;
+    };
+    if (2..=3).contains(&k) && c as f64 >= CHORD_SPLIT_SHARE * total as f64 {
+        k
+    } else {
+        1
+    }
+}
 
 /// Role hint from a part name, tolerant of abbreviations, Swedish and OCR noise.
 fn role_from_name(name: &str) -> Option<Role> {
@@ -279,7 +344,12 @@ struct Line {
     hint: Option<Role>,
     /// Divisi number given by the part name ("T2"), when names say so.
     number: Option<u8>,
+    /// (index from top, k) when this is one of k singers sharing chords.
+    split: Option<(u8, u8)>,
 }
+
+/// (pitch, chord index, chord size) per (staff, voice) of one part.
+type ChordNotes = BTreeMap<(u32, u32), Vec<(u8, u8, u8)>>;
 
 /// Plan mixer channels for a score.
 pub fn plan_channels(score: &Score, tm: &Timemap) -> ChannelPlan {
@@ -290,9 +360,14 @@ pub fn plan_channels(score: &Score, tm: &Timemap) -> ChannelPlan {
 pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> ChannelPlan {
     // Pitches per (part, staff, voice), in first-appearance order.
     let mut by_voice: Vec<BTreeMap<(u32, u32), Vec<u8>>> = vec![BTreeMap::new(); score.parts.len()];
+    let mut chord_notes: Vec<ChordNotes> = vec![BTreeMap::new(); score.parts.len()];
     for n in &tm.notes {
         if let Some(m) = by_voice.get_mut(n.part) {
             m.entry((n.staff, n.voice)).or_default().push(n.pitch);
+            chord_notes[n.part]
+                .entry((n.staff, n.voice))
+                .or_default()
+                .push((n.pitch, n.chord_index, n.chord_size));
         }
     }
 
@@ -357,26 +432,48 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
                 median: 0.0,
                 hint: role_from_name(&part.name),
                 number: None,
+                split: None,
             };
             tmp_line.median = median(&mut tmp_line.pitches.clone());
             slots.push(Slot::Lines(vec![lines.len()]));
             lines.push(tmp_line);
             continue;
         }
-        let mut part_lines: Vec<Line> = main
-            .into_iter()
-            .map(|(k, v)| {
+        let mut part_lines: Vec<Line> = Vec::new();
+        for (k, v) in main {
+            let cn = &chord_notes[pi][&k];
+            let singers = chord_singers(cn);
+            if singers == 1 {
                 let mut p = v.clone();
-                Line {
+                part_lines.push(Line {
                     part: pi,
                     keys: vec![k],
                     median: median(&mut p),
                     pitches: v,
                     hint: role_from_name(&part.name),
                     number: None,
-                }
-            })
-            .collect();
+                    split: None,
+                });
+                continue;
+            }
+            for s in 0..singers {
+                let pitches: Vec<u8> = cn
+                    .iter()
+                    .filter(|&&(_, idx, size)| size < singers || idx.min(singers - 1) == s)
+                    .map(|&(p, _, _)| p)
+                    .collect();
+                let mut p = pitches.clone();
+                part_lines.push(Line {
+                    part: pi,
+                    keys: vec![k],
+                    median: median(&mut p),
+                    pitches,
+                    hint: role_from_name(&part.name),
+                    number: None,
+                    split: Some((s, singers)),
+                });
+            }
+        }
         for (k, mut v) in minor {
             let m = median(&mut v);
             let target = part_lines
@@ -393,7 +490,13 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
             target.pitches.extend(v);
         }
         // Top line first within a staff group.
-        part_lines.sort_by(|a, b| b.median.partial_cmp(&a.median).unwrap());
+        // Lines split from one chord voice keep their top-down order.
+        part_lines.sort_by(|a, b| {
+            if a.keys[0] == b.keys[0] && a.split.is_some() && b.split.is_some() {
+                return a.split.cmp(&b.split);
+            }
+            b.median.partial_cmp(&a.median).unwrap()
+        });
         // A name listing one label per line ("T1\nT2\nB1\nB2") labels the
         // lines top to bottom.
         // A name may repeat a label ("T1\nT1\nT2"); then its distinct labels
@@ -466,8 +569,15 @@ pub fn plan_channels_for(score: &Score, tm: &Timemap, choir: Option<Choir>) -> C
                         role.name().to_string()
                     };
                     let ci = plan.channels.len();
-                    for k in &l.keys {
-                        plan.routes.insert((l.part, k.0, k.1), ci);
+                    for (j, k) in l.keys.iter().enumerate() {
+                        if j == 0 && l.split.is_some() {
+                            plan.chord_routes
+                                .entry((l.part, k.0, k.1))
+                                .or_default()
+                                .push(ci);
+                        } else {
+                            plan.routes.insert((l.part, k.0, k.1), ci);
+                        }
                     }
                     plan.channels.push(Channel {
                         label,

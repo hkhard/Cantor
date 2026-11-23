@@ -11,7 +11,7 @@ mod unfold;
 pub use unfold::unfold;
 
 use cantor_score::{EventKind, Score, Swing, Tick};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Quarter notes per minute used when a score has no tempo marking
 /// (common for OMR output, which rarely reads metronome marks).
@@ -32,6 +32,11 @@ pub struct TimedNote {
     pub sec_off: f64,
     /// MIDI velocity from dynamics and accents (PLAY-10).
     pub velocity: u8,
+    /// Position in its chord (same part, staff, voice and onset), 0 = top
+    /// note (PLAY-05: two singers written as chords on one staff).
+    pub chord_index: u8,
+    /// Notes in that chord (1 for a single note).
+    pub chord_size: u8,
 }
 
 /// Velocity when a score has no dynamics (mezzo-forte).
@@ -220,6 +225,8 @@ pub fn build_timemap(score: &Score) -> Timemap {
                     sec_on: 0.0,
                     sec_off: 0.0,
                     velocity,
+                    chord_index: 0,
+                    chord_size: 1,
                 });
                 if e.tie_start {
                     open.insert(midi, notes.len() - 1);
@@ -234,6 +241,22 @@ pub fn build_timemap(score: &Score) -> Timemap {
         n.sec_off = seconds_at(&tempos, n.tick_off);
     }
     notes.sort_by_key(|n| (n.tick_on, n.part, n.pitch));
+    // Chord position, top note first, per (onset, part, staff, voice).
+    let mut chords: BTreeMap<(Tick, usize, u32, u32), Vec<usize>> = BTreeMap::new();
+    for (i, n) in notes.iter().enumerate() {
+        chords
+            .entry((n.tick_on, n.part, n.staff, n.voice))
+            .or_default()
+            .push(i);
+    }
+    for ix in chords.values() {
+        let size = ix.len().min(255) as u8;
+        // Sorted by ascending pitch within the group.
+        for (k, &i) in ix.iter().rev().enumerate() {
+            notes[i].chord_index = k.min(255) as u8;
+            notes[i].chord_size = size;
+        }
+    }
 
     let beats = measure_order
         .iter()

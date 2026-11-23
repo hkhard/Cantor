@@ -360,3 +360,147 @@ fn play_03_channel_labels_are_unique() {
         "{labels:?}"
     );
 }
+
+/// One part with chords: every time step is a chord of `pitches` (top first),
+/// all in voice 1, as engravers write two singers on one staff.
+fn chord_part(name: &str, chords: &[Vec<u8>]) -> String {
+    let mut body = String::new();
+    for ch in chords {
+        for (k, &p) in ch.iter().enumerate() {
+            let (s, alt, oct) = step(p);
+            let tag = if k > 0 { "<chord/>" } else { "" };
+            body += &format!(
+                "<note>{tag}<pitch><step>{s}</step><alter>{alt}</alter><octave>{oct}</octave></pitch><duration>1</duration><voice>1</voice></note>"
+            );
+        }
+    }
+    format!(
+        r#"<score-part id="{name}"><part-name>{name}</part-name></score-part>|<part id="{name}"><measure number="1"><attributes><divisions>1</divisions><time><beats>16</beats><beat-type>4</beat-type></time></attributes>{body}</measure></part>"#
+    )
+}
+
+fn chord_score(parts: &[String]) -> cantor_score::Score {
+    let (pl, body): (Vec<&str>, Vec<&str>) =
+        parts.iter().map(|p| p.split_once('|').unwrap()).unzip();
+    let x = format!(
+        r#"<?xml version="1.0"?><score-partwise version="4.0"><part-list>{}</part-list>{}</score-partwise>"#,
+        pl.concat(),
+        body.concat()
+    );
+    parse_musicxml(x.as_bytes()).unwrap()
+}
+
+fn plan_for(s: &cantor_score::Score, title: &str) -> cantor_timeline::channels::ChannelPlan {
+    let tm = build_timemap(s);
+    cantor_timeline::channels::plan_channels_for(
+        s,
+        &tm,
+        cantor_timeline::channels::choir_from_title(title),
+    )
+}
+
+#[test]
+fn play_05_satb_written_as_chords_on_two_staves_splits_into_four_lines() {
+    // Treble: S+A chords; bass: T+B chords. All in voice 1.
+    let s = chord_score(&[
+        chord_part("Women", &vec![vec![72, 67]; 8]),
+        chord_part("Men", &vec![vec![57, 48]; 8]),
+    ]);
+    let pl = plan_for(&s, "Hymn SATB");
+    assert_eq!(
+        roles(&pl),
+        [
+            (Role::Soprano, 0),
+            (Role::Alto, 0),
+            (Role::Tenor, 0),
+            (Role::Bass, 0)
+        ]
+    );
+    let tm = build_timemap(&s);
+    for n in &tm.notes {
+        let want = match n.pitch {
+            72 => Role::Soprano,
+            67 => Role::Alto,
+            57 => Role::Tenor,
+            _ => Role::Bass,
+        };
+        assert_eq!(pl.channels[pl.channel_of(n)].role, want, "note {}", n.pitch);
+    }
+}
+
+#[test]
+fn play_05_ttbb_chords_split_into_tenor_1_2_bass_1_2() {
+    let s = chord_score(&[
+        chord_part("Tenor", &vec![vec![64, 60]; 8]),
+        chord_part("Bass", &vec![vec![55, 48]; 8]),
+    ]);
+    let pl = plan_for(&s, "Julsång TTBB");
+    let labels: Vec<_> = pl.channels.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, ["Tenor 1", "Tenor 2", "Bass 1", "Bass 2"]);
+}
+
+#[test]
+fn play_05_stb_and_sab_layouts_name_three_lines() {
+    // STB: soprano alone on top, tenor+bass sharing the bass staff.
+    let s = chord_score(&[
+        chord_part("S", &vec![vec![72]; 8]),
+        chord_part("TB", &vec![vec![57, 48]; 8]),
+    ]);
+    let pl = plan_for(&s, "Carol STB");
+    assert_eq!(
+        roles(&pl),
+        [(Role::Soprano, 0), (Role::Tenor, 0), (Role::Bass, 0)]
+    );
+    // SAB: soprano+alto chords, baritone line below (sung by the men: bass).
+    let s = chord_score(&[
+        chord_part("SA", &vec![vec![72, 65]; 8]),
+        chord_part("B", &vec![vec![52]; 8]),
+    ]);
+    let pl = plan_for(&s, "Carol SAB");
+    assert_eq!(
+        roles(&pl),
+        [(Role::Soprano, 0), (Role::Alto, 0), (Role::Bass, 0)]
+    );
+    // SSA: three women's lines.
+    let s = chord_score(&[
+        chord_part("SS", &vec![vec![76, 72]; 8]),
+        chord_part("A", &vec![vec![65]; 8]),
+    ]);
+    let pl = plan_for(&s, "Lullaby SSA");
+    let labels: Vec<_> = pl.channels.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, ["Soprano 1", "Soprano 2", "Alto"]);
+}
+
+#[test]
+fn play_05_unison_passage_in_a_chord_part_stays_on_both_lines() {
+    // Mostly two notes per chord, sometimes one (unison): the single note
+    // belongs to both singers, so both lines play it.
+    let mut ch = vec![vec![64, 60]; 6];
+    ch.push(vec![62]);
+    ch.push(vec![62]);
+    let s = chord_score(&[
+        chord_part("Tenor", &ch),
+        chord_part("Bass", &vec![vec![55, 48]; 8]),
+    ]);
+    let pl = plan_for(&s, "TTBB");
+    let tm = build_timemap(&s);
+    let unison: Vec<usize> = tm
+        .notes
+        .iter()
+        .filter(|n| n.pitch == 62)
+        .flat_map(|n| pl.channels_of(n))
+        .collect();
+    // Two unison notes, each on Tenor 1 and Tenor 2.
+    assert_eq!(unison, [0, 1, 0, 1]);
+}
+
+#[test]
+fn play_05_piano_chords_are_not_split() {
+    let s = chord_score(&[
+        chord_part("Soprano", &vec![vec![72]; 8]),
+        chord_part("Piano", &vec![vec![60, 64, 67]; 8]),
+    ]);
+    let pl = plan_for(&s, "Song");
+    assert_eq!(pl.channels.len(), 2);
+    assert_eq!(pl.channels[1].role, Role::Piano);
+}
