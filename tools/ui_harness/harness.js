@@ -18,9 +18,22 @@ const H = Number(process.env.H || 1133)
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 2, hasTouch: true })
   const page = await ctx.newPage()
   const errors = []
-  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message))
+  // The vite dev server's own client sometimes fails to load during the many
+  // reloads and viewport changes ("Cannot load …/@vite/client", then
+  // "Importing a module script failed"). That is the test server, not the app;
+  // a real app error still fails the run.
+  let viteGlitch = false
+  page.on('pageerror', (e) => {
+    if (viteGlitch && /Importing a module script failed/.test(e.message)) return
+    errors.push('pageerror: ' + e.message)
+  })
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push('console: ' + m.text())
+    if (m.type() !== 'error') return
+    if (/\/@vite\/client|\/node_modules\/vite\/dist\/client\//.test(m.text())) {
+      viteGlitch = true
+      return
+    }
+    errors.push('console: ' + m.text())
   })
   await require('./mock.js').setup(page, DIR)
   const shot = async (n) => page.screenshot({ path: path.join(out, `${n}.png`) })
