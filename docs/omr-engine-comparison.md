@@ -240,6 +240,14 @@ and the outputs were compared with Python's. Code: `tools/omr/spike/`.
 | **Peak memory footprint** | **609 MB** | **1.17 GB** | **1.18 GB** | 0.92 GB |
 | Same result as Python | segmentation 100% of pixels, decoder 117/117 tokens | same | same | same |
 
+A second, denser page was also run on the device: Christmas Day p3, 8
+staves, typeset with chord symbols, CoreML, first run after install. The
+segmentation was identical to Python on every pixel, and the decoder matched
+33 of 33 tokens on staff 0. Peak memory was 1.16 GB, the same as the 4-staff
+page: segmentation sets the peak, not the number of staves. The whole run
+took 26.7 s, of which 18 s was CoreML compiling the models; installing a new
+app version clears that cache. Encoder and decoder took 5.6 s for 8 staves.
+
 What this shows:
 
 - **Memory fits.** The models peak at 0.6 GB on the CPU and 1.2 GB with
@@ -271,6 +279,9 @@ Not covered by the spike:
   - Rough estimate, not measured: 2–4 weeks to port to Rust (`imageproc`, or
     OpenCV's iOS framework), plus tests against homr's output page by page.
 - Heat and battery over a long score.
+- Only 2 pages were run on the device (4 and 8 staves, both clean typeset
+  scores). Scans and phone photos go through the same models, so memory and
+  time should be similar, but that was not run.
 - Older or smaller iPads.
 
 ### Licence, read from homr's `LICENSE_FAQ.md` (checked 2026-11-23)
