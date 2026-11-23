@@ -33,6 +33,9 @@ jobs:
         working-directory: app/src-tauri
         run: |
           mkdir -p ../ui/dist && [ -f ../ui/dist/index.html ] || echo '<!doctype html>' > ../ui/dist/index.html
+          # Bundled sample scores are git-ignored (private); the bundle
+          # needs the folder to exist.
+          mkdir -p resources/scores
           cargo fmt --check
           cargo clippy -- -D warnings
           cargo test --lib
