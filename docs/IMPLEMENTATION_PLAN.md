@@ -505,6 +505,16 @@ tests (NFR-11: 100% of P0 criteria automated).
         - The options are in `docs/omr-engine-comparison.md`: accept AGPL, get a legal view on using only the weights, train our own models, or keep recognition off the device.
         - Waiting on the product owner's licence decision.
 
+  - **Licence and monetisation (decision 2026-11-23):**
+    - The Cantor client app becomes AGPL-3.0.
+    - If it earns money, a separate company sells Cantor Choir, Cantor Band and Cantor Conductor.
+    - Feasibility and plan: `docs/monetization-feasibility.md`.
+      - Sell services (org server, recognition, singing renders) and content (prepared voices), not locked features in the AGPL app.
+      - Grant an AGPL section 7 App Store permission for our own code now, while there is one copyright holder, and require a CLA from contributors.
+      - Keep homr out of App Store builds until a lawyer has answered on its weights, or we train our own.
+      - Conductor org seats under App Review guideline 3.1.3(c) need App Review's confirmation.
+    - Not yet done: the `LICENSE` file, the CLA, the lawyer review, the company.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.
