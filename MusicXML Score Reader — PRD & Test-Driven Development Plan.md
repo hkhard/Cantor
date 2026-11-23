@@ -160,6 +160,18 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | DATA-02 | P1 | Sync through a user-chosen folder (iCloud Drive, OneDrive, Google Drive) | Two devices converge after concurrent edits (CRDT test) |
 | DATA-03 | P0 | Full backup / restore file | Restore yields identical library hash |
 
+### Band: chord symbols and instrumentalists (BAND)
+
+Groundwork for the future Cantor Band edition, built in the free client. Count-in and click already exist (PLAY-06, PERF-03). None of these are P0, so the v1 gate does not change.
+
+| ID | Pri | Requirement | Acceptance criteria |
+| --- | --- | --- | --- |
+| BAND-01 | P1 | Read chord symbols (MusicXML `<harmony>`: root, alter, kind, bass, degrees, offset) into the model with their timing, keep them when writing | The lead-sheet fixture yields the expected list of (measure, tick offset, symbol); `parse(write(s)) == s` with chords |
+| BAND-02 | P1 | Chord symbols move with every transposition (VIEW-05 semitones, concert pitch, instrument key), spelled for the new key: flats in flat keys (Bb, not A#), sharps in sharp keys | C7 in C up 1 is Db7 in Db; F up 2 gives G; G in G down 2 gives F; +n then −n gives the same chords; the transposed MusicXML text equals the transposed model |
+| BAND-03 | P1 | Instrument key per player: C, B♭, E♭ or F. The notation is shown written for that instrument (B♭: a major second up; E♭: a major sixth up; F: a perfect fifth up), while playback stays at concert pitch | Choosing B♭ shows concert C as D and C7 as D7; the timemap's pitches are unchanged; the choice is saved per score and restored after a restart (UI scenario) |
+| BAND-04 | P2 | Lead-sheet view: melody, chord symbols and lyrics only, one staff, other parts hidden | A SATB score with chords shows one staff with all chord symbols; switching back restores all parts |
+| BAND-05 | P2 | Chord practice playback: a toggleable comping channel plays block chords from the chord symbols (piano, one chord per symbol, held until the next) | The comp notes at each chord's tick are exactly its chord tones (C7 = C E G B♭; slash bass in the bass); muting the channel silences it; scores without chords have no comp channel |
+
 ## Sung lyrics: ElevenLabs and Hugging Face
 
 Singing the notated part is feasible today, but only with score-conditioned open models from Hugging Face; ElevenLabs can sing the lyrics in a generated song, not the written melody. So Hugging Face is the default engine for "sing my part", and ElevenLabs is an optional "performance" mode.
