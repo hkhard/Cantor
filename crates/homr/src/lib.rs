@@ -87,11 +87,12 @@ pub struct Predictions {
     pub stems_rest: Gray,
 }
 
-/// One point of a staff's grid: x and the y of its five lines (homr `StaffPoint`).
+/// One point of a staff's grid: x and the y of its lines, top to bottom
+/// (homr `StaffPoint`): 5 lines, or 10 for a grand staff.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct StaffPoint {
     pub x: f64,
-    pub y: [f64; 5],
+    pub y: Vec<f64>,
     pub angle: f64,
 }
 
