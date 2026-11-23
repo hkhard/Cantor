@@ -56,6 +56,7 @@ exports.setup = async function setup(page, dir) {
         pdf_url_of: ({ file }) => (scores.find((s) => s.file === file)?.pdf ? '0/x.pdf' : null),
         read_title_page: ({ png }) => {
           store.ocrBytes = png.length
+          store.ocrPng = png
           return { title: 'Vårvindar friska', subtitle: 'för blandad kör', composer: 'Svensk folkmelodi', arranger: 'Hugo Alfvén', lyricist: 'Julia Nyberg', choir: 'SATB' }
         },
         set_order: ({ kind, ids }) => {

@@ -22,6 +22,7 @@
 		A6F76FC54ACD9EFBC16A38A8 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8C0857B713169D568B67D355 /* CoreGraphics.framework */; };
 		BE686E6D16D9FED26E1678DA /* CoreMIDI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5546B4873004DA93EA2CA0F5 /* CoreMIDI.framework */; };
 		C24B43E9972BED2B193B73E0 /* Cantor.icon in Resources */ = {isa = PBXBuildFile; fileRef = D2A8643C7653A0E3D9DB5AFE /* Cantor.icon */; };
+		DBF561382E4ADAA90F17444F /* Vision.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F46510020A038D4147B8A1C2 /* Vision.framework */; };
 		E1F29A21F9A9249D5090D91B /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C09ADEAA95206A808FAFB82 /* libapp.a */; };
 		E99A5E408FE872D94442CB6D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */; };
 		F88675384658814571651652 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 936589A28830A2BC9A4B0411 /* UIKit.framework */; };
@@ -33,11 +34,13 @@
 		187087B8AD45B360EDEBEFFA /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		290A91F9CD34A955B5ACAB98 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		2E44A71E6478D1B37E3CFD97 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		32708CEDD4B35779051957B2 /* m4a.rs */ = {isa = PBXFileReference; path = m4a.rs; sourceTree = "<group>"; };
 		3E8673E7F53042CD0C5E0DDC /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4D68CACA82D717EBA3EA0A69 /* audio.rs */ = {isa = PBXFileReference; path = audio.rs; sourceTree = "<group>"; };
 		4E063A8582581B6EEB62004F /* MediaPlayer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaPlayer.framework; path = System/Library/Frameworks/MediaPlayer.framework; sourceTree = SDKROOT; };
 		5546B4873004DA93EA2CA0F5 /* CoreMIDI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreMIDI.framework; path = System/Library/Frameworks/CoreMIDI.framework; sourceTree = SDKROOT; };
 		5547730EBDF6EC342909782B /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		58D6D51E1A9156AFF6C8BDE2 /* folder.rs */ = {isa = PBXFileReference; path = folder.rs; sourceTree = "<group>"; };
 		5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6C09ADEAA95206A808FAFB82 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		715F8714E0D0184083A1CB57 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
@@ -54,6 +57,7 @@
 		E560804DB7EBD4ED9A86B190 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		E899C3B3D3173D3F4547B82B /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
 		EA39971724FBF6A09C7944B6 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		F46510020A038D4147B8A1C2 /* Vision.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Vision.framework; path = System/Library/Frameworks/Vision.framework; sourceTree = SDKROOT; };
 		F52348C07A9677F29F8F7AC2 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -68,6 +72,7 @@
 				52A9660EC4258A1C7490D484 /* CoreAudio.framework in Frameworks */,
 				BE686E6D16D9FED26E1678DA /* CoreMIDI.framework in Frameworks */,
 				5AAC04C9D2FD4213CC52B7F1 /* MediaPlayer.framework in Frameworks */,
+				DBF561382E4ADAA90F17444F /* Vision.framework in Frameworks */,
 				A6F76FC54ACD9EFBC16A38A8 /* CoreGraphics.framework in Frameworks */,
 				0B1E3933149A841F01ABAFBF /* Metal.framework in Frameworks */,
 				0452C1B0503E24F2D6BBE4A1 /* MetalKit.framework in Frameworks */,
@@ -93,7 +98,9 @@
 			isa = PBXGroup;
 			children = (
 				4D68CACA82D717EBA3EA0A69 /* audio.rs */,
+				58D6D51E1A9156AFF6C8BDE2 /* folder.rs */,
 				F52348C07A9677F29F8F7AC2 /* lib.rs */,
+				32708CEDD4B35779051957B2 /* m4a.rs */,
 				CF6331A9FD49E328B65A700E /* main.rs */,
 				A11BBE77188038AD7D143C34 /* remote.rs */,
 				B18371A1F37EC83A768BB531 /* share.rs */,
@@ -140,6 +147,7 @@
 				95ADB3FAAA0B61065F963C1B /* QuartzCore.framework */,
 				5547730EBDF6EC342909782B /* Security.framework */,
 				936589A28830A2BC9A4B0411 /* UIKit.framework */,
+				F46510020A038D4147B8A1C2 /* Vision.framework */,
 				E0CB91FD271B2D5CD497AA88 /* WebKit.framework */,
 			);
 			name = Frameworks;
@@ -179,18 +187,18 @@
 			path = "cantor-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_21FB4D01-66DB-4305-B8B0-02CC34950C6C" /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
-		"TEMP_57769F2E-2D9C-496F-8508-9FD52D36EE26" /* x86_64 */ = {
+		"TEMP_0CC07560-08FF-40F0-906C-B43326B952CE" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_32788CA6-32FF-4CD0-B05E-A36E1C59E3F2" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

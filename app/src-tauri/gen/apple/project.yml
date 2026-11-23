@@ -157,6 +157,7 @@ targets:
       - sdk: CoreAudio.framework
       - sdk: CoreMIDI.framework
       - sdk: MediaPlayer.framework
+      - sdk: Vision.framework
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework

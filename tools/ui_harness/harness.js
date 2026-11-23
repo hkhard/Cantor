@@ -72,6 +72,10 @@ const H = Number(process.env.H || 1133)
     const bytes = await page.evaluate(() => window.__store.ocrBytes)
     // pdf.js rendered page 1 to a real PNG and sent it.
     if (!(bytes > 10000)) throw new Error('no page image sent ' + bytes)
+    // Keep the exact bytes the UI sent, so the real recogniser can be run on
+    // them (tools/ui_harness/run.sh ocr-check; cargo example read_title).
+    const png = await page.evaluate(() => window.__store.ocrPng)
+    fs.writeFileSync(path.join(out, 'ocr-input.png'), Buffer.from(png))
     const vals = await page.locator('.metasheet input').evaluateAll((els) => els.map((e) => e.value))
     if (vals[0] !== 'Vårvindar friska' || vals[1] !== 'Svensk folkmelodi' || vals[2] !== 'Hugo Alfvén') throw new Error('fields ' + vals.slice(0, 3))
     const tags = await page.locator('.metasheet input').nth(6).inputValue()
