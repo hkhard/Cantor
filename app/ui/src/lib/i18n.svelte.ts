@@ -180,6 +180,12 @@ const sv = {
   'lib.newListFrom': '{a} och {b}',
   'lib.listMade': 'Listan "{name}" skapades.',
   'lib.addedTo': '"{title}" lades till i {name}.',
+  'meta.readPage': 'Läs från sidan',
+  'meta.reading': 'Läser sidan …',
+  'meta.readFilled': 'Ifyllt från sidan: {fields}. Kontrollera innan du sparar.',
+  'meta.readNothing': 'Hittade ingen titel eller upphovsperson på sidan.',
+  'meta.readFailed': 'Kunde inte läsa sidan: {e}',
+  'meta.lyricist': 'Text',
   'pdf.openFailed': 'Kunde inte öppna PDF: {e}',
 } as const
 
@@ -362,6 +368,12 @@ const en: Record<Key, string> = {
   'lib.newListFrom': '{a} and {b}',
   'lib.listMade': 'The list "{name}" was made.',
   'lib.addedTo': '"{title}" was added to {name}.',
+  'meta.readPage': 'Read from the page',
+  'meta.reading': 'Reading the page …',
+  'meta.readFilled': 'Filled from the page: {fields}. Check before saving.',
+  'meta.readNothing': 'Found no title or credits on the page.',
+  'meta.readFailed': 'Could not read the page: {e}',
+  'meta.lyricist': 'Words',
   'pdf.openFailed': 'Could not open PDF: {e}',
 }
 

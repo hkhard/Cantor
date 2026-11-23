@@ -560,6 +560,33 @@ fn list_scores(paths: State<'_, Paths>) -> Result<Vec<ScoreEntry>, String> {
         .collect())
 }
 
+/// URL path of a score's original PDF (for the cantor:// scheme), if any.
+#[tauri::command]
+fn pdf_url_of(file: String, paths: State<'_, Paths>) -> Result<Option<String>, String> {
+    let entry = paths.entry(&file)?;
+    let dir_index = file.split(':').next().unwrap_or("0").to_string();
+    Ok(entry.pdf_file.as_ref().map(|f| format!("{dir_index}/{f}")))
+}
+
+/// LIB-03 from the page: recognise the text on a rendered first page (PNG
+/// from pdf.js) on the device (Apple Vision, Swedish + English) and read
+/// title, composer, arranger and lyricist from it. Runs off the main thread.
+#[tauri::command]
+async fn read_title_page(png: Vec<u8>) -> Result<cantor_ocr::TitlePage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let t = std::time::Instant::now();
+        let lines = cantor_ocr::recognize(&png, &["sv-SE", "en-US"]).map_err(|e| e.to_string())?;
+        eprintln!(
+            "ocr title page: {} lines in {} ms",
+            lines.len(),
+            t.elapsed().as_millis()
+        );
+        Ok(cantor_ocr::guess_metadata(&lines))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Save the manual order of the library (score ids) or of the setlist tabs.
 #[tauri::command]
 fn set_order(kind: String, ids: Vec<String>, paths: State<'_, Paths>) -> Result<(), String> {
@@ -1832,7 +1859,9 @@ pub fn run() {
             choose_sync_folder,
             forget_sync_folder,
             sync_folder_name,
-            set_order
+            set_order,
+            pdf_url_of,
+            read_title_page
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cantor")

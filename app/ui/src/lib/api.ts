@@ -150,6 +150,9 @@ export const api = {
   chooseSyncFolder: (path?: string) => invoke<string | null>('choose_sync_folder', { path: path ?? null }),
   forgetSyncFolder: () => invoke<void>('forget_sync_folder'),
   syncFolderName: () => invoke<string | null>('sync_folder_name'),
+  pdfUrlOf: (file: string) => invoke<string | null>('pdf_url_of', { file }),
+  /** Text recognition on the device: title, composer, ... from page 1. */
+  readTitlePage: (png: Uint8Array) => invoke<TitlePage>('read_title_page', { png: Array.from(png) }),
   /** Save the manual order of the library ('scores') or the setlist tabs. */
   setOrder: (kind: 'scores' | 'setlists', ids: string[]) => invoke<void>('set_order', { kind, ids }),
   pitchPipe: (channel?: number) => invoke<void>('pitch_pipe', { channel }),
@@ -175,4 +178,13 @@ export const api = {
     invoke<void>('set_channel', { index, volumeDb: c.volumeDb, mute: c.mute, solo: c.solo }),
   applyPreset: (preset: 'my_part' | 'without_me' | 'balanced', index?: number) =>
     invoke<Strip[]>('apply_preset', { preset, index }),
+}
+
+export interface TitlePage {
+  title: string
+  subtitle: string
+  composer: string
+  arranger: string
+  lyricist: string
+  choir: 'SATB' | 'TTBB' | 'SSAA' | null
 }

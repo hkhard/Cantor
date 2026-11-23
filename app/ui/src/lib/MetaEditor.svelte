@@ -2,15 +2,18 @@
   // LIB-03: edit a score's metadata (title, composer, arranger, key, tempo,
   // genre, tags, rating, difficulty). Saved to the library store.
   import { api, emptyMetadata, type Metadata } from './api'
+  import { openPdf, pagePng, scoreFileUrl } from './pdf'
   import { t } from './i18n.svelte'
 
   interface Props {
     id: string
     title: string
+    /** The score has an original PDF (offer "read from the page"). */
+    pdf?: boolean
     initial: Metadata | undefined
     onclose: (saved: boolean) => void
   }
-  let { id, title, initial, onclose }: Props = $props()
+  let { id, title, initial, pdf = false, onclose }: Props = $props()
 
   // Editing a copy taken when the sheet opens (the parent remounts it per score).
   const start = (): Metadata => {
@@ -33,6 +36,47 @@
     onclose(true)
   }
 
+  // Read title and credits from page 1 on the device (Apple Vision). Only
+  // empty fields are filled, plus the title when it is still the file name;
+  // what was filled is shown so it can be checked before saving.
+  let reading = $state(false)
+  let readNote = $state('')
+  async function readPage() {
+    reading = true
+    readNote = ''
+    try {
+      const url = await api.pdfUrlOf(id)
+      if (!url) throw new Error('no pdf')
+      const doc = await openPdf(scoreFileUrl(url))
+      const png = await pagePng(doc, 1)
+      void doc.destroy()
+      const p = await api.readTitlePage(png)
+      const filled: string[] = []
+      const put = (k: 'title' | 'composer' | 'arranger', v: string, force = false) => {
+        if (v && (force || !m[k].trim())) {
+          m[k] = v
+          filled.push(t(k === 'title' ? 'meta.name' : `meta.${k}`))
+        }
+      }
+      put('title', p.subtitle && p.title.length < 4 ? `${p.title} ${p.subtitle}` : p.title, m.title === title)
+      put('composer', p.composer)
+      put('arranger', p.arranger)
+      const extra = [p.lyricist && `${t('meta.lyricist')}: ${p.lyricist}`, p.choir].filter(Boolean) as string[]
+      if (extra.length) {
+        const have = tags.split(',').map((x) => x.trim())
+        const add = extra.filter((x) => !have.includes(x))
+        if (add.length) {
+          tags = [...have.filter(Boolean), ...add].join(', ')
+          filled.push(t('meta.tags'))
+        }
+      }
+      readNote = filled.length ? t('meta.readFilled', { fields: filled.join(', ') }) : t('meta.readNothing')
+    } catch (e) {
+      readNote = t('meta.readFailed', { e: String(e) })
+    }
+    reading = false
+  }
+
   function stars(n: number | null, set: (v: number | null) => void) {
     return [1, 2, 3, 4, 5].map((i) => ({ i, on: (n ?? 0) >= i, set: () => set(n === i ? null : i) }))
   }
@@ -41,6 +85,12 @@
 <div class="sheetbg" role="presentation" onclick={() => onclose(false)}></div>
 <div class="metasheet glass" role="dialog" aria-label={t('meta.title')}>
   <h3>{t('meta.title')}</h3>
+  {#if pdf}
+    <div class="readrow">
+      <button class="chip" onclick={readPage} disabled={reading}>{reading ? t('meta.reading') : t('meta.readPage')}</button>
+      {#if readNote}<span class="hint" role="status">{readNote}</span>{/if}
+    </div>
+  {/if}
   <label>{t('meta.name')}<input bind:value={m.title} /></label>
   <label>{t('meta.composer')}<input bind:value={m.composer} /></label>
   <label>{t('meta.arranger')}<input bind:value={m.arranger} /></label>
@@ -82,6 +132,13 @@
 </div>
 
 <style>
+  .readrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
   .sheetbg {
     position: fixed;
     inset: 0;

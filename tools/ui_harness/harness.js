@@ -64,6 +64,22 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('text=Bellman')
   })
 
+  await step('lib_03 read title and credits from the PDF page (on-device text recognition)', async () => {
+    await page.locator('ul.scores > li', { hasText: 'Min egen' }).locator('button.info').click()
+    await page.waitForSelector('.metasheet')
+    await page.click('.metasheet button >> text=Read from the page')
+    await page.waitForSelector('.metasheet [role=status]')
+    const bytes = await page.evaluate(() => window.__store.ocrBytes)
+    // pdf.js rendered page 1 to a real PNG and sent it.
+    if (!(bytes > 10000)) throw new Error('no page image sent ' + bytes)
+    const vals = await page.locator('.metasheet input').evaluateAll((els) => els.map((e) => e.value))
+    if (vals[0] !== 'Vårvindar friska' || vals[1] !== 'Svensk folkmelodi' || vals[2] !== 'Hugo Alfvén') throw new Error('fields ' + vals.slice(0, 3))
+    const tags = await page.locator('.metasheet input').nth(6).inputValue()
+    if (!tags.includes('Words: Julia Nyberg') || !tags.includes('SATB')) throw new Error('tags ' + tags)
+    await shot('31-read-title-page')
+    await page.click('.metasheet button >> text=Cancel')
+  })
+
   await step('lib_04 search by composer', async () => {
     await page.fill('input[type=search]', 'bellman')
     await page.waitForTimeout(400)

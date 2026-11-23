@@ -469,6 +469,19 @@ tests (NFR-11: 100% of P0 criteria automated).
       - The order is saved.
     - Test: `set_01_manual_order_…` in the library crate.
     - Not verified: frame timing on the real iPad mini, and drag feel with a finger.
+  - **Text recognition on the device (LIB-03 from the page, step 1 of on-iPad recognition):**
+    - New crate `crates/ocr` uses Apple Vision text recognition. It runs on the iPad and the Mac with no network. Swedish (`sv-SE`) is on the list since macOS/iOS 26; checked on this Mac (macOS 27): "Vårvindar friska", "för blandad kör" and "Alfvén" come out with å, ö and é.
+    - A title-page reader turns the recognised lines into title, subtitle, composer, arranger, lyricist and choir type (SATB/TTBB/SSAA). It knows Swedish and English credit words ("Musik:", "Arr. af", "Text:", "Words and Music by", "Arranged by" with the name on the next line), names carried onto a second line, ALL CAPS names, years in brackets, and the usual layout (lyricist left, composer right).
+    - In the app: Info → "Läs från sidan" renders page 1 with pdf.js, recognises it on the device and fills only empty fields (and the title while it is still the file name). Lyricist and choir type go into the tags. It says what was filled, so the user checks before saving.
+    - Tests: 7 `lib_03_*` tests in `cantor-ocr`, including a public fixture page (`fixtures/ocr/title_page_sv.png`) through the real recogniser. Coverage 96.5%. Harness step `lib_03 read title and credits from the PDF page`.
+    - Tried on the 12 private sample PDFs on the Mac:
+      - Title right on 11 of 12. Glimmande Nymf gives "Fredmans Epistel Nº 72.", which is what is printed largest.
+      - Composer right on 9 of 12. Bacchi, Glimmande Nymf and Supa klockan print none.
+      - Arranger and lyricist right wherever they are printed. One wrong lyricist: Glimmande Nymf's "Mauskörs Bröder" (it is a dedication).
+      - Choir type found on the 4 pages that state it.
+      - 0.2–0.5 s per page once warm. The first call after a restart took 66 s on the Mac while macOS compiled the model.
+    - Not verified: speed and the Swedish language list on the iPad mini itself, and the first-call delay there.
+    - Note recognition on the iPad (step 2): homr and oemer are being measured against Audiveris on the same pages; findings go to `docs/omr-engine-comparison.md`.
 
 ## 8. Future features (parked)
 

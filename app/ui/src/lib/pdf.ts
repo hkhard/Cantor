@@ -62,3 +62,21 @@ export async function renderPage(
   await page.render({ canvasContext: ctx, viewport: vp, canvas }).promise
   return { w: vp.width / dpr, h: vp.height / dpr }
 }
+
+/** Page `n` as a greyscale-friendly PNG about `px` pixels wide, for text
+ *  recognition (~150 DPI on A4 is enough for titles and credits). */
+export async function pagePng(doc: pdfjs.PDFDocumentProxy, n: number, px = 1240): Promise<Uint8Array> {
+  const page = await doc.getPage(n)
+  const base = page.getViewport({ scale: 1 })
+  const vp = page.getViewport({ scale: px / base.width })
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.floor(vp.width)
+  canvas.height = Math.floor(vp.height)
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  await page.render({ canvasContext: ctx, viewport: vp, canvas }).promise
+  const blob: Blob = await new Promise((r, e) => canvas.toBlob((b) => (b ? r(b) : e(new Error('png'))), 'image/png'))
+  page.cleanup()
+  return new Uint8Array(await blob.arrayBuffer())
+}

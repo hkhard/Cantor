@@ -403,6 +403,7 @@
   <MetaEditor
     id={editing.file}
     title={editing.title}
+    pdf={editing.pdf}
     initial={metadata[editing.file]}
     onclose={async (saved) => {
       editing = null

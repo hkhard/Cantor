@@ -1,0 +1,15 @@
+[package]
+name = "cantor-ocr"
+description = "On-device text recognition (Apple Vision) and title-page metadata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSData", "NSDictionary", "NSError", "NSObject"] }
+objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
+objc2-vision = { version = "0.3", default-features = false, features = ["std", "VNRequestHandler", "VNRecognizeTextRequest", "VNRequest", "VNObservation", "VNTypes", "objc2-core-foundation"] }
