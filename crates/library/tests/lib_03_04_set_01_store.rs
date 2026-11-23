@@ -138,6 +138,7 @@ fn set_01_setlists_persist_and_cascade() {
         sl.items.push(SetItem::Score {
             score: "1:A".into(),
             start_page: Some(2),
+            note: String::new(),
         });
         sl.items.push(SetItem::Placeholder {
             title: "Paus".into(),
@@ -145,6 +146,7 @@ fn set_01_setlists_persist_and_cascade() {
         sl.items.push(SetItem::Score {
             score: "2:B".into(),
             start_page: None,
+            note: String::new(),
         });
         sl.items.swap(0, 1); // reorder
     }
@@ -163,7 +165,8 @@ fn set_01_setlists_persist_and_cascade() {
             },
             SetItem::Score {
                 score: "9:A".into(),
-                start_page: Some(2)
+                start_page: Some(2),
+                note: String::new(),
             },
             SetItem::Placeholder { title: "B".into() },
         ]
@@ -244,7 +247,8 @@ fn lib_08_setlist_from_forscore_keeps_order_and_placeholders() {
         vec![
             SetItem::Score {
                 score: "1:Kung Lilje".into(),
-                start_page: Some(3)
+                start_page: Some(3),
+                note: String::new(),
             },
             SetItem::Placeholder {
                 title: "Paus".into()

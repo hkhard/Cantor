@@ -44,7 +44,9 @@
 //!   whole record wins). A setlist is two registers: its head (name and any
 //!   other fields) and its item list (order included, LWW as a whole). Setlist
 //!   order in the file is by creation. Deletes are tombstones; delete vs edit
-//!   is decided per register by the clock. Deleting a score on one device
+//!   is decided per register by the clock. Instructions (SET-03) are one
+//!   register per score id (`instructions`) and one per setlist (apart
+//!   from its name and items). Deleting a score on one device
 //!   while another edits its metadata later leaves that metadata record
 //!   (an orphan without files) on both devices; when the delete is later the
 //!   score is gone everywhere. Other top-level keys are one register each.
@@ -748,7 +750,7 @@ fn walk(base: &Path, d: &Path, out: &mut Vec<String>) -> Result<(), String> {
 fn is_store_key(k: &Key) -> bool {
     matches!(
         k[0].as_str(),
-        "store" | "meta" | "settings" | "setlist" | "setlist-items"
+        "store" | "meta" | "settings" | "instr" | "setlist" | "setlist-items" | "setlist-instr"
     )
 }
 
@@ -760,8 +762,12 @@ fn is_doc_key(k: &Key, n: &str) -> bool {
 fn store_view(obj: &Map<String, Value>, out: &mut BTreeMap<Key, Value>) {
     for (k, v) in obj {
         match k.as_str() {
-            "metadata" | "settings" => {
-                let kind = if k == "metadata" { "meta" } else { "settings" };
+            "metadata" | "settings" | "instructions" => {
+                let kind = match k.as_str() {
+                    "metadata" => "meta",
+                    "settings" => "settings",
+                    _ => "instr",
+                };
                 for (id, val) in v.as_object().into_iter().flatten() {
                     out.insert(key(kind, &[id]), val.clone());
                 }
@@ -779,8 +785,14 @@ fn store_view(obj: &Map<String, Value>, out: &mut BTreeMap<Key, Value>) {
                     let mut head = o.clone();
                     head.remove("id");
                     let items = head.remove("items").unwrap_or(Value::Array(Vec::new()));
+                    // SET-03: the set's instructions are their own register,
+                    // so a rename and an instructions edit both survive.
+                    let instr = head
+                        .remove("instructions")
+                        .unwrap_or(Value::String(String::new()));
                     out.insert(hk, Value::Object(head));
                     out.insert(key("setlist-items", &[id]), items);
+                    out.insert(key("setlist-instr", &[id]), instr);
                 }
             }
             _ => {
@@ -794,7 +806,7 @@ fn store_view(obj: &Map<String, Value>, out: &mut BTreeMap<Key, Value>) {
 fn store_object(m: &Merged) -> Option<Map<String, Value>> {
     let mut any = false;
     let mut obj = Map::new();
-    let (mut metadata, mut settings) = (Map::new(), Map::new());
+    let (mut metadata, mut settings, mut instructions) = (Map::new(), Map::new(), Map::new());
     let mut setlists = Vec::new();
     for (k, (_, v)) in &m.regs {
         if !is_store_key(k) {
@@ -804,7 +816,12 @@ fn store_object(m: &Merged) -> Option<Map<String, Value>> {
         let Some(v) = v else { continue };
         let id = &k[1];
         match k[0].as_str() {
-            "store" if !matches!(id.as_str(), "metadata" | "settings" | "setlists") => {
+            "store"
+                if !matches!(
+                    id.as_str(),
+                    "metadata" | "settings" | "setlists" | "instructions"
+                ) =>
+            {
                 obj.insert(id.clone(), v.clone());
             }
             "meta" => {
@@ -812,6 +829,9 @@ fn store_object(m: &Merged) -> Option<Map<String, Value>> {
             }
             "settings" => {
                 settings.insert(id.clone(), v.clone());
+            }
+            "instr" => {
+                instructions.insert(id.clone(), v.clone());
             }
             "setlist" => {
                 let Value::Object(head) = v else { continue };
@@ -823,6 +843,15 @@ fn store_object(m: &Merged) -> Option<Map<String, Value>> {
                     .and_then(|(_, v)| v.clone())
                     .unwrap_or(Value::Array(Vec::new()));
                 o.insert("items".into(), items);
+                if let Some(Value::String(t)) = m
+                    .regs
+                    .get(&key("setlist-instr", &[id]))
+                    .and_then(|(_, v)| v.clone())
+                {
+                    if !t.is_empty() {
+                        o.insert("instructions".into(), Value::String(t));
+                    }
+                }
                 setlists.push((m.first.get(k).cloned(), id.clone(), Value::Object(o)));
             }
             _ => {}
@@ -834,6 +863,7 @@ fn store_object(m: &Merged) -> Option<Map<String, Value>> {
     setlists.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
     obj.insert("metadata".into(), Value::Object(metadata));
     obj.insert("settings".into(), Value::Object(settings));
+    obj.insert("instructions".into(), Value::Object(instructions));
     obj.insert(
         "setlists".into(),
         Value::Array(setlists.into_iter().map(|s| s.2).collect()),
@@ -1042,7 +1072,13 @@ impl Op {
                 (Some("layer"), 3) => {
                     safe_doc_name(&k[1]) && k[2].parse::<usize>().is_ok_and(|i| i < MAX_LAYERS)
                 }
-                (Some("store" | "meta" | "settings" | "setlist" | "setlist-items"), 2) => true,
+                (
+                    Some(
+                        "store" | "meta" | "settings" | "instr" | "setlist" | "setlist-items"
+                        | "setlist-instr",
+                    ),
+                    2,
+                ) => true,
                 _ => false,
             },
             Op::AnnAdd { doc, .. } | Op::AnnRemove { doc, .. } => safe_doc_name(doc),

@@ -1,6 +1,7 @@
 //! Persisted library store: per-score metadata (LIB-03), search (LIB-04),
 //! setlists (SET-01, LIB-08 import) and per-score playback settings incl.
-//! custom mixer presets (PLAY-04).
+//! custom mixer presets (PLAY-04), instructions and part hints per score and
+//! per setlist, and notes per setlist item (SET-03, SET-05).
 //!
 //! Everything lives in one versioned JSON file, [`STORE_FILE`], inside the
 //! user's library folder. Saves are atomic (write `library.json.tmp`, then
@@ -60,6 +61,9 @@ pub enum SetItem {
     Score {
         score: String,
         start_page: Option<u32>,
+        /// SET-05: a note for this item ("start at bar 9", "skip verse 2").
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        note: String,
     },
     Placeholder {
         title: String,
@@ -71,6 +75,48 @@ pub struct Setlist {
     pub id: String,
     pub name: String,
     pub items: Vec<SetItem>,
+    /// SET-03: the director's instructions for the whole set (markdown-light
+    /// text, see [`ScoreInstructions::text`]).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub instructions: String,
+}
+
+/// SET-03: who sings what. `who` is a member or a group ("Anna", "Tenor 1
+/// group"); `part` is the mixer channel label it maps to ("Tenor 1").
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PartHint {
+    pub who: String,
+    pub part: String,
+}
+
+/// SET-03: instructions for one score: free text (paragraphs separated by a
+/// blank line, `**bold**`, `[text](url)` and bare links, bar references such
+/// as "t. 12" / "m. 12"; the UI renders it, the store keeps it verbatim) and
+/// part hints for members.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ScoreInstructions {
+    pub text: String,
+    pub parts: Vec<PartHint>,
+}
+
+impl ScoreInstructions {
+    /// Nothing written and no hints.
+    pub fn is_empty(&self) -> bool {
+        self.text.trim().is_empty() && self.parts.is_empty()
+    }
+    /// The part hinted for `member` (case- and accent-insensitive), if any.
+    pub fn part_for(&self, member: &str) -> Option<&str> {
+        let m = normalize(member.trim());
+        if m.is_empty() {
+            return None;
+        }
+        self.parts
+            .iter()
+            .find(|h| normalize(h.who.trim()) == m)
+            .map(|h| h.part.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -382,6 +428,10 @@ struct Data {
     default_voice_sets: BTreeMap<String, String>,
     /// "score|pdf" pairs the user chose not to combine.
     dismissed_pairs: std::collections::BTreeSet<String>,
+    /// SET-03: instructions and part hints per score id.
+    instructions: BTreeMap<String, ScoreInstructions>,
+    /// SET-03: the member using this library (matches [`PartHint::who`]).
+    member: String,
 }
 
 /// The persisted library store.
@@ -471,6 +521,7 @@ impl Store {
         }
         self.data.metadata.extend(d.metadata);
         self.data.settings.extend(d.settings);
+        self.data.instructions.extend(d.instructions);
         for sl in d.setlists {
             match self.data.setlists.iter_mut().find(|s| s.id == sl.id) {
                 Some(s) => *s = sl,
@@ -538,6 +589,36 @@ impl Store {
     }
     pub fn set_settings(&mut self, id: &str, s: ScoreSettings) {
         self.data.settings.insert(id.to_string(), s);
+    }
+
+    // --- instructions (SET-03) ---
+    pub fn instructions(&self, id: &str) -> Option<&ScoreInstructions> {
+        self.data.instructions.get(id)
+    }
+    pub fn all_instructions(&self) -> &BTreeMap<String, ScoreInstructions> {
+        &self.data.instructions
+    }
+    /// Set (or, when empty, remove) the instructions of a score. Blank hint
+    /// rows are dropped.
+    pub fn set_instructions(&mut self, id: &str, mut ins: ScoreInstructions) {
+        ins.parts
+            .retain(|h| !h.who.trim().is_empty() && !h.part.trim().is_empty());
+        if ins.is_empty() {
+            self.data.instructions.remove(id);
+        } else {
+            self.data.instructions.insert(id.to_string(), ins);
+        }
+    }
+    /// The member name chosen on this library ("" = nobody).
+    pub fn member(&self) -> &str {
+        &self.data.member
+    }
+    pub fn set_member(&mut self, name: &str) {
+        self.data.member = name.trim().to_string();
+    }
+    /// The part hinted for the current member in score `id`.
+    pub fn member_part(&self, id: &str) -> Option<&str> {
+        self.instructions(id)?.part_for(&self.data.member)
     }
 
     // --- voice sets (PLAY-09) ---
@@ -681,6 +762,7 @@ impl Store {
             id: id.clone(),
             name: name.to_string(),
             items: Vec::new(),
+            instructions: String::new(),
         });
         id
     }
@@ -704,6 +786,9 @@ impl Store {
         }
         if let Some(s) = self.data.settings.remove(old) {
             self.data.settings.insert(new.to_string(), s);
+        }
+        if let Some(i) = self.data.instructions.remove(old) {
+            self.data.instructions.insert(new.to_string(), i);
         }
         for it in self
             .data
@@ -730,6 +815,7 @@ impl Store {
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| fallback_title.to_string());
         self.data.settings.remove(id);
+        self.data.instructions.remove(id);
         for it in self
             .data
             .setlists
@@ -863,6 +949,7 @@ pub fn setlist_from_forscore(
             match hit {
                 Some((_, id)) => SetItem::Score {
                     score: id.clone(),
+                    note: String::new(),
                     start_page: ["StartPage", "startPage", "Page", "page"]
                         .iter()
                         .find_map(|k| it.unknown.get(*k))
@@ -879,5 +966,6 @@ pub fn setlist_from_forscore(
         id: new_id(),
         name: name.to_string(),
         items,
+        instructions: String::new(),
     }
 }
