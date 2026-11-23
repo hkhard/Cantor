@@ -572,16 +572,31 @@ fn pdf_url_of(file: String, paths: State<'_, Paths>) -> Result<Option<String>, S
 /// from pdf.js) on the device (Apple Vision, Swedish + English) and read
 /// title, composer, arranger and lyricist from it. Runs off the main thread.
 #[tauri::command]
-async fn read_title_page(png: Vec<u8>) -> Result<cantor_ocr::TitlePage, String> {
+async fn read_title_page(
+    png: Vec<u8>,
+    paths: State<'_, Paths>,
+) -> Result<cantor_ocr::TitlePage, String> {
+    let user = paths.user.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let t = std::time::Instant::now();
         let lines = cantor_ocr::recognize(&png, &["sv-SE", "en-US"]).map_err(|e| e.to_string())?;
-        eprintln!(
-            "ocr title page: {} lines in {} ms",
-            lines.len(),
-            t.elapsed().as_millis()
-        );
-        Ok(cantor_ocr::guess_metadata(&lines))
+        let ms = t.elapsed().as_millis();
+        let m = cantor_ocr::guess_metadata(&lines);
+        // Timing and result in Documents/.perf.log (read off the iPad).
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(user.join(".perf.log"))
+        {
+            use std::io::Write;
+            let _ = writeln!(
+                f,
+                "ocr title page\t{ms} ms\t{} lines\t{:?}",
+                lines.len(),
+                m.title
+            );
+        }
+        Ok(m)
     })
     .await
     .map_err(|e| e.to_string())?
