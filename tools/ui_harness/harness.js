@@ -37,6 +37,12 @@ const H = Number(process.env.H || 1133)
   }
 
   await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
+
+  await step('lib_00 cold start shows the flapping Songbird, then the library', async () => {
+    await page.waitForSelector('.splash img[src="/songbird-flap.gif"]', { timeout: 3000 })
+    await shot('00-splash')
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 5000 })
+  })
   await page.waitForSelector('text=Lacrymosa')
   await shot('01-library')
 

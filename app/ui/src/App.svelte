@@ -16,10 +16,13 @@
   import { openAnnotations, editAnnotations, STAMPS, type AnnDoc, type AnnCommand, type Tool, type Box } from './lib/annot'
   import AnnotLayer from './lib/AnnotLayer.svelte'
   import { swipe } from './lib/swipe'
+  import Splash from './lib/Splash.svelte'
   import InstructionsPanel from './lib/InstructionsPanel.svelte'
   import type { InstructionsData } from './lib/api'
 
   let scores: ScoreEntry[] = $state([])
+  /** The library is loaded: the cold-start splash may go. */
+  let started = $state(false)
   let notice = $state('')
   let opened: Opened | null = $state(null)
   // First run (phase P): a one-time hint in the reader, remembered in the
@@ -320,7 +323,7 @@
 
   onMount(async () => {
     try {
-      scores = await api.listScores()
+      scores = await api.listScores().finally(() => (started = true))
       // Files shared to Cantor from other apps (share sheet, AirDrop, Files).
       listen<string[]>('library-changed', async (ev) => {
         scores = await api.listScores()
@@ -1244,6 +1247,7 @@
 {/if}
 
 <Dialog />
+<Splash ready={started} />
 
 <style>
   /* SET-03: the part the director gave this member, and a marker on the

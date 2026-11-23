@@ -32,6 +32,7 @@ const ratio = (a, b) => {
     }, skin)
     await page.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
     await page.waitForSelector('ul.scores > li')
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 5000 })
     await page.screenshot({ path: path.join(DIR, 'shots', `skin-${skin}-library.png`) })
     await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).first().locator('button.open').click()
     await page.waitForSelector('.pdfview canvas, .sheet canvas', { timeout: 20000 })

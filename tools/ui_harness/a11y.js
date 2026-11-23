@@ -133,6 +133,7 @@ const SCREENS = [
         }, [skin, lang])
         await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
         await page.waitForSelector('ul.scores > li')
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 5000 })
         try {
           await go(page)
         } catch (e) {
@@ -191,6 +192,7 @@ const SCREENS = [
     await require('./mock.js').setup(page, DIR)
     await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
     await page.waitForSelector('ul.scores > li')
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 5000 })
     const seen = []
     for (let i = 0; i < 25; i++) {
       await page.keyboard.press('Tab')
@@ -235,6 +237,7 @@ const SCREENS = [
     await page.addInitScript(() => localStorage.setItem('cantor.textScale', '2'))
     await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
     await page.waitForSelector('ul.scores > li')
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 5000 })
     for (const screen of ['library', 'reader']) {
       if (screen === 'reader') {
         await page.locator('ul.scores > li').first().locator('button.open').click()
@@ -267,6 +270,7 @@ const SCREENS = [
     await require('./mock.js').setup(page, DIR)
     await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
     await page.waitForSelector('ul.scores > li')
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 5000 })
     const moving = await page.evaluate(() => {
       const out = []
       for (const el of document.querySelectorAll('*')) {
