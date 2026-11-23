@@ -7,6 +7,9 @@ export interface SwipeOpts {
   enabled: boolean
   /** +1 = next (drag to the left), -1 = previous. */
   onswipe: (d: number) => void | Promise<void>
+  /** Is there a page that way? At the first or last page the drag only
+   * gives a little resistance (no fold) and nothing turns. */
+  canturn?: (d: number) => boolean
 }
 
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -69,7 +72,7 @@ function animate(from: number, to: number, ms: number, step: (x: number) => void
 export function swipe(node: HTMLElement, opts: SwipeOpts) {
   let o = opts
   let start: { x: number; y: number; t: number; id: number } | null = null
-  let drag: { d: number; f: ReturnType<typeof makeFold>; w: number; left: number; lastX: number; lastT: number; v: number } | null = null
+  let drag: { d: number; f: ReturnType<typeof makeFold> | null; w: number; left: number; lastX: number; lastT: number; v: number } | null = null
   let busy = false
   // Vertical scrolling stays native; horizontal drags come to us.
   node.style.touchAction = 'pan-y pinch-zoom'
@@ -89,8 +92,16 @@ export function swipe(node: HTMLElement, opts: SwipeOpts) {
         return
       }
       const r = node.getBoundingClientRect()
-      drag = { d: dx < 0 ? 1 : -1, f: makeFold(node), w: r.width, left: r.left, lastX: e.clientX, lastT: e.timeStamp, v: 0 }
+      const d = dx < 0 ? 1 : -1
+      const can = o.canturn ? o.canturn(d) : true
+      drag = { d, f: can ? makeFold(node) : null, w: r.width, left: r.left, lastX: e.clientX, lastT: e.timeStamp, v: 0 }
       node.setPointerCapture?.(e.pointerId)
+    }
+    if (!drag.f) {
+      // Edge of the score: a short rubber band, then it springs back.
+      const pull = Math.sign(dx) * Math.min(28, Math.abs(dx) / 6)
+      if (!reduced()) node.style.transform = `translateX(${pull}px)`
+      return
     }
     const now = e.timeStamp
     drag.v = (e.clientX - drag.lastX) / Math.max(1, now - drag.lastT)
@@ -106,6 +117,16 @@ export function swipe(node: HTMLElement, opts: SwipeOpts) {
     start = null
     drag = null
     if (!s || e.pointerId !== s.id || !g) return
+    if (!g.f) {
+      // Nothing that way: spring back, and the release is not a tap.
+      node.addEventListener('click', (c) => (c.stopPropagation(), c.preventDefault()), { capture: true, once: true })
+      if (!reduced()) {
+        node.style.transition = 'transform 0.18s ease-out'
+        node.style.transform = ''
+        setTimeout(() => (node.style.transition = ''), 200)
+      } else node.style.transform = ''
+      return
+    }
     // The release must not also count as a tap on a bar.
     const eat = (c: Event) => {
       c.stopPropagation()
@@ -118,27 +139,29 @@ export function swipe(node: HTMLElement, opts: SwipeOpts) {
     const flick = Math.abs(g.v) > 0.6 && Math.sign(-g.v) === g.d && Math.abs(dx) > 40 && e.timeStamp - g.lastT < 80
     const turn = Math.abs(dx) > g.w * 0.25 || flick
     const x = g.d > 0 ? g.w + dx : dx
+    const f = g.f
     busy = true
     if (reduced()) {
-      g.f.el.remove()
+      f.el.remove()
       if (turn) await o.onswipe(g.d)
       busy = false
       return
     }
     if (turn) {
       // Finish the fold to the far side, then show the new page.
-      await animate(x, g.d > 0 ? -g.w : 2 * g.w, 220, (v) => place(g.f, g.w, v, g.d))
+      await animate(x, g.d > 0 ? -g.w : 2 * g.w, 220, (v) => place(f, g.w, v, g.d))
       await o.onswipe(g.d)
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     } else {
-      await animate(x, g.d > 0 ? g.w : 0, 180, (v) => place(g.f, g.w, v, g.d))
+      await animate(x, g.d > 0 ? g.w : 0, 180, (v) => place(f, g.w, v, g.d))
     }
-    g.f.el.remove()
+    f.el.remove()
     busy = false
   }
   const cancel = () => {
     start = null
-    drag?.f.el.remove()
+    drag?.f?.el.remove()
+    node.style.transform = ''
     drag = null
   }
   node.addEventListener('pointerdown', down)

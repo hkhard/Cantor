@@ -1307,6 +1307,29 @@ const H = Number(process.env.H || 1133)
     await page.mouse.up()
     await page.waitForTimeout(600)
     if ((await pg()) !== before) throw new Error('a short drag turned the page')
+    // No page before the first: a drag right on page 1 shows no fold and
+    // nothing turns (and the same at the end).
+    const dragFold = async (from, to) => {
+      await page.mouse.move(b.x + b.width * from, cy)
+      await page.mouse.down()
+      for (let i = 1; i <= 8; i++) await page.mouse.move(b.x + b.width * (from + ((to - from) * i) / 8), cy)
+      const fold = await page.locator('.pagefold .pf-flap').count()
+      await page.mouse.up()
+      await page.waitForTimeout(600)
+      return fold
+    }
+    if (!/^1\//.test(await pg())) throw new Error('expected page 1, got ' + (await pg()))
+    if (await dragFold(0.1, 0.7)) throw new Error('fold shown before the first page')
+    if (!/^1\//.test(await pg())) throw new Error('turned before the first page: ' + (await pg()))
+    // Go to the last page, then drag left: nothing to turn to.
+    const n = Number((await pg()).split('/')[1])
+    await page.evaluate((n) => window.__gotoPage?.(n), n)
+    await page.waitForTimeout(500)
+    if ((await pg()) !== `${n}/${n}`) throw new Error('not on the last page: ' + (await pg()))
+    if (await dragFold(0.9, 0.3)) throw new Error('fold shown after the last page')
+    if ((await pg()) !== `${n}/${n}`) throw new Error('moved past the last page: ' + (await pg()))
+    await page.evaluate(() => window.__gotoPage?.(1))
+    await page.waitForTimeout(500)
     // A vertical drag does nothing.
     await page.mouse.move(b.x + b.width / 2, b.y + 100)
     await page.mouse.down()

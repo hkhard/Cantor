@@ -267,6 +267,11 @@
     const to = Math.min(last, Math.max(0, from + d))
     await seekMeasure(to)
   }
+  /** Swipe: is there a page that way in the view that is showing? */
+  function canSwipe(d: number): boolean {
+    const p = shownPage
+    return d > 0 ? p.page < p.pages : p.page > 1
+  }
   /** Swipe: a whole page in the view that is showing. */
   function swipePage(d: number) {
     if (view === 'pdf' && pdfView) pdfView.turnPage(d)
@@ -277,6 +282,7 @@
     const w = window as unknown as Record<string, unknown>
     w.__seekBar = (m: number) => seekMeasure(m)
     w.__playingBar = () => playingMeasure
+    w.__gotoPage = (p: number) => gotoPage(p)
   }
 
   async function savePreset() {
@@ -1185,7 +1191,7 @@
     <div class="body" onclickcapture={phoneTap}>
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       {#if view === 'pdf' && opened.pdf_url}
-        <div class="score pdf" use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage }}>
+        <div class="score pdf" use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage, canturn: canSwipe }}>
           <PdfView
             bind:this={pdfView}
             url={scoreFileUrl(opened.pdf_url)}
@@ -1206,7 +1212,7 @@
           />
         </div>
       {:else}
-      <div class="score" bind:this={scoreEl} onclick={tapScore} use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage }} role="region" aria-label={t('a11y.notation', { n: page, of: engraved?.pages ?? 1 })}>
+      <div class="score" bind:this={scoreEl} onclick={tapScore} use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage, canturn: canSwipe }} role="region" aria-label={t('a11y.notation', { n: page, of: engraved?.pages ?? 1 })}>
         {#if loading}<p class="loading">{loading}</p>{/if}
         {#if error}<p class="error">{error}</p>{/if}
         {@html svg}
