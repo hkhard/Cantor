@@ -147,6 +147,9 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | --- | --- | --- | --- |
 | SET-01 | P0 | Setlists with ordering, placeholders and per-item start page | Drag to reorder; placeholder shows in performance mode |
 | SET-02 | P1 | Share setlist as a bundle (scores + annotations + mix presets) | Bundle imports on another device with identical content hash |
+| SET-03 | P1 | Instructions per score and per setlist: free text with paragraphs, bold, links and bar references ("t. 12", "m. 12") that jump to the bar; plus "who sings what" hints (member or group to part) per score | Saved in the library store, synced through folder sync, in backups; shown and editable in the reader and on the setlist page; a bar reference seeks to that bar; a member who picks their name gets their part marked |
+| SET-04 | P1 | Account-free set sharing: the `.cantorset` carries the setlist, its instructions, every score's files, the part hints and exported practice tracks (one M4A per part); older bundles stay readable | Round trip keeps instructions, hints and tracks with the same content hash; a version 1 bundle imports; opening a received set shows its instructions and offers "practise my part" without a re-render |
+| SET-05 | P2 | A note per setlist item ("start at bar 9", "skip verse 2") | Saved with the setlist, shown in the list and in the reader, travels in the bundle |
 | PERF-01 | P0 | Performance mode: locks editing, large turn zones | No accidental annotation in performance mode |
 | PERF-02 | P0 | Page turners: Bluetooth HID pedals (AirTurn, PageFlip), keyboard arrows | Pedal press maps to configurable action |
 | PERF-03 | P1 | Metronome and pitch pipe | Metronome jitter < 1 ms against the audio clock |

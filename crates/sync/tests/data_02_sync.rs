@@ -346,6 +346,7 @@ fn data_02_setlist_rename_and_reorder_both_survive() {
         sl.items.push(SetItem::Score {
             score: ID.into(),
             start_page: None,
+            note: String::new(),
         });
         sl.items.push(SetItem::Placeholder {
             title: "Pause".into(),
@@ -516,6 +517,7 @@ fn random_edit(d: &Device, rng: &mut Rng) {
                 s.setlist_mut(&sid).unwrap().items.push(SetItem::Score {
                     score: id.clone(),
                     start_page: Some(1),
+                    note: String::new(),
                 });
             } else {
                 let sid = s.setlists()[rng.below(n as u64) as usize].id.clone();
@@ -616,4 +618,67 @@ fn data_02_random_concurrent_edits_converge() {
             );
         }
     }
+}
+
+/// SET-03: instructions travel through folder sync. Score instructions are
+/// one register per score; a setlist's instructions are a register apart
+/// from its name and items, so a rename on one device and an instructions
+/// edit on another both survive. Item notes (SET-05) ride with the items.
+#[test]
+fn data_02_set_03_instructions_and_item_notes_sync() {
+    use cantor_library::store::{PartHint, ScoreInstructions};
+    let (a, b) = two_with_olaf();
+    let mut sl_id = String::new();
+    a.at(1_500).edit_store(|s| {
+        s.set_instructions(
+            ID,
+            ScoreInstructions {
+                text: "Andas före **t. 12**.".into(),
+                parts: vec![PartHint {
+                    who: "Bo".into(),
+                    part: "Tenor 1".into(),
+                }],
+            },
+        );
+        sl_id = s.create_setlist("Vår");
+        s.setlist_mut(&sl_id).unwrap().items.push(SetItem::Score {
+            score: ID.into(),
+            start_page: None,
+            note: "Börja i t. 9".into(),
+        });
+    });
+    a.sync();
+    b.at(1_600).sync();
+    {
+        let st = b.store();
+        assert_eq!(st.instructions(ID).unwrap().text, "Andas före **t. 12**.");
+        assert_eq!(st.instructions(ID).unwrap().parts[0].part, "Tenor 1");
+        assert!(matches!(
+            &st.setlist(&sl_id).unwrap().items[0],
+            SetItem::Score { note, .. } if note == "Börja i t. 9"
+        ));
+    }
+    a.at(2_000)
+        .edit_store(|s| s.setlist_mut(&sl_id).unwrap().name = "Vårkonsert".into());
+    b.at(2_100).edit_store(|s| {
+        s.setlist_mut(&sl_id).unwrap().instructions = "Svart klädsel.".into();
+    });
+    b.sync();
+    a.sync();
+    b.sync();
+    for d in [&a, &b] {
+        let st = d.store();
+        let sl = st.setlist(&sl_id).unwrap();
+        assert_eq!(sl.name, "Vårkonsert");
+        assert_eq!(sl.instructions, "Svart klädsel.");
+    }
+    assert_eq!(a.hash(), b.hash());
+
+    // Clearing the score's instructions syncs as a removal.
+    a.at(3_000)
+        .edit_store(|s| s.set_instructions(ID, ScoreInstructions::default()));
+    a.sync();
+    b.sync();
+    assert!(b.store().instructions(ID).is_none());
+    assert_eq!(a.hash(), b.hash());
 }
