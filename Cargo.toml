@@ -7,7 +7,7 @@ exclude = ["app/src-tauri"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "UNLICENSED"
+license = "AGPL-3.0-only"
 
 [workspace.dependencies]
 cantor-score = { path = "crates/score" }

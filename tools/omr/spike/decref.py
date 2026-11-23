@@ -1,7 +1,8 @@
 # Reference greedy decode for staff 0 with the plain fp32 CPU models: the
 # token ids (rhythm, pitch) the Rust probe must reproduce.
 import numpy as np, onnxruntime as ort, json, glob, time
-H='/Users/hkh/.jcode/scratch/omrbench/homr-venv/lib/python3.11/site-packages/homr/transformer/'
+import os, homr
+H=os.path.join(os.path.dirname(homr.__file__), 'transformer') + '/'
 enc=ort.InferenceSession(glob.glob(H+'encoder_*.onnx')[0]); dec=ort.InferenceSession(glob.glob(H+'decoder_*.onnx')[0])
 x=np.fromfile('olaf/enc_in_0.f32','<f4').reshape(1,1,256,1280)
 t=time.perf_counter(); ctx=enc.run(None,{'input':x})[0]; te=time.perf_counter()-t

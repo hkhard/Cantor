@@ -563,6 +563,16 @@ const H = Number(process.env.H || 1133)
     await page.click('[role=tab] >> text=All scores')
   })
 
+  await step('about licence: About states AGPL-3.0 and where the source is', async () => {
+    await page.click('header button[aria-label="About Cantor"]')
+    const txt = await page.locator('.about').innerText()
+    if (!txt.includes('GNU Affero General Public License, version 3')) throw new Error('no AGPL notice')
+    if (!txt.includes('app store')) throw new Error('no app store permission mentioned')
+    if (!/Source code for this version:\s*https:\/\/github\.com\/\S+/.test(txt)) throw new Error('no source link')
+    if (!txt.includes('THIRD_PARTY_NOTICES.md')) throw new Error('no third-party notices')
+    await page.click('.about button.primary')
+  })
+
   await step('data_03 back up and restore a received backup', async () => {
     await page.click('header button[aria-label="About Cantor"]')
     await page.click('.about button:has-text("Back up now")')

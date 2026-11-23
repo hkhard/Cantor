@@ -515,6 +515,33 @@ tests (NFR-11: 100% of P0 criteria automated).
       - Conductor org seats under App Review guideline 3.1.3(c) need App Review's confirmation.
     - Not yet done: the `LICENSE` file, the CLA, the lawyer review, the company.
 
+  - **Open-source readiness (2026-11-23):**
+    - Licensing:
+      - `LICENSE` (AGPL-3.0, verbatim from gnu.org).
+      - `LICENSE-EXCEPTIONS.md` (section 7 app store permission).
+      - `CONTRIBUTING.md` (CLA v1, transferable to a future enskild firma).
+      - Licence fields in `Cargo.toml` and `package.json` set to `AGPL-3.0-only`.
+    - Checks in CI:
+      - `tools/licenses.py`: dependency allow-list. Self-test passes; tested to fail on an LGPL crate; 344 packages pass.
+      - `THIRD_PARTY_NOTICES.md`: generated, and CI fails when it is stale.
+      - `tools/check_docs.py`: every path and link in the main docs exists. Tested to fail on a planted broken link.
+    - About shows the licence and the source link (UI scenario `about licence`).
+    - Docs:
+      - `docs/ARCHITECTURE.md`, written from the code; names checked against the crates.
+      - `AGENTS.md` (and `CLAUDE.md` pointing to it).
+      - `docs/DEVELOPING.md`, `docs/README.md` (index), the README rewritten.
+      - `SECURITY.md`, `CODE_OF_CONDUCT.md`, PR and issue templates.
+    - Git history checked:
+      - No private scores; only public fixtures and the soundfont.
+      - No keys.
+      - Private score names appear only in test names and docs.
+      - The Apple team id is in the Xcode config.
+    - Phases, including what waits for the firm: `docs/ROADMAP.md`.
+    - Before publishing:
+      - Add a UI-harness fixture that needs no private scores.
+      - Remove the maintainer path from the CI runner config.
+      - Have a lawyer review the section 7 permission and the CLA.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.

@@ -39,6 +39,14 @@ jobs:
           cargo fmt --check
           cargo clippy -- -D warnings
           cargo test --lib
+      - name: Docs point at files that exist
+        run: python3 tools/check_docs.py
+      - name: Dependency licences (AGPL client, app store permission)
+        run: |
+          python3 tools/licenses.py --self-test
+          (cd app/ui && npm ci --silent)
+          python3 tools/licenses.py --report "$RUNNER_TEMP/notices.md"
+          diff -q <(tail -n +11 THIRD_PARTY_NOTICES.md) <(tail -n +11 "$RUNNER_TEMP/notices.md") || { echo "THIRD_PARTY_NOTICES.md is out of date: run tools/licenses.py --report THIRD_PARTY_NOTICES.md"; exit 1; }
       - name: Traceability (NFR-11)
         run: bash tools/trace.sh
       - name: Coverage >= 85% per core crate (NFR-11)

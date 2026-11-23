@@ -69,6 +69,11 @@
 
   let { onclose, onrestored }: { onclose: () => void; onrestored?: () => void } = $props()
 
+  // AGPL-3.0 section 6(d)/13: where the Corresponding Source is. Must point at
+  // the public repository (or tag) of the exact version before any release
+  // outside the maintainer's own devices (docs/ROADMAP.md, phase 0).
+  const SOURCE_URL = 'https://github.com/hkhard/Cantor'
+
   const licences = [
     { name: 'Verovio', what: 'Notsättning / music engraving', licence: 'LGPL-3.0', url: 'https://www.verovio.org' },
     { name: 'pdf.js', what: 'PDF', licence: 'Apache-2.0', url: 'https://mozilla.github.io/pdf.js/' },
@@ -78,6 +83,7 @@
     { name: 'Tauri', what: 'App', licence: 'MIT / Apache-2.0', url: 'https://tauri.app' },
     { name: 'Svelte', what: 'UI', licence: 'MIT', url: 'https://svelte.dev' },
     { name: 'quick-xml, zip, serde, objc2', what: 'MusicXML, MXL, data, iOS', licence: 'MIT / Apache-2.0', url: 'https://crates.io' },
+    { name: t('about.allOthers'), what: 'THIRD_PARTY_NOTICES.md', licence: 'MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0, Unicode', url: SOURCE_URL },
   ]
 </script>
 
@@ -124,6 +130,11 @@
     <input bind:this={restoreInput} type="file" accept=".cantorbackup" style="display:none" onchange={restorePicked} aria-label={t('backup.restore')} />
   </div>
   {#if backupMsg}<p role="status">{backupMsg}</p>{/if}
+  <h4>{t('about.licence')}</h4>
+  <p class="licence">{t('about.licenceBody')}</p>
+  <p class="licence">
+    {t('about.source')} <span class="url">{SOURCE_URL}</span>
+  </p>
   <h4>{t('about.licences')}</h4>
   <ul>
     {#each licences as l}
