@@ -61,11 +61,11 @@ OUT=$TMPDIR/pw bash tools/ui_harness/run.sh all
 Screenshots are written to `$OUT/shots`, and a failing step saves
 `fail-<step>.png`.
 
-**Known gap:** the harness needs one score with a PDF and a measure map in
-`scores/out/` (`SCORE=` picks which). `scores/` is private and git-ignored,
-so outside contributors cannot run the harness yet. A public replacement
-(generated from `fixtures/musicxml/satb_chorale_24.musicxml`) is on the
-roadmap (`docs/ROADMAP.md`, phase 0).
+**Scores:** the harness needs no private scores. It uses the public fixture
+`fixtures/scores/mozart-lacrymosa/` (MusicXML unzipped from the `.mxl`, the
+PDF, and `measures.json`). Regenerate the measure map with
+`cargo run -q -p cantor-score --example layout_boxes -- <mxl> > measures.json`.
+Forks and outside contributors can run it as is (done 2026-11-23).
 
 ## iPad
 
@@ -114,12 +114,17 @@ xcrun devicectl device process launch --device <UDID> <bundle id>
 ## Note recognition for PDFs (desktop)
 
 PDFs and forScore files have no note data. `cantor-omr` reads them with
-Audiveris (installed separately) and writes MusicXML, MIDI and a measure map
-next to the PDF:
+Audiveris (installed separately) and writes, per piece, MusicXML, the
+original PDF, a measure map and MIDI, named after the printed title:
 
 ```sh
-cargo run --release -p cantor-omr -- scores/out scores/*.4sc scores/*.pdf
+cargo run --release -p cantor-omr -- doctor     # what is installed, what is missing
+cargo run --release -p cantor-omr -- convert scores/*.4sc scores/*.pdf --out scores/out [--set "Name"]
 ```
+
+`--set` also writes a `.cantorset` to AirDrop. The old form
+`cantor-omr <out-dir> <files>...` still works. The guide for directors is
+[guides/pdf-to-cantor.md](guides/pdf-to-cantor.md).
 
 Scan cleanup, Tesseract languages and two-page spreads are covered in
 `tools/omr/README.md`. The on-device engine study is in
@@ -140,9 +145,10 @@ today.
 - **UI job:** the UI harness and the accessibility audit.
 
 The runner has the label `cantor` and is installed at `~/dev/cantor-runner`
-as a launchd service (`./svc.sh status|stop|start`). The runner links the
-private sample scores from the maintainer's machine. A
-fork's CI will not have them (see the known gap above).
+as a launchd service (`./svc.sh status|stop|start`). The core job reads
+private forScore samples from the maintainer's machine (`CANTOR_SAMPLES`);
+the tests that need them skip when they are missing. The UI job uses only
+public fixtures.
 
 ## Releasing a build to anyone else
 

@@ -4,9 +4,9 @@ const fs = require('fs')
 const path = require('path')
 
 exports.setup = async function setup(page, dir) {
-  const xml = fs.readFileSync(path.join(dir, 'Glimmande Nymf.musicxml'), 'utf8')
-  const pdf = fs.readFileSync(path.join(dir, 'Glimmande Nymf.pdf'))
-  const boxes = JSON.parse(fs.readFileSync(path.join(dir, 'Glimmande Nymf.measures.json'), 'utf8'))
+  const xml = fs.readFileSync(path.join(dir, 'score.musicxml'), 'utf8')
+  const pdf = fs.readFileSync(path.join(dir, 'score.pdf'))
+  const boxes = JSON.parse(fs.readFileSync(path.join(dir, 'score.measures.json'), 'utf8'))
   await page.route('http://cantor.localhost/**', (r) => r.fulfill({ body: pdf, contentType: 'application/pdf' }))
   // DATA-01 / NFR-05 / NFR-07: the app must work with no network and must not
   // call out. Every request that is not the local dev server or the cantor://
@@ -38,7 +38,7 @@ exports.setup = async function setup(page, dir) {
       })
       window.__store = store
       const scores = [
-        { file: '0:Glimmande Nymf', title: 'Glimmande Nymf', playable: true, pdf: true, user: false },
+        { file: '0:Lacrymosa', title: 'Lacrymosa', playable: true, pdf: true, user: false },
         { file: '0:Christmas', title: 'Christmas Day', playable: true, pdf: false, user: false },
         { file: '1:Mine', title: 'Min egen', playable: false, pdf: true, user: true },
         { file: '1:Scanned', title: 'Skannad', playable: true, pdf: false, user: true },
@@ -183,8 +183,8 @@ exports.setup = async function setup(page, dir) {
           choir: 'auto',
           voice_choir: 'male',
           sample_rate: 48000,
-          pdf_url: file === '0:Christmas' ? null : '0/Glimmande Nymf.pdf',
-          measure_boxes: file === '0:Glimmande Nymf' ? boxes : null,
+          pdf_url: file === '0:Christmas' ? null : '0/score.pdf',
+          measure_boxes: file === '0:Lacrymosa' ? boxes : null,
           track: store.track && file === '1:Mine' ? { offset_sec: store.track.offset_sec, markers: store.track.markers, duration_sec: 30 } : null,
           _transpose: transpose,
         }),

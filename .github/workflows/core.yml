@@ -59,8 +59,6 @@ jobs:
       - uses: actions/checkout@v7
       - name: Toolchain on PATH
         run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
-      - name: Private sample scores (git-ignored, on the runner only)
-        run: ln -sfn /Users/hkh/dev/musicMaker/scores scores
       - run: npm ci
         working-directory: app/ui
       - run: npx svelte-check --threshold error || true

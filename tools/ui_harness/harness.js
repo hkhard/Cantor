@@ -37,7 +37,7 @@ const H = Number(process.env.H || 1133)
   }
 
   await page.goto((process.env.CANTOR_UI_URL || 'http://localhost:5173/'))
-  await page.waitForSelector('text=Glimmande Nymf')
+  await page.waitForSelector('text=Lacrymosa')
   await shot('01-library')
 
   await step('lib_04 search filters', async () => {
@@ -50,7 +50,7 @@ const H = Number(process.env.H || 1133)
   })
 
   await step('lib_03 metadata editor saves', async () => {
-    await page.locator('ul.scores > li', { hasText: 'Glimmande Nymf' }).locator('button.info').click()
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).locator('button.info').click()
     await page.waitForSelector('.metasheet')
     await shot('02-meta')
     const inputs = page.locator('.metasheet input')
@@ -59,7 +59,7 @@ const H = Number(process.env.H || 1133)
     await page.locator('.metasheet .stars').first().locator('button').nth(3).click()
     await page.locator('.metasheet button.primary').click()
     await page.waitForSelector('.metasheet', { state: 'detached' })
-    const m = await page.evaluate(() => window.__store.metadata['0:Glimmande Nymf'])
+    const m = await page.evaluate(() => window.__store.metadata['0:Lacrymosa'])
     if (m.composer !== 'Bellman' || m.tags.length !== 2 || m.rating !== 4) throw new Error(JSON.stringify(m))
     await page.waitForSelector('text=Bellman')
   })
@@ -90,7 +90,7 @@ const H = Number(process.env.H || 1133)
     await page.selectOption('.viewsel select', 'tags')
     await page.click('[role=tab] >> text=vår')
     const titles = await page.locator('ul.scores > li .t > span:first-child').allInnerTexts()
-    if (titles.length !== 1 || titles[0] !== 'Glimmande Nymf') throw new Error('filter ' + titles)
+    if (titles.length !== 1 || titles[0] !== 'Lacrymosa') throw new Error('filter ' + titles)
     // Scores without tags are reachable under "None".
     await page.click('[role=tab] >> text=None')
     const rest = await page.locator('ul.scores > li').count()
@@ -112,14 +112,14 @@ const H = Number(process.env.H || 1133)
   })
 
   await step('lib_05 suggest combining a MusicXML and a PDF of the same piece', async () => {
-    // A MusicXML ("Lacrymosa") and its PDF under a download name arrived
+    // A MusicXML ("Ave verum") and its PDF under a download name arrived
     // separately; the backend says they match (title on the PDF's page 1).
     await page.evaluate(() => {
       window.__addScores([
-        { file: '1:lacrymosa', title: 'Lacrymosa', playable: true, pdf: false, user: true },
+        { file: '1:aveverum', title: 'Ave verum', playable: true, pdf: false, user: true },
         { file: '1:score-b503fb', title: 'score-b503fb', playable: false, pdf: true, user: true },
       ])
-      window.__store.pairs = [['1:lacrymosa', '1:score-b503fb']]
+      window.__store.pairs = [['1:aveverum', '1:score-b503fb']]
       document.dispatchEvent(new Event('visibilitychange'))
     })
     await page.click('[role=tab] >> text=All scores')
@@ -130,17 +130,17 @@ const H = Number(process.env.H || 1133)
     await page.click('.pending button:has-text("Combine")')
     await page.waitForSelector('.pending >> text=look like the same piece', { state: 'detached' })
     const combined = await page.evaluate(() => window.__store.combined)
-    if (!combined || combined[0] !== '1:lacrymosa') throw new Error('not combined ' + combined)
+    if (!combined || combined[0] !== '1:aveverum') throw new Error('not combined ' + combined)
     const after = await page.locator('ul.scores > li').count()
     if (after !== before - 1) throw new Error(`cards ${before} -> ${after}`)
-    const card = page.locator('ul.scores > li', { hasText: 'Lacrymosa' })
+    const card = page.locator('ul.scores > li', { hasText: 'Ave verum' })
     if (!(await card.locator('text=PDF').count())) throw new Error('combined card has no PDF badge')
     // Leave the library as the later steps expect it.
     await page.evaluate(() => {
-      window.__removeScore('1:lacrymosa')
+      window.__removeScore('1:aveverum')
       document.dispatchEvent(new Event('visibilitychange'))
     })
-    await page.waitForSelector('ul.scores > li >> text=Lacrymosa', { state: 'detached' })
+    await page.waitForSelector('ul.scores > li >> text=Ave verum', { state: 'detached' })
   })
 
   await step('lib_04 search by composer', async () => {
@@ -159,7 +159,7 @@ const H = Number(process.env.H || 1133)
     await page.click('.dlg button.primary')
     await page.waitForSelector('h2.setname')
     await page.click('[role=tab] >> text=All scores')
-    for (const t of ['Christmas Day', 'Glimmande Nymf']) {
+    for (const t of ['Christmas Day', 'Lacrymosa']) {
       await page.locator('ul.scores > li', { hasText: t }).locator('button.add').click()
       await page.locator('.addmenu button', { hasText: 'Vårkonsert' }).click()
     }
@@ -170,7 +170,7 @@ const H = Number(process.env.H || 1133)
     await page.locator('ol.setlist > li').nth(1).locator('button.up').click()
     await page.waitForTimeout(200)
     const first = await page.evaluate(() => window.__store.setlists[0].items[0].score)
-    if (first !== '0:Glimmande Nymf') throw new Error('reorder failed ' + first)
+    if (first !== '0:Lacrymosa') throw new Error('reorder failed ' + first)
   })
 
   // Drag with a long press, measuring every frame while the item moves.
@@ -351,14 +351,14 @@ const H = Number(process.env.H || 1133)
   await step('set_01 open from setlist, next piece', async () => {
     await page.click('[role=tab] >> text=Vårkonsert')
     await page.click('text=Play setlist')
-    await page.waitForSelector('.top h2 >> text=Glimmande Nymf')
+    await page.waitForSelector('.top h2 >> text=Lacrymosa')
     await page.waitForSelector('.pdfhost canvas')
     await page.waitForTimeout(1500)
     await shot('04-reader-pdf')
     await page.click('.top button[aria-label="▶"]')
     await page.waitForSelector('.top h2 >> text=Christmas')
     await page.click('.top button[aria-label="◀"]')
-    await page.waitForSelector('.top h2 >> text=Glimmande Nymf')
+    await page.waitForSelector('.top h2 >> text=Lacrymosa')
   })
 
   await step('perf_02 page turn by tap and key while paused (follow must not snap back)', async () => {
@@ -417,7 +417,7 @@ const H = Number(process.env.H || 1133)
     await page.fill('.dlg input', 'Utan T1')
     await page.click('.dlg button.primary')
     await page.waitForTimeout(600)
-    const s = await page.evaluate(() => window.__store.settings['0:Glimmande Nymf'])
+    const s = await page.evaluate(() => window.__store.settings['0:Lacrymosa'])
     if (!s || s.presets[0]?.name !== 'Utan T1' || !s.presets[0].strips[0].mute) throw new Error(JSON.stringify(s))
     await page.click('.top button:has-text("Hide mixer")')
   })
@@ -519,7 +519,12 @@ const H = Number(process.env.H || 1133)
       }, it.id)
       if (res.err) throw new Error(label + ': ' + res.err)
       const cx = (res.x0 + res.x1) / 2, cy = (res.y0 + res.y1) / 2
-      const inBar = res.bars.findIndex(([l, r, t, b]) => cx >= l && cx <= r && cy >= t && cy <= b)
+      // The smallest bar box holding the centre: a bar's box can include
+      // text that runs far past it (Lacrymosa's lyric line in bar 1).
+      let inBar = -1
+      res.bars.forEach(([l, r, t, b], i) => {
+        if (cx >= l && cx <= r && cy >= t && cy <= b && (inBar < 0 || (r - l) * (b - t) < (res.bars[inBar][1] - res.bars[inBar][0]) * (res.bars[inBar][3] - res.bars[inBar][2]))) inBar = i
+      })
       return { cx, cy, inBar, w: res.x1 - res.x0 }
     }
     const before = await check('before')
@@ -569,14 +574,15 @@ const H = Number(process.env.H || 1133)
     if (tr !== 1) throw new Error('transpose arg ' + tr)
     await page.waitForSelector('.score svg', { timeout: 20000 })
     if (!(await page.locator('.popover.more').count())) await page.click('.top button:has-text("•••")')
-    const before = await page.locator('.score svg g.staff').count()
+    // Staves per system: fewer parts fit more systems on a page.
+    const before = await page.evaluate(() => document.querySelector('.score svg g.system')?.querySelectorAll('g.staff').length ?? 0)
     await page.locator('.popover.more .check input').first().uncheck()
     await page.waitForTimeout(2500)
     await page.click('.top button:has-text("•••")')
-    const after = await page.locator('.score svg g.staff').count()
+    const after = await page.evaluate(() => document.querySelector('.score svg g.system')?.querySelectorAll('g.staff').length ?? 0)
     await shot('08-notation-hidden')
     if (!(after < before)) throw new Error(`staves ${before} -> ${after}`)
-    const s = await page.evaluate(() => window.__store.settings['0:Glimmande Nymf'])
+    const s = await page.evaluate(() => window.__store.settings['0:Lacrymosa'])
     if (s.transpose !== 1 || s.hidden_parts[0] !== 0) throw new Error(JSON.stringify(s))
   })
 
@@ -584,7 +590,7 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button[aria-label="Library"]')
     await page.waitForSelector('text=New setlist')
     await page.click('[role=tab] >> text=All scores')
-    await page.locator('ul.scores > li', { hasText: 'Glimmande Nymf' }).locator('button.open').click()
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).locator('button.open').click()
     await page.waitForSelector('.top h2')
     await page.waitForTimeout(1500)
     const last = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'open_score').pop()[1])
@@ -681,7 +687,7 @@ const H = Number(process.env.H || 1133)
     if ((await page.evaluate(() => window.__store.restored)) !== 'Cantor 2026-11-20.cantorbackup') throw new Error('not restored')
     if (await page.locator('.pending').count()) throw new Error('prompt still shown')
     await page.click('[role=tab] >> text=All scores')
-    await page.locator('ul.scores > li', { hasText: 'Glimmande Nymf' }).locator('button.open').click()
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).locator('button.open').click()
     await page.waitForSelector('.top h2')
   })
 
@@ -702,7 +708,12 @@ const H = Number(process.env.H || 1133)
       const systems = [...host.querySelectorAll('g.system')].map((s) => s.querySelectorAll('g.measure').length)
       host.remove()
       return systems
-    }, await page.evaluate(() => window.__xml))
+    }, require('fs').readFileSync(
+      // A hymn-like 4/4 SATB score: Lacrymosa's 12/8 piano bars are too dense
+      // for two to a phone line, and that is correct engraving.
+      path.join(process.env.CANTOR_REPO || path.join(__dirname, '../..'), 'fixtures/musicxml/satb_chorale_24.musicxml'),
+      'utf8',
+    ))
     if (!res.length) throw new Error('no systems engraved')
     const min = Math.min(...res)
     console.log('     bars per system at 390 px:', res.join(','))
@@ -782,7 +793,7 @@ const H = Number(process.env.H || 1133)
   await step('play_12 lock screen shows title and position (now playing updated from status)', async () => {
     // The lock-screen card is set natively from the status poll; here we
     // check the app polls status while playing so the card stays current.
-    await page.locator('ul.scores > li', { hasText: 'Glimmande Nymf' }).locator('button.open').click()
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).locator('button.open').click()
     await page.waitForSelector('.transport .play')
     const n0 = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'status').length)
     await page.click('.transport .play')
