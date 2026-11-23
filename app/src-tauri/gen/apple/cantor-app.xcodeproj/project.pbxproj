@@ -24,6 +24,7 @@
 		C24B43E9972BED2B193B73E0 /* Cantor.icon in Resources */ = {isa = PBXBuildFile; fileRef = D2A8643C7653A0E3D9DB5AFE /* Cantor.icon */; };
 		DBF561382E4ADAA90F17444F /* Vision.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F46510020A038D4147B8A1C2 /* Vision.framework */; };
 		E1F29A21F9A9249D5090D91B /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C09ADEAA95206A808FAFB82 /* libapp.a */; };
+		E8267C2D47471759D2D38015 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 70D0B66F917AF2DC5506425F /* PrivacyInfo.xcprivacy */; };
 		E99A5E408FE872D94442CB6D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */; };
 		F88675384658814571651652 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 936589A28830A2BC9A4B0411 /* UIKit.framework */; };
 /* End PBXBuildFile section */
@@ -43,6 +44,7 @@
 		58D6D51E1A9156AFF6C8BDE2 /* folder.rs */ = {isa = PBXFileReference; path = folder.rs; sourceTree = "<group>"; };
 		5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6C09ADEAA95206A808FAFB82 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		70D0B66F917AF2DC5506425F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		715F8714E0D0184083A1CB57 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		8C0857B713169D568B67D355 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		936589A28830A2BC9A4B0411 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
@@ -169,6 +171,7 @@
 				5AB1A89BB9847D7BC1B31EB4 /* Assets.xcassets */,
 				D2A8643C7653A0E3D9DB5AFE /* Cantor.icon */,
 				3E8673E7F53042CD0C5E0DDC /* LaunchScreen.storyboard */,
+				70D0B66F917AF2DC5506425F /* PrivacyInfo.xcprivacy */,
 				F3E40A6D37F2C4D25BFD63A8 /* cantor-app_iOS */,
 				81D3AB78FFFB9C0167EB3288 /* Externals */,
 				793423B2E1A266F46AB7A4A7 /* Sources */,
@@ -187,14 +190,14 @@
 			path = "cantor-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_8BF1FF75-6955-48EA-904A-7E30160504D8" /* arm64 */ = {
+		"TEMP_4CA65E44-398D-407B-BC07-DC70A8548CE6" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
 			sourceTree = "<group>";
 		};
-		"TEMP_B80EC700-1E46-41C4-AF3B-C6425707657B" /* x86_64 */ = {
+		"TEMP_FFE84B6B-6A52-4240-988A-BE2585916652" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -265,6 +268,7 @@
 				E99A5E408FE872D94442CB6D /* Assets.xcassets in Resources */,
 				C24B43E9972BED2B193B73E0 /* Cantor.icon in Resources */,
 				054C2193769ED25925BB3AD9 /* LaunchScreen.storyboard in Resources */,
+				E8267C2D47471759D2D38015 /* PrivacyInfo.xcprivacy in Resources */,
 				2BF2DC39E1B45A0A8D9C82E8 /* assets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -143,6 +143,42 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('ul.scores > li >> text=Ave verum', { state: 'detached' })
   })
 
+  await step('lib_05 combine later from Info after answering no', async () => {
+    // The user said "No, they differ" (or the names never matched): the
+    // pair is no longer suggested, but Info still offers "Combine with".
+    await page.evaluate(() => {
+      window.__addScores([
+        { file: '1:gloria', title: 'Gloria', playable: true, pdf: false, user: true },
+        { file: '1:scan-77', title: 'scan-77', playable: false, pdf: true, user: true },
+      ])
+      window.__store.pairs = [['1:gloria', '1:scan-77']]
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForSelector('.pending >> text=look like the same piece')
+    await page.click('.pending button:has-text("No, they differ")')
+    await page.waitForSelector('.pending >> text=look like the same piece', { state: 'detached' })
+    // From the PDF's side: Info, pick the notes, combine.
+    await page.click('ul.scores > li:has-text("scan-77") button.info')
+    const sheet = page.locator('.metasheet')
+    await sheet.locator('select[aria-label="Combine with"]').selectOption('1:gloria')
+    await sheet.locator('button:has-text("Combine")').click()
+    await page.waitForSelector('.metasheet', { state: 'detached' })
+    const combined = await page.evaluate(() => window.__store.combined)
+    if (!combined || combined[0] !== '1:gloria' || combined[1] !== '1:scan-77') throw new Error('not combined ' + combined)
+    const card = page.locator('ul.scores > li', { hasText: 'Gloria' })
+    if (!(await card.locator('text=PDF').count())) throw new Error('combined card has no PDF badge')
+    if (await page.locator('ul.scores > li', { hasText: 'scan-77' }).count()) throw new Error('PDF card still there')
+    // Bundled and complete scores offer nothing to combine.
+    await page.click('ul.scores > li:has-text("Gloria") button.info')
+    if (await page.locator('.metasheet select[aria-label="Combine with"]').count()) throw new Error('complete score offers combine')
+    await page.click('.metasheet button:has-text("Cancel")')
+    await page.evaluate(() => {
+      window.__removeScore('1:gloria')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForSelector('ul.scores > li >> text=Gloria', { state: 'detached' })
+  })
+
   await step('lib_04 search by composer', async () => {
     await page.fill('input[type=search]', 'bellman')
     await page.waitForTimeout(400)
@@ -355,9 +391,9 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('.pdfhost canvas')
     await page.waitForTimeout(1500)
     await shot('04-reader-pdf')
-    await page.click('.top button[aria-label="▶"]')
+    await page.click('.top button[aria-label="Next piece"]')
     await page.waitForSelector('.top h2 >> text=Christmas')
-    await page.click('.top button[aria-label="◀"]')
+    await page.click('.top button[aria-label="Previous piece"]')
     await page.waitForSelector('.top h2 >> text=Lacrymosa')
   })
 
@@ -442,9 +478,14 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('.annbar')
     const svg = page.locator('svg.annot').first()
     const b = await svg.boundingBox()
-    await page.mouse.move(b.x + 100, b.y + 200)
+    // Start inside bar 1 of the fixture's measure map, so the stroke lands
+    // on a bar whatever the score's layout (title space, indents).
+    const m0 = await page.evaluate(() => window.__boxes?.[0] ?? null)
+    const sx = m0 ? b.x + b.width * (m0.x + m0.w * 0.2) : b.x + 100
+    const sy = m0 ? b.y + b.height * (m0.y + m0.h * 0.4) : b.y + 200
+    await page.mouse.move(sx, sy)
     await page.mouse.down()
-    for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + 100 + i * 15, b.y + 200 + i * 3)
+    for (let i = 1; i <= 10; i++) await page.mouse.move(sx + i * 15, sy + i * 3)
     await page.mouse.up()
     await page.click('.annbar button:has-text("Stamp")')
     await page.click('.annbar .stamps button:has-text("mf")')
@@ -654,6 +695,88 @@ const H = Number(process.env.H || 1133)
     const ex = await page.evaluate(() => window.__store.exports)
     const kinds = ex.map((e) => e[0]).join(',')
     if (!/setlist/.test(kinds) || !/4ss/.test(kinds)) throw new Error('exports ' + kinds)
+    await page.click('[role=tab] >> text=All scores')
+  })
+
+  await step('set_03 instructions per score: write, bar reference jumps, member gets their part', async () => {
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).locator('button.open').click()
+    await page.waitForSelector('.pdfhost canvas')
+    if (await page.locator('.inspanel').count()) throw new Error('panel open with no instructions')
+    await page.click('.top button[aria-label="Instructions"]')
+    await page.click('.inspanel button:has-text("Edit")')
+    await page.fill('.inspanel textarea', 'Breathe before m. 3.\n\n**Piano** from bar 2, see [notes](https://example.org).')
+    await page.fill('.inspanel input[aria-label="Name or group"]', 'Bo')
+    await page.locator('.inspanel select[aria-label="Part"]').selectOption('Tenor 1')
+    await page.click('.inspanel button:has-text("Save")')
+    await page.waitForSelector('.inspanel .barref')
+    const saved = await page.evaluate(() => window.__store.instructions['0:Lacrymosa'])
+    if (!saved.text.includes('m. 3') || saved.parts[0].who !== 'Bo' || saved.parts[0].part !== 'Tenor 1') throw new Error('saved ' + JSON.stringify(saved))
+    if ((await page.locator('.inspanel .ins p').count()) !== 2) throw new Error('paragraphs')
+    if ((await page.locator('.inspanel .ins strong', { hasText: 'Piano' }).count()) !== 1) throw new Error('bold')
+    const href = await page.locator('.inspanel .ins a').getAttribute('href')
+    if (href !== 'https://example.org') throw new Error('link ' + href)
+    if ((await page.locator('.inspanel .barref').count()) !== 2) throw new Error('bar refs')
+    // "m. 3" seeks to bar 3 (mock: 2 s per bar, so 4 s).
+    await page.click('.inspanel .barref >> text=m. 3')
+    await page.waitForTimeout(200)
+    const seek = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'seek').at(-1))
+    if (!seek || seek[1].seconds !== 4) throw new Error('seek ' + JSON.stringify(seek))
+    // Pick "I am Bo": the part is named and marked in the mixer.
+    await page.locator('.inspanel label:has-text("I am") select').selectOption('Bo')
+    await page.waitForSelector('.inspanel >> text=Your part: Tenor 1')
+    if ((await page.evaluate(() => window.__store.member)) !== 'Bo') throw new Error('member not saved')
+    if (!(await page.locator('aside.mixer').count())) await page.click('.top button[aria-label="Mixer"]')
+    await page.waitForSelector('.strip.hinted')
+    if ((await page.locator('.strip.hinted .label').textContent()).trim() !== 'Tenor 1') throw new Error('wrong part marked')
+    await shot('40-instructions')
+    await page.click('.top button[aria-label="Library"]')
+  })
+
+  await step('set_03 setlist instructions on the setlist page', async () => {
+    await page.click('[role=tab] >> text=Vårkonsert')
+    await page.click('.setins button:has-text("Edit")')
+    await page.fill('.setins textarea', 'Meet at **17.30**. Black clothes.')
+    await page.click('.setins button:has-text("Save")')
+    await page.waitForSelector('.setins strong >> text=17.30')
+    const sl = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert'))
+    if (sl.instructions !== 'Meet at **17.30**. Black clothes.') throw new Error('set instructions ' + sl.instructions)
+  })
+
+  await step('set_05 note per setlist item, shown in the list and the reader', async () => {
+    const first = page.locator('ol.setlist > li').first()
+    await first.locator('button.notebtn').click()
+    await page.waitForSelector('.dlg input')
+    await page.fill('.dlg input', 'Start at bar 9')
+    await page.click('.dlg button.primary')
+    await page.waitForSelector('ol.setlist .itemnote >> text=Start at bar 9')
+    const it = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert').items[0])
+    if (it.note !== 'Start at bar 9') throw new Error('note ' + JSON.stringify(it))
+    await shot('41-setlist-instructions')
+    // Opening the set shows set instructions, the item note and the piece's own.
+    await page.click('text=Play setlist')
+    await page.waitForSelector('.inspanel')
+    const txt = await page.locator('.inspanel').innerText()
+    for (const want of ['Meet at', 'Start at bar 9', 'Breathe before']) if (!txt.includes(want)) throw new Error('panel lacks ' + want)
+    if (!(await page.locator('.inspanel .barref >> text=bar 9').count())) throw new Error('note bar ref')
+    await page.click('.top button[aria-label="Library"]')
+  })
+
+  await step('set_04 a received set opens with its instructions and offers practise my part', async () => {
+    await page.evaluate(() => {
+      window.__store.setlists.push({ id: 'rx', name: 'Mottagen', instructions: 'Welcome! Learn **m. 5** first.', items: [{ kind: 'score', score: '0:Lacrymosa', start_page: null, note: '' }] })
+      window.__store.receivedSet = 'rx'
+      window.__store.practice = { '0:Lacrymosa': ['Tenor 1', 'Bas 1'] }
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForSelector('[role=status] >> text=You received the setlist')
+    if ((await page.locator('h2.setname').textContent()).trim() !== 'Mottagen') throw new Error('not on the received set')
+    await page.waitForSelector('.setins strong >> text=m. 5')
+    await shot('42-received-set')
+    await page.click('text=Play setlist')
+    await page.waitForSelector('.inspanel')
+    await page.waitForSelector('.inspanel button:has-text("Practise my part (Tenor 1)")')
+    if ((await page.locator('.inspanel .tracks button').count()) !== 2) throw new Error('practice tracks')
+    await page.click('.top button[aria-label="Library"]')
     await page.click('[role=tab] >> text=All scores')
   })
 
@@ -892,6 +1015,52 @@ const H = Number(process.env.H || 1133)
     await page.click('.about button.primary')
     await page.waitForSelector('text=Alla noter')
     await shot('11-library-sv')
+  })
+
+  // Phase P first run. Swedish is on after the nfr_10 step above.
+  await step('lib_01 first run: empty library explains how to add scores and offers Lacrymosa', async () => {
+    if (await page.locator('.top button[aria-label="Bibliotek"]').count()) await page.click('.top button[aria-label="Bibliotek"]')
+    if (await page.locator('.welcome').count()) throw new Error('welcome shown while the user has scores')
+    await page.evaluate(() => {
+      for (const f of ['1:Mine', '1:Scanned']) window.__removeScore(f, true)
+    })
+    await page.reload()
+    await page.waitForSelector('.welcome .trycard')
+    const txt = await page.locator('.welcome').innerText()
+    for (const w of ['Importera', 'AirDrop', 'Filer', 'Lacrymosa']) if (!txt.includes(w)) throw new Error('welcome lacks ' + w)
+    await shot('40-first-run-sv')
+  })
+
+  await step('lib_01 first open shows a one-time hint, dismissed and remembered in the store', async () => {
+    await page.evaluate(() => { window.__store.hints = [] })
+    await page.click('.welcome .trycard')
+    await page.waitForSelector('.readerhint')
+    const txt = await page.locator('.readerhint').innerText()
+    if (!/takt/.test(txt) || !/mixer/i.test(txt)) throw new Error('hint text: ' + txt)
+    await shot('41-reader-hint-sv')
+    await page.click('.readerhint button.primary')
+    await page.waitForSelector('.readerhint', { state: 'detached' })
+    const hints = await page.evaluate(() => window.__store.hints)
+    if (!hints.includes('reader')) throw new Error('hint not saved in the store')
+    await page.reload()
+    await page.waitForSelector('.welcome .trycard')
+    await page.click('.welcome .trycard')
+    await page.waitForSelector('.pdfhost canvas')
+    await page.waitForTimeout(500)
+    if (await page.locator('.readerhint').count()) throw new Error('hint shown again')
+  })
+
+  await step('lib_01 hint has no animation with reduced motion', async () => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.evaluate(() => { window.__store.hints = [] })
+    await page.reload()
+    await page.waitForSelector('.welcome .trycard')
+    await page.click('.welcome .trycard')
+    await page.waitForSelector('.readerhint')
+    const anim = await page.locator('.readerhint').evaluate((e) => getComputedStyle(e).animationName)
+    if (anim !== 'none') throw new Error('animation: ' + anim)
+    await page.click('.readerhint button.primary')
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
   })
 
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors')

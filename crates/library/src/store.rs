@@ -428,6 +428,8 @@ struct Data {
     default_voice_sets: BTreeMap<String, String>,
     /// "score|pdf" pairs the user chose not to combine.
     dismissed_pairs: std::collections::BTreeSet<String>,
+    /// One-time hints the user has dismissed (first run, e.g. "reader").
+    hints_seen: std::collections::BTreeSet<String>,
     /// SET-03: instructions and part hints per score id.
     instructions: BTreeMap<String, ScoreInstructions>,
     /// SET-03: the member using this library (matches [`PartHint::who`]).
@@ -681,6 +683,17 @@ impl Store {
     }
     pub fn dismiss_pair(&mut self, key: &str) {
         self.data.dismissed_pairs.insert(key.to_string());
+    }
+
+    // --- one-time hints ---
+    pub fn hint_seen(&self, id: &str) -> bool {
+        self.data.hints_seen.contains(id)
+    }
+    pub fn mark_hint_seen(&mut self, id: &str) {
+        self.data.hints_seen.insert(id.to_string());
+    }
+    pub fn hints_seen(&self) -> Vec<String> {
+        self.data.hints_seen.iter().cloned().collect()
     }
 
     // --- start view ---

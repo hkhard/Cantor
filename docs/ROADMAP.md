@@ -45,11 +45,11 @@ not part of this phase (see "held back").
 | Work | Exit check |
 |---|---|
 | **Device check of everything marked "not verified"** in plan section 7: combine MXL+PDF, PDF cursor, voice sets by ear, real share sheet, Apple Pencil, lock-screen controls, keyboard and pedal, two-device sync, drag feel | Each item ticked by the product owner on the iPad mini, or turned into a bug with a test |
-| **First run:** an empty library explains what to do (import, AirDrop, Files), Lacrymosa is there to try, a short hint for tap-to-play and the mixer | UI scenario from a fresh install; product owner check |
+| **First run:** an empty library explains what to do (import, AirDrop, Files), Lacrymosa is there to try, a short hint for tap-to-play and the mixer | UI scenario from a fresh install; product owner check. **Done in the harness (2026-11-23); device and product owner check open** |
 | **Robustness** (in progress: panic guard, corrupt-file tests per importer, atomic writes done 2026-11-23, NFR-13; device test open)**:** no panic crosses into the app (every command returns an error the user can read), damaged or unsupported files give a clear message, low-memory and backgrounding do not lose work | Fuzz/corrupt-file tests per importer; panic guard test; device test: background, kill, reopen |
 | **Performance on the iPad mini:** 60 fps for page turns, scrolling the library and the mixer; cold start and score open times logged | `.perf.log` numbers recorded in plan section 7, within NFR-01/03 |
 | **Accessibility on the device:** VoiceOver through library, reader, mixer; larger text; reduced motion | Product owner or VoiceOver walkthrough notes; axe stays at 0 |
-| **Swedish and English complete** | `nfr_10_sv_en_localisation_complete` passes; no hard-coded strings in the UI |
+| **Swedish and English complete** | `nfr_10_sv_en_localisation_complete` passes; no hard-coded strings in the UI. **Passes (2026-11-23), in CI** |
 | **Long-session soak:** 2 hours of playback without drift or memory growth | `nfr_02_no_drift_gt_5ms`; memory probe in `.perf.log` |
 | **Release build:** version and build number from a git tag, shown in About with the source link; Release (not debug) configuration; final app icon and launch screen; `PrivacyInfo.xcprivacy` (no tracking, no data collected) | `tools/ipad.sh release` builds an archive; About shows the tag |
 | **Store-ready material (not submitted):** description sv/en, screenshots of the iPad mini and 13", privacy statement, support page | Files in a new store folder under docs; submission waits for the decision below |
@@ -143,8 +143,10 @@ One review covering:
 
 ## Phase 5: moved here from phase 1 (2026-11-23, after phase P)
 
-Started and stopped on 2026-11-23 so the iPad app is finished first. Only
-the PRD rows BAND-01..05 were committed (text, no code). Same exit checks as before.
+Moved here on 2026-11-23 so the iPad app is finished first. Core code for
+BAND-01..03 and SET-03..05 was already committed by then (tests pass), with
+a first UI; product owner review and device checks wait for this phase.
+Same exit checks as before.
 
 | Work | Exit check |
 |---|---|

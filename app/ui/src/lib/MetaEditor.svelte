@@ -11,9 +11,31 @@
     /** The score has an original PDF (offer "read from the page"). */
     pdf?: boolean
     initial: Metadata | undefined
+    /** LIB-05: scores this one can be combined with (the other half: PDF
+     * for notes, notes for a PDF). Empty = nothing to offer. */
+    partners?: { file: string; title: string }[]
+    /** Combine this score with `other`; resolves when done. */
+    oncombine?: (other: string) => Promise<void>
     onclose: (saved: boolean) => void
   }
-  let { id, title, initial, pdf = false, onclose }: Props = $props()
+  let { id, title, initial, pdf = false, partners = [], oncombine, onclose }: Props = $props()
+
+  // LIB-05: combine by hand, also after "No, they differ" or when the names
+  // never matched.
+  let partner = $state('')
+  let combining = $state(false)
+  let combineErr = $state('')
+  async function combineNow() {
+    if (!partner || !oncombine) return
+    combining = true
+    combineErr = ''
+    try {
+      await oncombine(partner)
+    } catch (e) {
+      combineErr = String(e)
+      combining = false
+    }
+  }
 
   // Editing a copy taken when the sheet opens (the parent remounts it per score).
   const start = (): Metadata => {
@@ -95,7 +117,7 @@
   <label>{t('meta.composer')}<input bind:value={m.composer} /></label>
   <label>{t('meta.arranger')}<input bind:value={m.arranger} /></label>
   <div class="row">
-    <label>{t('meta.key')}<input bind:value={m.key} placeholder="F-dur" /></label>
+    <label>{t('meta.key')}<input bind:value={m.key} placeholder={t('meta.keyHint')} /></label>
     <label
       >{t('meta.tempo')}<input
         type="number"
@@ -125,6 +147,21 @@
       {/each}
     </span>
   </div>
+  {#if partners.length && oncombine}
+    <div class="combine">
+      <label
+        >{pdf ? t('meta.combineNotes') : t('meta.combinePdf')}
+        <select bind:value={partner} aria-label={t('meta.combineWith')}>
+          <option value="">{t('meta.combineChoose')}</option>
+          {#each partners as p (p.file)}
+            <option value={p.file}>{p.title}</option>
+          {/each}
+        </select>
+      </label>
+      <button class="chip" onclick={combineNow} disabled={!partner || combining}>{t('lib.combine')}</button>
+    </div>
+    {#if combineErr}<p class="hint" role="alert">{combineErr}</p>{/if}
+  {/if}
   <div class="actions">
     <button onclick={() => onclose(false)}>{t('common.cancel')}</button>
     <button class="primary" onclick={save} disabled={saving}>{t('common.save')}</button>
@@ -132,6 +169,19 @@
 </div>
 
 <style>
+  .combine {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+  }
+  .combine select {
+    font-size: 1rem;
+    padding: 7px 9px;
+    min-height: 44px;
+  }
+  .combine .chip {
+    min-height: 44px;
+  }
   .readrow {
     display: flex;
     align-items: center;

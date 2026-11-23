@@ -839,3 +839,41 @@ select {
 .library.editing .scores > li:nth-child(2n) > :first-child {
   animation-delay: -0.14s;
 }
+
+/* First run (phase P): one-time reader hint. */
+.hintbg {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgb(0 0 0 / 0.25);
+}
+.readerhint {
+  position: fixed;
+  z-index: 61;
+  left: 50%;
+  top: 50%;
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  transform: translate(-50%, -50%);
+  animation: hintin 0.2s ease-out;
+}
+.readerhint h3 {
+  margin: 0 0 0.5rem;
+}
+.readerhint ul {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  line-height: 1.5;
+}
+@keyframes hintin {
+  from {
+    transform: translate(-50%, -45%);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .readerhint {
+    animation: none;
+  }
+}

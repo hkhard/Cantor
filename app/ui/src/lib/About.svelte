@@ -77,17 +77,17 @@
   const VERSION = __CANTOR_VERSION__
   const SOURCE_REF_URL = `${SOURCE_URL}/tree/${__CANTOR_REF__}`
 
-  const licences = [
-    { name: 'Verovio', what: 'Notsättning / music engraving', licence: 'LGPL-3.0', url: 'https://www.verovio.org' },
+  const licences = $derived([
+    { name: 'Verovio', what: t('about.engraving'), licence: 'LGPL-3.0', url: 'https://www.verovio.org' },
     { name: 'pdf.js', what: 'PDF', licence: 'Apache-2.0', url: 'https://mozilla.github.io/pdf.js/' },
-    { name: 'GeneralUser GS', what: 'SoundFont (S. Christian Collins)', licence: 'GeneralUser GS License v2.0 (fri användning)', url: 'https://schristiancollins.com/generaluser.php' },
-    { name: 'RustySynth', what: 'SoundFont-syntes', licence: 'MIT', url: 'https://github.com/sinshu/rustysynth' },
-    { name: 'cpal', what: 'Ljud ut / audio output', licence: 'Apache-2.0', url: 'https://github.com/RustAudio/cpal' },
+    { name: 'GeneralUser GS', what: 'SoundFont (S. Christian Collins)', licence: t('about.gsLicence'), url: 'https://schristiancollins.com/generaluser.php' },
+    { name: 'RustySynth', what: t('about.synth'), licence: 'MIT', url: 'https://github.com/sinshu/rustysynth' },
+    { name: 'cpal', what: t('about.audioOut'), licence: 'Apache-2.0', url: 'https://github.com/RustAudio/cpal' },
     { name: 'Tauri', what: 'App', licence: 'MIT / Apache-2.0', url: 'https://tauri.app' },
     { name: 'Svelte', what: 'UI', licence: 'MIT', url: 'https://svelte.dev' },
     { name: 'quick-xml, zip, serde, objc2', what: 'MusicXML, MXL, data, iOS', licence: 'MIT / Apache-2.0', url: 'https://crates.io' },
     { name: t('about.allOthers'), what: 'THIRD_PARTY_NOTICES.md', licence: 'MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0, Unicode', url: SOURCE_URL },
-  ]
+  ])
 </script>
 
 <div class="sheetbg" role="presentation" onclick={onclose}></div>
@@ -98,8 +98,8 @@
   <label class="lang"
     >{t('about.language')}
     <select value={i18n.lang} onchange={(e) => setLang((e.target as HTMLSelectElement).value as 'sv' | 'en')}>
-      <option value="sv">Svenska</option>
-      <option value="en">English</option>
+      <option value="sv">{t('lang.sv')}</option>
+      <option value="en">{t('lang.en')}</option>
     </select>
   </label>
   <label class="lang"

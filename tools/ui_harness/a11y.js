@@ -76,6 +76,43 @@ const SCREENS = [
     await p.click('.popover.more button.primary')
     await p.waitForSelector('.perfexit')
   }],
+  // SET-03/04: instructions panel (with hints and a practice track) and a
+  // received setlist with its instructions.
+  ['reader-instructions', async (p) => {
+    await p.evaluate(() => {
+      window.__store.instructions = { '0:Lacrymosa': { text: 'Andas före t. 3. **Piano** se [noter](https://example.org).', parts: [{ who: 'Bo', part: 'Tenor 1' }] } }
+      window.__store.member = 'Bo'
+      window.__store.practice = { '0:Lacrymosa': ['Tenor 1', 'Bas 1'] }
+    })
+    await p.locator('ul.scores > li').first().locator('button.open').click()
+    await p.waitForSelector('.inspanel .barref')
+  }],
+  ['reader-instructions-edit', async (p) => {
+    await p.locator('ul.scores > li').first().locator('button.open').click()
+    await p.waitForSelector('.pdfhost canvas')
+    await p.click('.top button[aria-pressed][aria-label]:has-text("ℹ")')
+    await p.click('.inspanel button.chip:not([aria-label])')
+    await p.waitForSelector('.inspanel textarea')
+  }],
+  ['setlist-received', async (p) => {
+    await p.evaluate(() => {
+      window.__store.setlists = [{ id: 'rx', name: 'Vår', instructions: 'Samling **17.30**.', items: [{ kind: 'score', score: '0:Lacrymosa', start_page: null, note: 'Börja i t. 9' }] }]
+      window.__store.receivedSet = 'rx'
+    })
+    await p.reload()
+    await p.waitForSelector('.setins')
+  }],
+  // Phase P first run: empty library and the one-time reader hint.
+  ['first-run', async (p) => {
+    await p.evaluate(() => { window.__removeScore('1:Mine', true); window.__removeScore('1:Scanned', true) })
+    await p.reload()
+    await p.waitForSelector('.welcome .trycard')
+  }],
+  ['reader-hint', async (p) => {
+    await p.evaluate(() => { window.__store.hints = [] })
+    await p.locator('ul.scores > li').first().locator('button.open').click()
+    await p.waitForSelector('.readerhint')
+  }],
 ]
 
 ;(async () => {

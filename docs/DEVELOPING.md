@@ -46,6 +46,15 @@ bash tools/coverage.sh                       # fails if a core crate is under 85
 (cd app/src-tauri && cargo tauri dev)       # desktop window with the real backend (starts vite itself)
 ```
 
+### Swedish and English (NFR-10)
+
+`node tools/i18n_check.mjs` is the test `nfr_10_sv_en_localisation_complete`.
+It fails if a key in `app/ui/src/lib/i18n.svelte.ts` lacks Swedish or English,
+if `t()` names a missing key, or if a Svelte file has literal user-visible text
+(text between tags, `aria-label`, `title`, `placeholder`, `alt`, `label`, or a
+literal string passed to `ask`/`confirmBox`/`alert`). Names such as Cantor and
+PDF are allowed (see `ALLOW` in the script). CI runs it in the UI job.
+
 ### UI harness (scenarios and accessibility)
 
 `tools/ui_harness` runs the real UI in Playwright WebKit at iPad mini size.

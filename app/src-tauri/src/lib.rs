@@ -141,6 +141,11 @@ fn import_path(paths: &Paths, path: &std::path::Path) -> Vec<String> {
                 if let Err(e) = st.save() {
                     log::warn!("bundle store save: {e:?}");
                 }
+                // SET-04: the library opens this set and shows its
+                // instructions next time it looks (take_received_set).
+                let marker = paths.user.join(".incoming");
+                let _ = std::fs::create_dir_all(&marker);
+                let _ = std::fs::write(marker.join(RECEIVED_SET), &b.setlist_id);
                 b.score_ids
             }
             Err(e) => {
@@ -220,6 +225,8 @@ struct LibraryData {
     metadata: std::collections::BTreeMap<String, cantor_library::store::Metadata>,
     setlists: Vec<cantor_library::store::Setlist>,
     home: cantor_library::store::HomeView,
+    /// One-time hints already dismissed (first run).
+    hints: Vec<String>,
 }
 
 /// Metadata (LIB-03) and setlists (SET-01) for the library screen.
@@ -241,6 +248,7 @@ fn library_data(paths: State<'_, Paths>) -> LibraryData {
         metadata: st.all_metadata().clone(),
         setlists: st.setlists_ordered().into_iter().cloned().collect(),
         home: st.home_view().clone(),
+        hints: st.hints_seen(),
     }
 }
 
@@ -252,6 +260,103 @@ fn set_metadata(
 ) -> Result<(), String> {
     let mut st = store(&paths);
     st.set_metadata(&id, metadata);
+    save_store(&st)
+}
+
+/// SET-04: file (in `.incoming`, never synced or backed up) naming the
+/// setlist of the last received `.cantorset`.
+const RECEIVED_SET: &str = "received-set";
+
+/// SET-04: the setlist id of a just-received set, once (then forgotten).
+#[tauri::command]
+fn take_received_set(paths: State<'_, Paths>) -> Option<String> {
+    let f = paths.user.join(".incoming").join(RECEIVED_SET);
+    let id = std::fs::read_to_string(&f).ok()?;
+    let _ = std::fs::remove_file(&f);
+    Some(id.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// SET-04: directory of a score's practice tracks (one file per part).
+fn practice_dir(paths: &Paths, id: &str) -> PathBuf {
+    paths
+        .user
+        .join(cantor_library::bundle::PRACTICE_DIR)
+        .join(cantor_library::bundle::safe_id(id))
+}
+
+/// SET-04: `(part, file name)` of a score's practice tracks, by part.
+fn practice_tracks(paths: &Paths, id: &str) -> Vec<(String, String)> {
+    let mut v: Vec<(String, String)> = std::fs::read_dir(practice_dir(paths, id))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let n = e.file_name().to_string_lossy().to_string();
+            let (stem, ext) = n.rsplit_once('.')?;
+            (!stem.starts_with('.')
+                && ["m4a", "wav", "mp3", "aac"].contains(&ext.to_lowercase().as_str()))
+            .then(|| (stem.to_string(), n.clone()))
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+#[derive(Serialize)]
+struct PracticeInfo {
+    part: String,
+    /// Path for the `cantor://` scheme: `practice/<safe id>/<file>`.
+    url: String,
+}
+
+/// SET-03: a score's instructions, the member and their part, and the
+/// practice tracks that came with it (SET-04).
+#[derive(Serialize)]
+struct InstructionsData {
+    text: String,
+    parts: Vec<cantor_library::store::PartHint>,
+    member: String,
+    member_part: Option<String>,
+    practice: Vec<PracticeInfo>,
+}
+
+#[tauri::command]
+fn score_instructions(id: String, paths: State<'_, Paths>) -> InstructionsData {
+    let st = store(&paths);
+    let ins = st.instructions(&id).cloned().unwrap_or_default();
+    let safe = cantor_library::bundle::safe_id(&id);
+    InstructionsData {
+        member_part: st.member_part(&id).map(str::to_string),
+        member: st.member().to_string(),
+        text: ins.text,
+        parts: ins.parts,
+        practice: practice_tracks(&paths, &id)
+            .into_iter()
+            .map(|(part, f)| PracticeInfo {
+                part,
+                url: format!("practice/{safe}/{f}"),
+            })
+            .collect(),
+    }
+}
+
+/// SET-03: save (or clear, when empty) a score's instructions and hints.
+#[tauri::command]
+fn set_instructions(
+    id: String,
+    instructions: cantor_library::store::ScoreInstructions,
+    paths: State<'_, Paths>,
+) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.set_instructions(&id, instructions);
+    save_store(&st)
+}
+
+/// SET-03: who uses this library ("" = nobody); picks their part.
+#[tauri::command]
+fn set_member(name: String, paths: State<'_, Paths>) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.set_member(&name);
     save_store(&st)
 }
 
@@ -335,6 +440,8 @@ struct Player {
 /// The open score, kept so exports can render with fresh engines.
 struct RenderSource {
     title: String,
+    /// Score id, so part exports also become its practice tracks (SET-04).
+    id: String,
     timemap: cantor_timeline::Timemap,
     plan: cantor_timeline::channels::ChannelPlan,
     /// The backing track, so exports include it.
@@ -648,6 +755,7 @@ fn start_engine(
     p.engine = Some(engine);
     p.channels = channels.len();
     p.render = Some(RenderSource {
+        id: String::new(),
         title: entry.title.clone(),
         timemap: tm.clone(),
         plan: plan.clone(),
@@ -893,6 +1001,14 @@ fn set_home_view(
     save_store(&st)
 }
 
+/// First run: remember that a one-time hint was dismissed.
+#[tauri::command]
+fn mark_hint_seen(id: String, paths: State<'_, Paths>) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.mark_hint_seen(&id);
+    save_store(&st)
+}
+
 /// Save the manual order of the library (score ids) or of the setlist tabs.
 #[tauri::command]
 fn set_order(kind: String, ids: Vec<String>, paths: State<'_, Paths>) -> Result<(), String> {
@@ -964,11 +1080,14 @@ async fn export_audio(
     } else {
         "m4a"
     };
-    let (jobs, out_dir) = {
+    let (jobs, out_dir, practice) = {
         let paths = app.state::<Paths>();
         let player = app.state::<Shared>();
         let p = guard::lock(&player);
         let src = p.render.as_ref().ok_or("no score open")?;
+        // SET-04: learning tracks at normal tempo of a library score are
+        // kept as its practice tracks, so a shared set carries them.
+        let mut practice: Vec<(String, String)> = Vec::new();
         let engine = p.engine.as_ref().ok_or("no score open")?;
         let live = guard::lock(engine);
         let tempo = live.tempo_scale();
@@ -992,15 +1111,16 @@ async fn export_audio(
         if what == "parts" {
             for (i, c) in src.plan.channels.iter().enumerate() {
                 if c.role.is_vocal() {
-                    jobs.push((
-                        format!(
-                            "{} - {}{}.{ext}",
-                            safe(&src.title),
-                            safe(&c.label),
-                            tempo_tag
-                        ),
-                        Some(i),
-                    ));
+                    let name = format!(
+                        "{} - {}{}.{ext}",
+                        safe(&src.title),
+                        safe(&c.label),
+                        tempo_tag
+                    );
+                    if tempo_tag.is_empty() && !src.id.is_empty() {
+                        practice.push((name.clone(), format!("{}.{ext}", safe(&c.label))));
+                    }
+                    jobs.push((name, Some(i)));
                 }
             }
         } else {
@@ -1016,11 +1136,13 @@ async fn export_audio(
             mix,
             src.backing.clone(),
         );
+        let pdir = (!practice.is_empty()).then(|| practice_dir(&paths, &src.id));
         (
             jobs.into_iter()
                 .map(|j| (j, render.clone()))
                 .collect::<Vec<_>>(),
             out_dir,
+            pdir.map(|d| (d, practice)),
         )
     };
     // Render off the UI thread; each job gets its own synth and engine.
@@ -1063,6 +1185,17 @@ async fn export_audio(
     })
     .await
     .map_err(|e| e.to_string())??;
+    if let Some((dir, list)) = practice {
+        // Replace the score's practice tracks with this export.
+        let _ = std::fs::remove_dir_all(&dir);
+        if std::fs::create_dir_all(&dir).is_ok() {
+            for (from, to) in list {
+                if let Err(e) = std::fs::copy(out_dir.join(&from), dir.join(&to)) {
+                    log::warn!("practice track {to}: {e}");
+                }
+            }
+        }
+    }
     let files: Vec<PathBuf> = names.iter().map(|n| out_dir.join(n)).collect();
     share_on_main(&app, files)?;
     Ok(names)
@@ -1661,6 +1794,15 @@ async fn export_item(kind: String, id: String, app: tauri::AppHandle) -> Result<
                             .ok(),
                         metadata: st.metadata(sid).cloned(),
                         settings: st.settings(sid).cloned(),
+                        // SET-03/04: instructions, hints and practice tracks.
+                        instructions: st.instructions(sid).cloned(),
+                        practice: practice_tracks(&paths, sid)
+                            .into_iter()
+                            .filter_map(|(part, f)| {
+                                let b = std::fs::read(practice_dir(&paths, sid).join(&f)).ok()?;
+                                Some((part, f, b))
+                            })
+                            .collect(),
                     });
                 }
                 (
@@ -1801,8 +1943,15 @@ fn combine_scores(
     dismiss: Option<bool>,
     paths: State<'_, Paths>,
 ) -> Result<(), String> {
-    let mut st = store(&paths);
-    if dismiss.unwrap_or(false) {
+    combine_in(&paths, score, pdf, dismiss.unwrap_or(false))
+}
+
+/// [`combine_scores`] without Tauri state. Works for any MusicXML-only and
+/// PDF-only pair the user picks (Info > "Combine with"), also after they
+/// answered "No, they differ" to the suggestion.
+fn combine_in(paths: &Paths, score: String, pdf: String, dismiss: bool) -> Result<(), String> {
+    let mut st = store(paths);
+    if dismiss {
         st.dismiss_pair(&format!("{score}|{pdf}"));
         return save_store(&st);
     }
@@ -1812,8 +1961,8 @@ fn combine_scores(
     cantor_library::import::combine(&paths.user, s, p)?;
     // Annotations made on the PDF while it stood alone stay with it.
     let (from, to) = (
-        annotations_path(&paths, &pdf),
-        annotations_path(&paths, &score),
+        annotations_path(paths, &pdf),
+        annotations_path(paths, &score),
     );
     if from.exists() && !to.exists() {
         let _ = std::fs::rename(from, to);
@@ -1868,6 +2017,7 @@ fn delete_score(file: String, paths: State<'_, Paths>) -> Result<(), String> {
             .join(format!("{}.4sc", e.stem)),
     );
     let _ = std::fs::remove_file(annotations_path(&paths, &file));
+    let _ = std::fs::remove_dir_all(practice_dir(&paths, &file));
     // Setlists keep a placeholder with the title (SET-01).
     let mut st = store(&paths);
     st.remove_score(&file, &e.title);
@@ -2002,6 +2152,9 @@ fn open_score(
         None => "auto",
     };
     let measure_boxes = measure_map(&entry).filter(|b| b.len() == score.measure_count());
+    if let Some(r) = guard::lock(&player).render.as_mut() {
+        r.id = file.clone();
+    }
     Ok(Opened {
         pdf_url,
         measure_boxes,
@@ -2249,6 +2402,45 @@ pub fn run() {
             // cantor://localhost/<dir>%2F<file>.pdf -> bytes of a library PDF.
             let paths = ctx.app_handle().state::<Paths>();
             let path = percent_decode(req.uri().path().trim_start_matches('/'));
+            // SET-04: practice/<safe id>/<file>: a practice track.
+            if let Some(rest) = path.strip_prefix("practice/") {
+                let audio = rest.split_once('/').and_then(|(d, name)| {
+                    let ok = [d, name].iter().all(|p| {
+                        !p.is_empty()
+                            && !p.contains('/')
+                            && !p.contains("..")
+                            && !p.starts_with('.')
+                    });
+                    let ext = name.rsplit_once('.')?.1.to_lowercase();
+                    let mime = match ext.as_str() {
+                        "m4a" | "aac" => "audio/mp4",
+                        "mp3" => "audio/mpeg",
+                        "wav" => "audio/wav",
+                        _ => return None,
+                    };
+                    ok.then(|| {
+                        (
+                            paths
+                                .user
+                                .join(cantor_library::bundle::PRACTICE_DIR)
+                                .join(d)
+                                .join(name),
+                            mime,
+                        )
+                    })
+                });
+                return match audio.and_then(|(f, m)| Some((std::fs::read(f).ok()?, m))) {
+                    Some((bytes, mime)) => tauri::http::Response::builder()
+                        .header("Content-Type", mime)
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(bytes)
+                        .unwrap(),
+                    None => tauri::http::Response::builder()
+                        .status(404)
+                        .body(Vec::new())
+                        .unwrap(),
+                };
+            }
             let file = path.split_once('/').and_then(|(d, name)| {
                 let dir = paths.dirs().get(d.parse::<usize>().ok()?).copied()?;
                 let ok = !name.contains('/') && !name.contains("..") && name.ends_with(".pdf");
@@ -2307,6 +2499,11 @@ pub fn run() {
             sync_folder_name,
             set_order,
             set_home_view,
+            mark_hint_seen,
+            score_instructions,
+            set_instructions,
+            set_member,
+            take_received_set,
             set_instrument,
             voice_sets,
             apply_voice_set,
@@ -2458,6 +2655,48 @@ mod lib_05_app {
         let e = cantor_library::import::list_library(&[d.as_path()]).remove(0);
         assert!(measure_map(&e).is_none());
         assert!(!d.join("lacrymosa.measures.json").exists());
+    }
+    #[test]
+    fn lib_05_combine_by_hand_after_answering_no() {
+        let d = std::env::temp_dir().join(format!("cantor-l5c-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let paths = Paths {
+            scores: d.join("bundled"),
+            user: d.clone(),
+            soundfont: d.join("x.sf2"),
+        };
+        std::fs::write(
+            d.join("lacrymosa.mxl"),
+            fixture("mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.mxl"),
+        )
+        .unwrap();
+        std::fs::write(
+            d.join("scan-77.pdf"),
+            fixture("mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.pdf"),
+        )
+        .unwrap();
+        // "No, they differ": remembered, not suggested again.
+        combine_in(&paths, "1:lacrymosa".into(), "1:scan-77".into(), true).unwrap();
+        assert!(store(&paths)
+            .dismissed_pairs()
+            .contains("1:lacrymosa|1:scan-77"));
+        // Later the user combines them by hand: it still works, and the PDF
+        // entry is gone from the library.
+        combine_in(&paths, "1:lacrymosa".into(), "1:scan-77".into(), false).unwrap();
+        assert!(d.join("lacrymosa.pdf").exists());
+        assert!(!d.join("scan-77.pdf").exists());
+        let lib = cantor_library::import::list_library(&[d.as_path()]);
+        assert_eq!(lib.len(), 1);
+        assert!(lib[0].pdf_file.is_some() && lib[0].score_file.is_some());
+        // A score that already has a PDF cannot take another one.
+        std::fs::write(
+            d.join("other.pdf"),
+            fixture("mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.pdf"),
+        )
+        .unwrap();
+        assert!(combine_in(&paths, "1:lacrymosa".into(), "1:other".into(), false).is_err());
+        assert!(d.join("other.pdf").exists());
     }
 }
 

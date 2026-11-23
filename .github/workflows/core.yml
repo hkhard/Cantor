@@ -61,6 +61,8 @@ jobs:
         run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
       - run: npm ci
         working-directory: app/ui
+      - name: NFR-10 Swedish and English complete
+        run: node tools/i18n_check.mjs
       - run: npx svelte-check --threshold error || true
         working-directory: app/ui
       - run: npm run build

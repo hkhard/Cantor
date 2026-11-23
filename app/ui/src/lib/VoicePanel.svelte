@@ -4,7 +4,7 @@
   // your own, saved from the current mixer).
   import { onMount } from 'svelte'
   import { api, type ChannelInfo, type VoiceSet } from './api'
-  import { i18n, t } from './i18n.svelte'
+  import { i18n, t, type Key } from './i18n.svelte'
   import { ask } from './prompts.svelte'
 
   interface Props {
@@ -23,10 +23,7 @@
   let current = $state('')
 
   // GM families of 8, named, for a grouped picker.
-  const FAMILIES = [
-    'Piano', 'Chromatic percussion', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass',
-    'Reed', 'Pipe', 'Synth lead', 'Synth pad', 'Synth effects', 'Ethnic', 'Percussive', 'Sound effects',
-  ]
+  const FAMILIES = $derived(Array.from({ length: 16 }, (_, i) => t(`gm.family${i}` as Key)))
 
   const setName = (v: VoiceSet) => (i18n.lang === 'sv' ? v.name_sv : v.name_en)
   const choirKey = $derived(choir === 'male' || choir === 'female' ? choir : 'mixed')
