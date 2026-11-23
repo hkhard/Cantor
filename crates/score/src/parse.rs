@@ -85,10 +85,8 @@ fn mxl_rootfile(bytes: &[u8]) -> Result<Vec<u8>, ParseError> {
     let mxl = |e: &dyn std::fmt::Display| ParseError::Mxl(e.to_string());
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| mxl(&e))?;
     let mut read = |name: &str| -> Result<Vec<u8>, ParseError> {
-        let mut f = zip.by_name(name).map_err(|e| mxl(&e))?;
-        let mut buf = Vec::new();
-        f.read_to_end(&mut buf).map_err(|e| mxl(&e))?;
-        Ok(buf)
+        let f = zip.by_name(name).map_err(|e| mxl(&e))?;
+        read_capped(f)
     };
 
     let rootfile = match read("META-INF/container.xml") {
@@ -118,10 +116,21 @@ fn mxl_rootfile(bytes: &[u8]) -> Result<Vec<u8>, ParseError> {
             }
         }
     };
-    let mut f = zip.by_name(&rootfile).map_err(|e| mxl(&e))?;
-    let mut xml = Vec::new();
-    f.read_to_end(&mut xml).map_err(|e| mxl(&e))?;
-    Ok(xml)
+    let f = zip.by_name(&rootfile).map_err(|e| mxl(&e))?;
+    read_capped(f)
+}
+
+/// NFR-13: an MXL entry may unpack to at most 512 MB (zip bombs are refused).
+fn read_capped(f: impl Read) -> Result<Vec<u8>, ParseError> {
+    const MAX: u64 = 512 * 1024 * 1024;
+    let mut buf = Vec::new();
+    f.take(MAX + 1)
+        .read_to_end(&mut buf)
+        .map_err(|e| ParseError::Mxl(e.to_string()))?;
+    if buf.len() as u64 > MAX {
+        return Err(ParseError::Mxl("score file too large to unpack".into()));
+    }
+    Ok(buf)
 }
 
 /// Parse an uncompressed MusicXML document.

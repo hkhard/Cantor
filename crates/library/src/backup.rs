@@ -197,8 +197,7 @@ fn read_backup(bytes: &[u8]) -> Result<(Manifest, BackupFiles), String> {
         let mut f = zr
             .by_name(&format!("library/{rel}"))
             .map_err(|_| format!("backup is missing {rel}"))?;
-        let mut data = Vec::new();
-        f.read_to_end(&mut data).map_err(|e| e.to_string())?;
+        let data = crate::import::read_limited(&mut f, rel)?;
         if &sha(&data) != want {
             return Err(format!(
                 "backup is damaged: {rel} does not match its checksum"

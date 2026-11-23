@@ -245,7 +245,7 @@
       try {
         added.push(...(await api.importFile(f)))
       } catch (err) {
-        failed.push(String(err))
+        failed.push(t('lib.importFailed', { name: f.name, e: String(err) }))
       }
     }
     importing = false

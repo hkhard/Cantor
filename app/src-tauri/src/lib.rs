@@ -7,6 +7,7 @@
 
 mod audio;
 mod folder;
+mod guard;
 mod m4a;
 mod remote;
 mod share;
@@ -593,7 +594,7 @@ fn start_engine(
     info: &TrackInfo,
     track_dir: &std::path::Path,
 ) -> Result<(Vec<ChannelInfo>, f64, u32), String> {
-    let mut p = player.lock().unwrap();
+    let mut p = guard::lock(player);
     // Stop the old stream before opening a new one.
     p.stream = None;
     let sr = audio::output_sample_rate().unwrap_or(48_000);
@@ -643,7 +644,7 @@ fn start_engine(
     let duration = engine.duration();
     let engine = Arc::new(Mutex::new(engine));
     p.stream = Some(audio::Output::start(engine.clone())?);
-    *remote_slot.lock().unwrap() = Some(engine.clone());
+    *guard::lock(remote_slot) = Some(engine.clone());
     p.engine = Some(engine);
     p.channels = channels.len();
     p.render = Some(RenderSource {
@@ -966,10 +967,10 @@ async fn export_audio(
     let (jobs, out_dir) = {
         let paths = app.state::<Paths>();
         let player = app.state::<Shared>();
-        let p = player.lock().unwrap();
+        let p = guard::lock(&player);
         let src = p.render.as_ref().ok_or("no score open")?;
         let engine = p.engine.as_ref().ok_or("no score open")?;
-        let live = engine.lock().unwrap();
+        let live = guard::lock(engine);
         let tempo = live.tempo_scale();
         let mix: Vec<(f32, bool, bool)> = (0..p.channels)
             .map(|i| {
@@ -1347,9 +1348,9 @@ fn set_track_info(
     } else {
         paths.user.clone()
     };
-    std::fs::write(
-        dir.join(format!("{}.track.json", e.stem)),
-        serde_json::to_vec_pretty(&info).map_err(|e| e.to_string())?,
+    cantor_library::import::write_atomic(
+        &dir.join(format!("{}.track.json", e.stem)),
+        &serde_json::to_vec_pretty(&info).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
     let _ = with_engine(&player, |eng| {
@@ -1547,7 +1548,8 @@ fn measure_map(e: &cantor_library::import::LibraryEntry) -> Option<Vec<serde_jso
         .map(|b| serde_json::json!({ "page": b.page, "x": b.x, "y": b.y, "w": b.w, "h": b.h, "source": "layout" }))
         .collect();
     // Cache in the user's library only (bundled scores are read-only).
-    let _ = std::fs::write(&path, serde_json::to_vec(&v).unwrap_or_default());
+    let _ =
+        cantor_library::import::write_atomic(&path, &serde_json::to_vec(&v).unwrap_or_default());
     Some(v)
 }
 
@@ -1715,7 +1717,7 @@ fn annotations_open(
         .and_then(|s| cantor_annotations::Document::from_json(&s).ok())
         .unwrap_or_default();
     let out = doc.clone();
-    ann.lock().unwrap().open = Some((path, cantor_annotations::Editor::new(doc)));
+    guard::lock(&ann).open = Some((path, cantor_annotations::Editor::new(doc)));
     Ok(out)
 }
 
@@ -1726,7 +1728,7 @@ fn annotations_edit(
     command: Option<cantor_annotations::Command>,
     ann: State<'_, Mutex<Annotations>>,
 ) -> Result<cantor_annotations::Document, String> {
-    let mut a = ann.lock().unwrap();
+    let mut a = guard::lock(&ann);
     let (path, ed) = a.open.as_mut().ok_or("no annotations open")?;
     match action.as_str() {
         "undo" => {
@@ -1744,9 +1746,11 @@ fn annotations_edit(
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, doc.to_json().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &*path).map_err(|e| e.to_string())?;
+    cantor_library::import::write_atomic(
+        path,
+        doc.to_json().map_err(|e| e.to_string())?.as_bytes(),
+    )
+    .map_err(|e| e.to_string())?;
     Ok(doc)
 }
 
@@ -1916,12 +1920,12 @@ fn open_score(
                 track: Some(track_info),
             });
         }
-        let mut p = player.lock().unwrap();
+        let mut p = guard::lock(&player);
         p.stream = None;
         p.engine = None;
         p.channels = 0;
         p.render = None;
-        *remote_slot.lock().unwrap() = None;
+        *guard::lock(&remote_slot) = None;
         return Ok(Opened {
             title: entry.title,
             musicxml: String::new(),
@@ -2018,9 +2022,9 @@ fn with_engine<T>(
     player: &State<'_, Shared>,
     f: impl FnOnce(&mut Engine<SoundFontSynth>) -> T,
 ) -> Result<T, String> {
-    let p = player.lock().unwrap();
+    let p = guard::lock(player);
     let e = p.engine.as_ref().ok_or("no score open")?;
-    let mut e = e.lock().unwrap();
+    let mut e = guard::lock(e);
     Ok(f(&mut e))
 }
 
@@ -2145,7 +2149,7 @@ fn apply_preset(
     index: Option<usize>,
     player: State<'_, Shared>,
 ) -> Result<Vec<Strip>, String> {
-    let n = player.lock().unwrap().channels;
+    let n = guard::lock(&player).channels;
     with_engine(&player, |e| {
         let p = match (preset.as_str(), index) {
             ("my_part", Some(i)) => Preset::MyPart(i),
@@ -2262,7 +2266,7 @@ pub fn run() {
                     .unwrap(),
             }
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(guarded(tauri::generate_handler![
             list_scores,
             open_score,
             play,
@@ -2313,7 +2317,7 @@ pub fn run() {
             combine_scores,
             pdf_url_of,
             read_title_page
-        ])
+        ]))
         .build(tauri::generate_context!())
         .expect("error while building Cantor")
         .run(|app, event| {
@@ -2518,5 +2522,18 @@ mod play_09_app {
         // The piano part is left alone by choir sets.
         let piano = role(&plan, cantor_timeline::channels::Role::Piano);
         assert_eq!(plan.channels[piano].program, plan0.channels[piano].program);
+    }
+}
+
+/// NFR-13: wrap the command handler so a panic in any command rejects its
+/// promise with a readable message instead of aborting the app. Async
+/// commands do their heavy work in `spawn_blocking`, whose panics already
+/// come back as `Err` through `.await.map_err`.
+fn guarded<R: tauri::Runtime>(
+    h: impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let resolver = invoke.resolver.clone();
+        guard::catch(|| h(invoke), true, move |m| resolver.reject(m))
     }
 }

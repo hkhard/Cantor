@@ -312,11 +312,10 @@ pub fn import_bundle(
     let mut zr = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|e| format!("bundle: {e}"))?;
     let m = read_manifest(&mut zr)?;
     let mut read = |f: &FileEntry| -> Result<Vec<u8>, String> {
-        let mut b = Vec::new();
-        zr.by_name(&f.path)
-            .map_err(|_| format!("bundle is missing {}", f.path))?
-            .read_to_end(&mut b)
-            .map_err(|e| e.to_string())?;
+        let entry = zr
+            .by_name(&f.path)
+            .map_err(|_| format!("bundle is missing {}", f.path))?;
+        let b = crate::import::read_limited(entry, &f.path)?;
         if sha256_hex(&b) != f.sha256 {
             return Err(format!(
                 "{}: checksum mismatch (damaged or modified)",

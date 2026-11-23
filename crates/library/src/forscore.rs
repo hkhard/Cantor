@@ -10,7 +10,6 @@
 use flate2::read::GzDecoder;
 use plist::{Dictionary, Value};
 use std::collections::BTreeMap;
-use std::io::Read;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ForscoreError {
@@ -95,8 +94,8 @@ fn decode(bytes: &[u8]) -> Result<Value, ForscoreError> {
     if bytes.len() < 2 || bytes[0] != 0x1f || bytes[1] != 0x8b {
         return Err(ForscoreError::NotGzip);
     }
-    let mut raw = Vec::new();
-    GzDecoder::new(bytes).read_to_end(&mut raw)?;
+    let raw = crate::import::read_limited(GzDecoder::new(bytes), "forScore")
+        .map_err(ForscoreError::Archive)?;
     Ok(Value::from_reader(std::io::Cursor::new(raw))?)
 }
 

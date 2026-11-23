@@ -37,6 +37,43 @@ pub struct LibraryEntry {
 pub const ORIGINALS_DIR: &str = ".forscore";
 
 const SCORE_EXT: &[&str] = &["mxl", "musicxml", "xml"];
+
+/// NFR-13: most bytes one file inside an archive (MXL, backup, bundle,
+/// forScore gzip) may unpack to. A "zip bomb" that declares or inflates to
+/// more is refused instead of filling memory.
+pub const MAX_UNPACKED: u64 = 512 * 1024 * 1024;
+
+/// Read at most [`MAX_UNPACKED`] bytes; more is an error.
+pub fn read_limited(r: impl std::io::Read, what: &str) -> Result<Vec<u8>, String> {
+    read_limited_to(r, MAX_UNPACKED, what)
+}
+
+/// Read at most `max` bytes; more is an error.
+pub fn read_limited_to(r: impl std::io::Read, max: u64, what: &str) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    r.take(max + 1)
+        .read_to_end(&mut out)
+        .map_err(|e| format!("{what}: {e}"))?;
+    if out.len() as u64 > max {
+        return Err(format!("{what}: too large to unpack (damaged file?)"));
+    }
+    Ok(out)
+}
+
+/// NFR-13: write a file atomically (temp file, then rename), so a crash
+/// mid-write leaves the old file or the new one, never half of one.
+pub fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let tmp = path.with_file_name(format!(".{name}.tmp"));
+    std::fs::write(&tmp, data)?;
+    std::fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
+}
 /// Audio formats a backing track can have (decoded by cantor-audio).
 pub const TRACK_EXT: &[&str] = &["m4a", "mp3", "wav", "flac", "aac", "aif", "aiff"];
 
@@ -114,7 +151,7 @@ pub fn import_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<Vec<Imported>
     let lower = name.to_lowercase();
     let ext = lower.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
     let write = |stem: &str, ext: &str, data: &[u8]| -> Result<(), String> {
-        std::fs::write(dir.join(format!("{stem}.{ext}")), data).map_err(|e| e.to_string())
+        write_atomic(&dir.join(format!("{stem}.{ext}")), data).map_err(|e| e.to_string())
     };
     match ext {
         "mxl" | "musicxml" | "xml" => {
@@ -204,6 +241,18 @@ pub fn import_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<Vec<Imported>
 /// zip, MusicXML has a complete `score-partwise`/`score-timewise` root.
 fn check_musicxml(bytes: &[u8]) -> Result<(), String> {
     if bytes.starts_with(b"PK\x03\x04") {
+        // MXL: the zip must open and hold a score file that unpacks.
+        let bad = || "Filen är inte en hel MusicXML-fil (skadad .mxl)".to_string();
+        let mut zr = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| bad())?;
+        let name = zr
+            .file_names()
+            .filter_map(|n| n.ok().map(|n| n.into_owned()))
+            .find(|n| {
+                !n.starts_with("META-INF/") && (n.ends_with(".xml") || n.ends_with(".musicxml"))
+            })
+            .ok_or_else(bad)?;
+        let f = zr.by_name(&name).map_err(|_| bad())?;
+        read_limited(f, &name).map_err(|_| bad())?;
         return Ok(());
     }
     let text = String::from_utf8_lossy(bytes);
