@@ -187,6 +187,8 @@ struct Data {
     seeded: std::collections::BTreeSet<String>,
     /// The library's start view.
     home: HomeView,
+    /// "score|pdf" pairs the user chose not to combine.
+    dismissed_pairs: std::collections::BTreeSet<String>,
 }
 
 /// The persisted library store.
@@ -343,6 +345,14 @@ impl Store {
     }
     pub fn set_settings(&mut self, id: &str, s: ScoreSettings) {
         self.data.settings.insert(id.to_string(), s);
+    }
+
+    // --- combine suggestions (LIB-05) ---
+    pub fn dismissed_pairs(&self) -> &std::collections::BTreeSet<String> {
+        &self.data.dismissed_pairs
+    }
+    pub fn dismiss_pair(&mut self, key: &str) {
+        self.data.dismissed_pairs.insert(key.to_string());
     }
 
     // --- start view ---

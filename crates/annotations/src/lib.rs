@@ -17,7 +17,7 @@
 //!   PDF export (ANN-05).
 
 pub mod pdf;
-pub use pdf::{annotate_pdf, annotate_pdf_with_layout};
+pub use pdf::{annotate_pdf, annotate_pdf_with_layout, pdf_info, PdfInfo};
 
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;

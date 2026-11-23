@@ -569,6 +569,37 @@ tests (NFR-11: 100% of P0 criteria automated).
       - Mozart *Lacrymosa*, SATB + piano: MusicXML, PDF, MuseScore and MP3; public domain. Its title and composer exist only as untyped credits, which tests the fallback.
     - Not verified on the iPad yet: the start view and the titles of the user's own imported files.
 
+  - **PDF cursor without OMR, and combining MusicXML with its PDF (LIB-05, 2026-11-23):**
+    - **Problem:** Lacrymosa and The Anchor Song had a MusicXML and a PDF but no cursor on the PDF, because measure maps only came from OMR (Audiveris).
+    - **Measure boxes from the file's own layout** (`cantor_score::layout_measure_boxes`).
+      - MuseScore, Finale, Dorico and Sibelius exports carry:
+        - page size and odd/even margins
+        - `<print new-system|new-page>` breaks
+        - system margins and distances
+        - measure widths
+        - staff distances per part and staff
+      - From these, the box of every measure on the engraved page is computed.
+      - Used only when the PDF's page count matches the layout's. The result is cached as `<stem>.measures.json`; an existing map (from OMR) wins.
+      - Checked by drawing the boxes over the real PDFs (`tools/measure_overlay.py`):
+        - Lacrymosa: 30 measures, 5 pages, every box on its bar.
+        - The Anchor Song: 53 measures, 2 pages, on its bars, including the repeat and coda measures.
+      - Tests: `lib_05_measure_boxes_*` (3), plus app test `lib_05_pdf_cursor_from_musicxml_layout_cached_and_guarded`.
+    - **Combine suggestion.** When a MusicXML-only and a PDF-only score have the same title, or the PDF's `/Title` or page-1 text contains the score's title, the library asks: "… look like the same piece. Combine them so the cursor follows along in the PDF?"
+      - Choosing Combine:
+        - moves the PDF and its annotations to the score;
+        - merges metadata;
+        - repoints setlists.
+      - "No, they differ" is remembered.
+      - Tests: `lib_05_suggests_pairs_by_title_or_first_page_text`, `lib_05_combine_moves_the_pdf_and_its_files_to_the_score`, plus UI scenario `lib_05 suggest combining …`.
+    - **MuseScore `.mscz`:** accepted on import and through Open in, and kept beside its MusicXML/PDF (backed up, synced, deleted with the score).
+      - Cantor cannot play `.mscz` itself. Imported alone, it says to export MusicXML and PDF from MuseScore.
+      - Test: `lib_05_mscz_is_kept_with_its_score_not_played`.
+    - **Not covered:**
+      - Files without layout information (hand-written MusicXML, our own OMR output) still need OMR maps.
+      - A PDF engraved with different settings than the MusicXML (page count differs) gets no cursor, on purpose.
+      - Box height covers the whole system, not single staves.
+      - Not yet checked on the iPad.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.

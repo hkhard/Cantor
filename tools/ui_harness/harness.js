@@ -111,6 +111,38 @@ const H = Number(process.env.H || 1133)
     await page.waitForTimeout(400)
   })
 
+  await step('lib_05 suggest combining a MusicXML and a PDF of the same piece', async () => {
+    // A MusicXML ("Lacrymosa") and its PDF under a download name arrived
+    // separately; the backend says they match (title on the PDF's page 1).
+    await page.evaluate(() => {
+      window.__addScores([
+        { file: '1:lacrymosa', title: 'Lacrymosa', playable: true, pdf: false, user: true },
+        { file: '1:score-b503fb', title: 'score-b503fb', playable: false, pdf: true, user: true },
+      ])
+      window.__store.pairs = [['1:lacrymosa', '1:score-b503fb']]
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.click('[role=tab] >> text=All scores')
+    // Coming back to the app reloads the library and asks.
+    await page.waitForSelector('.pending >> text=look like the same piece')
+    await shot('33-combine-ask')
+    const before = await page.locator('ul.scores > li').count()
+    await page.click('.pending button:has-text("Combine")')
+    await page.waitForSelector('.pending >> text=look like the same piece', { state: 'detached' })
+    const combined = await page.evaluate(() => window.__store.combined)
+    if (!combined || combined[0] !== '1:lacrymosa') throw new Error('not combined ' + combined)
+    const after = await page.locator('ul.scores > li').count()
+    if (after !== before - 1) throw new Error(`cards ${before} -> ${after}`)
+    const card = page.locator('ul.scores > li', { hasText: 'Lacrymosa' })
+    if (!(await card.locator('text=PDF').count())) throw new Error('combined card has no PDF badge')
+    // Leave the library as the later steps expect it.
+    await page.evaluate(() => {
+      window.__removeScore('1:lacrymosa')
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForSelector('ul.scores > li >> text=Lacrymosa', { state: 'detached' })
+  })
+
   await step('lib_04 search by composer', async () => {
     await page.fill('input[type=search]', 'bellman')
     await page.waitForTimeout(400)
@@ -248,7 +280,8 @@ const H = Number(process.env.H || 1133)
     })
     // Drag the first card to the gap between the 3rd and the 4th (the
     // left edge of the last card): an edge, so it moves, not a merge.
-    const last = await cards.nth(3).boundingBox()
+    const n = await cards.count()
+    const last = await cards.nth(n - 1).boundingBox()
     const frames = await longDrag(cards.nth(0), { x: last.x + 6, y: last.y + last.height / 2 }, { steps: 50, dwell: 300 })
     const domChangesDuringDrag = await page.evaluate(() => {
       const n = window.__moves
@@ -258,10 +291,10 @@ const H = Number(process.env.H || 1133)
     checkFrames(frames, 'library')
     await page.waitForTimeout(300)
     const t1 = await titles()
-    const want = [t0[1], t0[2], t0[3], t0[0]]
+    const want = [...t0.slice(1), t0[0]]
     if (JSON.stringify(t1) !== JSON.stringify(want)) throw new Error(`order ${t1} want ${want}`)
     const saved = await page.evaluate(() => window.__store.scoreOrder.length)
-    if (saved !== 4) throw new Error('order not saved')
+    if (saved !== n) throw new Error('order not saved')
     // Only the drop changes the DOM (one reorder), never mid-drag.
     if (domChangesDuringDrag > 12) throw new Error('DOM churn during drag ' + domChangesDuringDrag)
     // The saved order is what the backend gets back on the next start

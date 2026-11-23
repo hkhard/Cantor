@@ -113,6 +113,9 @@ export const api = {
   openScore: (file: string, choir?: string, transpose?: number, concert?: boolean) =>
     invoke<Opened>('open_score', { file, choir, transpose, concert }),
   libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[]; home?: HomeView }>('library_data'),
+  /** LIB-05: MusicXML-only + PDF-only scores that look like the same piece. */
+  pairSuggestions: () => invoke<[string, string][]>('pair_suggestions'),
+  combineScores: (score: string, pdf: string, dismiss = false) => invoke<void>('combine_scores', { score, pdf, dismiss }),
   /** LIB-04: what the library opens on. */
   setHomeView: (view: HomeView) => invoke<void>('set_home_view', { view }),
   setMetadata: (id: string, metadata: Metadata) => invoke<void>('set_metadata', { id, metadata }),

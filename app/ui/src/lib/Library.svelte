@@ -145,8 +145,22 @@
   }
 
   let pending: string[] = $state([])
+  // LIB-05: suggestions to combine a MusicXML and a PDF of the same piece.
+  let pairs: [string, string][] = $state([])
+  async function combine(score: string, pdf: string, yes: boolean) {
+    const name = byId.get(score)?.title ?? ''
+    try {
+      await api.combineScores(score, pdf, !yes)
+      if (yes) notice = t('lib.combined', { title: name })
+      await onrefresh()
+    } catch (e) {
+      notice = String(e)
+    }
+    pairs = await api.pairSuggestions().catch(() => [])
+  }
   async function reload() {
     pending = await api.pendingBackups().catch(() => [])
+    pairs = await api.pairSuggestions().catch(() => [])
     const d = await api.libraryData()
     metadata = d.metadata
     setlists = d.setlists
@@ -325,6 +339,14 @@
     </div>
   {/each}
 
+  {#each pairs as [score, pdf] (score + pdf)}
+    <div class="pending glass" role="alert">
+      <span>{t('lib.combineAsk', { a: byId.get(score)?.title ?? score, b: byId.get(pdf)?.title ?? pdf })}</span>
+      <button class="chip on" onclick={() => combine(score, pdf, true)}>{t('lib.combine')}</button>
+      <button class="chip" onclick={() => combine(score, pdf, false)}>{t('lib.combineNo')}</button>
+    </div>
+  {/each}
+
   <div class="viewbar">
     <label class="viewsel"
       >{t('lib.show')}
@@ -389,7 +411,7 @@
         bind:this={fileInput}
         type="file"
         multiple
-        accept=".mxl,.musicxml,.xml,.pdf,.4sc,.4ss,.cantorset,.cantorbackup,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
+        accept=".mxl,.musicxml,.xml,.pdf,.mscz,.4sc,.4ss,.cantorset,.cantorbackup,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
         style="display:none"
         onchange={importPicked}
       />

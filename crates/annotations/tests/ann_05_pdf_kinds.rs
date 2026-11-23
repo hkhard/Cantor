@@ -218,3 +218,27 @@ fn ann_05_every_item_kind_on_every_rotation() {
 fn ann_05_bad_input_is_an_error() {
     assert!(annotate_pdf(b"not a pdf", &everything()).is_err());
 }
+
+#[test]
+fn lib_05_pdf_info_title_text_pages() {
+    let read = |p: &str| {
+        std::fs::read(format!(
+            "{}/../../fixtures/scores/{p}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
+    };
+    let a = cantor_annotations::pdf_info(&read("the-anchor-song/the-anchor-song.pdf")).unwrap();
+    assert_eq!((a.title.as_str(), a.pages), ("The Anchor Song", 2));
+    let l = cantor_annotations::pdf_info(&read(
+        "mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.pdf",
+    ))
+    .unwrap();
+    assert_eq!(l.pages, 5);
+    assert!(
+        l.first_page_text.contains("Lacrymosa"),
+        "{}",
+        l.first_page_text
+    );
+    assert!(cantor_annotations::pdf_info(b"%PDF-1.4 garbage").is_none());
+}

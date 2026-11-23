@@ -1239,6 +1239,52 @@ fn read_annotations(paths: &Paths, id: &str) -> Option<cantor_annotations::Docum
         .and_then(|s| cantor_annotations::Document::from_json(&s).ok())
 }
 
+/// Page count of a PDF (`/Type /Page` objects), enough to check that a PDF
+/// and a MusicXML layout describe the same engraving.
+fn pdf_page_count(bytes: &[u8]) -> Option<u32> {
+    let pat = b"/Type";
+    let mut n = 0u32;
+    let mut i = 0;
+    while let Some(pos) = bytes[i..].windows(pat.len()).position(|w| w == pat) {
+        let rest = &bytes[i + pos + pat.len()..];
+        let rest = &rest[rest.iter().take_while(|b| b.is_ascii_whitespace()).count()..];
+        if rest.starts_with(b"/Page") && !rest.starts_with(b"/Pages") {
+            n += 1;
+        }
+        i += pos + pat.len();
+    }
+    (n > 0).then_some(n)
+}
+
+/// LIB-05: measure boxes on the score's PDF. A `<stem>.measures.json` (from
+/// OMR, or written by hand) wins. Otherwise, when the PDF was engraved from
+/// the same MusicXML (MuseScore and other notation programs write page
+/// layout into the file), the boxes are computed from that layout, if the
+/// page counts agree, and cached next to the score.
+fn measure_map(e: &cantor_library::import::LibraryEntry) -> Option<Vec<serde_json::Value>> {
+    let path = e.dir.join(format!("{}.measures.json", e.stem));
+    if let Some(v) = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Vec<serde_json::Value>>(&b).ok())
+    {
+        return Some(v);
+    }
+    let score = std::fs::read(e.dir.join(e.score_file.as_ref()?)).ok()?;
+    let pdf = std::fs::read(e.dir.join(e.pdf_file.as_ref()?)).ok()?;
+    let boxes = cantor_score::layout_measure_boxes(&score)?;
+    let last_page = boxes.iter().map(|b| b.page).max()?;
+    if pdf_page_count(&pdf) != Some(last_page) {
+        return None;
+    }
+    let v: Vec<serde_json::Value> = boxes
+        .iter()
+        .map(|b| serde_json::json!({ "page": b.page, "x": b.x, "y": b.y, "w": b.w, "h": b.h, "source": "layout" }))
+        .collect();
+    // Cache in the user's library only (bundled scores are read-only).
+    let _ = std::fs::write(&path, serde_json::to_vec(&v).unwrap_or_default());
+    Some(v)
+}
+
 /// The PDF of a score with its annotations drawn in (ANN-05), or the plain
 /// PDF when there are none.
 fn annotated_pdf(paths: &Paths, id: &str) -> Result<Option<Vec<u8>>, String> {
@@ -1249,25 +1295,22 @@ fn annotated_pdf(paths: &Paths, id: &str) -> Result<Option<Vec<u8>>, String> {
     let bytes = std::fs::read(e.dir.join(pdf)).map_err(|e| e.to_string())?;
     // Bar-anchored notes (drawn on the notation or the page) go where the
     // PDF measure map puts their bar (ANN-04/05).
-    let map: Vec<cantor_annotations::Rect> =
-        std::fs::read(e.dir.join(format!("{}.measures.json", e.stem)))
-            .ok()
-            .and_then(|b| serde_json::from_slice::<Vec<serde_json::Value>>(&b).ok())
-            .map(|v| {
-                v.iter()
-                    .map(|b| {
-                        let g = |k: &str| b.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
-                        cantor_annotations::Rect {
-                            page: g("page") as u32,
-                            x: g("x"),
-                            y: g("y"),
-                            w: g("w"),
-                            h: g("h"),
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+    let map: Vec<cantor_annotations::Rect> = measure_map(&e)
+        .map(|v| {
+            v.iter()
+                .map(|b| {
+                    let g = |k: &str| b.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32;
+                    cantor_annotations::Rect {
+                        page: g("page") as u32,
+                        x: g("x"),
+                        y: g("y"),
+                        w: g("w"),
+                        h: g("h"),
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     Ok(Some(match read_annotations(paths, id) {
         Some(doc) if !doc.items.is_empty() => {
             cantor_annotations::annotate_pdf_with_layout(&bytes, &doc, &|m| map.get(m).copied())?
@@ -1442,6 +1485,96 @@ fn annotations_edit(
 }
 
 /// Remove an imported score (all its files) from the user library.
+/// LIB-05: pairs of a MusicXML-only and a PDF-only score in the user's
+/// library that look like the same piece (same title, or the title printed
+/// on the PDF's first page). Returned as score ids `(score, pdf)`.
+#[tauri::command]
+fn pair_suggestions(paths: State<'_, Paths>) -> Vec<(String, String)> {
+    let dir = &paths.user;
+    let entries = cantor_library::import::list_library(&[dir.as_path()]);
+    let cands: Vec<cantor_library::import::Candidate> = entries
+        .iter()
+        .map(|e| {
+            let pdf_text = match (&e.pdf_file, &e.score_file) {
+                (Some(p), None) => std::fs::read(e.dir.join(p))
+                    .ok()
+                    .and_then(|b| cantor_annotations::pdf_info(&b))
+                    .map(|i| format!("{} {}", i.title, i.first_page_text))
+                    .unwrap_or_default(),
+                _ => String::new(),
+            };
+            cantor_library::import::Candidate {
+                stem: e.stem.clone(),
+                title: e.title.clone(),
+                playable: e.score_file.is_some(),
+                pdf: e.pdf_file.is_some(),
+                pdf_text,
+            }
+        })
+        .collect();
+    let st = store(&paths);
+    let dismissed = st.dismissed_pairs();
+    cantor_library::import::pair_suggestions(&cands)
+        .into_iter()
+        .map(|(a, b)| (format!("1:{a}"), format!("1:{b}")))
+        .filter(|p| !dismissed.contains(&format!("{}|{}", p.0, p.1)))
+        .collect()
+}
+
+/// Combine a PDF-only score into a MusicXML score (LIB-05), or remember
+/// that the user said no (`dismiss`). The PDF's annotations, metadata and
+/// setlist entries move to the combined score.
+#[tauri::command]
+fn combine_scores(
+    score: String,
+    pdf: String,
+    dismiss: Option<bool>,
+    paths: State<'_, Paths>,
+) -> Result<(), String> {
+    let mut st = store(&paths);
+    if dismiss.unwrap_or(false) {
+        st.dismiss_pair(&format!("{score}|{pdf}"));
+        return save_store(&st);
+    }
+    let (Some(s), Some(p)) = (score.strip_prefix("1:"), pdf.strip_prefix("1:")) else {
+        return Err("only scores in your own library can be combined".into());
+    };
+    cantor_library::import::combine(&paths.user, s, p)?;
+    // Annotations made on the PDF while it stood alone stay with it.
+    let (from, to) = (
+        annotations_path(&paths, &pdf),
+        annotations_path(&paths, &score),
+    );
+    if from.exists() && !to.exists() {
+        let _ = std::fs::rename(from, to);
+    }
+    // Metadata typed on the PDF fills what the score lacks; setlists that
+    // pointed at the PDF now point at the score.
+    if let Some(pm) = st.metadata(&pdf).cloned() {
+        let mut m = st.metadata(&score).cloned().unwrap_or_default();
+        for (slot, v) in [
+            (&mut m.composer, &pm.composer),
+            (&mut m.arranger, &pm.arranger),
+            (&mut m.genre, &pm.genre),
+            (&mut m.key, &pm.key),
+        ] {
+            if slot.is_empty() {
+                *slot = v.clone();
+            }
+        }
+        for t in pm.tags {
+            if !m.tags.contains(&t) {
+                m.tags.push(t);
+            }
+        }
+        m.rating = m.rating.or(pm.rating);
+        m.difficulty = m.difficulty.or(pm.difficulty);
+        st.set_metadata(&score, m);
+    }
+    st.rename_score_id(&pdf, &score);
+    save_store(&st)
+}
+
 #[tauri::command]
 fn delete_score(file: String, paths: State<'_, Paths>) -> Result<(), String> {
     if !file.starts_with("1:") {
@@ -1452,6 +1585,7 @@ fn delete_score(file: String, paths: State<'_, Paths>) -> Result<(), String> {
         e.score_file,
         e.pdf_file,
         Some(format!("{}.measures.json", e.stem)),
+        Some(format!("{}.mscz", e.stem)),
     ]
     .into_iter()
     .flatten()
@@ -1592,10 +1726,7 @@ fn open_score(
         Some(Choir::Mixed) => "mixed",
         None => "auto",
     };
-    let measure_boxes = std::fs::read(entry.dir.join(format!("{}.measures.json", entry.stem)))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Vec<serde_json::Value>>(&b).ok())
-        .filter(|b| b.len() == score.measure_count());
+    let measure_boxes = measure_map(&entry).filter(|b| b.len() == score.measure_count());
     Ok(Opened {
         pdf_url,
         measure_boxes,
@@ -1900,6 +2031,8 @@ pub fn run() {
             sync_folder_name,
             set_order,
             set_home_view,
+            pair_suggestions,
+            combine_scores,
             pdf_url_of,
             read_title_page
         ])
@@ -1996,5 +2129,52 @@ mod data_02_app {
             cantor_library::backup::library_hash(&a.user).unwrap(),
             cantor_library::backup::library_hash(&b.user).unwrap()
         );
+    }
+}
+
+#[cfg(test)]
+mod lib_05_app {
+    use super::*;
+
+    fn fixture(p: &str) -> Vec<u8> {
+        std::fs::read(format!(
+            "{}/../../fixtures/scores/{p}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn lib_05_pdf_cursor_from_musicxml_layout_cached_and_guarded() {
+        let d = std::env::temp_dir().join(format!("cantor-l5-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(
+            d.join("lacrymosa.mxl"),
+            fixture("mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.mxl"),
+        )
+        .unwrap();
+        std::fs::write(
+            d.join("lacrymosa.pdf"),
+            fixture("mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.pdf"),
+        )
+        .unwrap();
+        let e = cantor_library::import::list_library(&[d.as_path()]).remove(0);
+        let map = measure_map(&e).expect("boxes from the layout");
+        assert_eq!(map.len(), 30);
+        assert_eq!(map[0]["page"], 1);
+        assert_eq!(map[29]["page"], 5);
+        // Cached as the measure map file; a later open reads it.
+        assert!(d.join("lacrymosa.measures.json").exists());
+        // A PDF with another page count is a different engraving: no map.
+        std::fs::remove_file(d.join("lacrymosa.measures.json")).unwrap();
+        std::fs::write(
+            d.join("lacrymosa.pdf"),
+            fixture("the-anchor-song/the-anchor-song.pdf"),
+        )
+        .unwrap();
+        let e = cantor_library::import::list_library(&[d.as_path()]).remove(0);
+        assert!(measure_map(&e).is_none());
+        assert!(!d.join("lacrymosa.measures.json").exists());
     }
 }

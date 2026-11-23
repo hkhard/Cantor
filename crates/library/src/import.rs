@@ -172,8 +172,30 @@ pub fn import_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<Vec<Imported>
             }
             Ok(out)
         }
+        "mscz" => {
+            // MuseScore source: kept beside the score with the same stem so
+            // it travels with it (backup, sync). Cantor cannot play it;
+            // MuseScore exports the MusicXML and PDF that it uses.
+            if !bytes.starts_with(b"PK\x03\x04") {
+                return Err(format!("{name}: not a MuseScore file"));
+            }
+            let stem = safe_stem(name);
+            let has_score = SCORE_EXT.iter().chain(["pdf"].iter()).any(|e| dir.join(format!("{stem}.{e}")).exists());
+            if !has_score {
+                return Err(format!(
+                    "{name}: MuseScore-filer kan inte spelas direkt. Exportera MusicXML (och gärna PDF) från MuseScore och importera dem; .mscz-filen sparas då med noterna."
+                ));
+            }
+            write(&stem, "mscz", bytes)?;
+            Ok(vec![Imported {
+                stem,
+                playable: dir.join(format!("{}.mxl", safe_stem(name))).exists()
+                    || dir.join(format!("{}.musicxml", safe_stem(name))).exists(),
+                pdf: dir.join(format!("{}.pdf", safe_stem(name))).exists(),
+            }])
+        }
         _ => Err(format!(
-            "{name}: Cantor kan öppna MusicXML (.musicxml, .mxl), PDF och forScore (.4sc, .4ss)"
+            "{name}: Cantor kan öppna MusicXML (.musicxml, .mxl), PDF, MuseScore (.mscz, tillsammans med MusicXML) och forScore (.4sc, .4ss)"
         )),
     }
 }
@@ -280,4 +302,80 @@ pub fn list_library(dirs: &[&Path]) -> Vec<LibraryEntry> {
     }
     out.sort_by_key(|e| e.title.to_lowercase());
     out
+}
+
+/// A library entry as seen by [`pair_suggestions`]: its stem, displayed
+/// title, whether it has MusicXML / a PDF, and (PDF only) the words on the
+/// PDF's first page.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Candidate {
+    pub stem: String,
+    pub title: String,
+    pub playable: bool,
+    pub pdf: bool,
+    pub pdf_text: String,
+}
+
+fn norm(s: &str) -> String {
+    s.to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// LIB-05: MusicXML-only and PDF-only entries that are the same piece:
+/// equal titles, or the score's title (at least two words or 6 letters)
+/// printed on the PDF's first page. Returns `(score stem, pdf stem)` pairs,
+/// each entry used once, sorted by score stem.
+pub fn pair_suggestions(c: &[Candidate]) -> Vec<(String, String)> {
+    let scores: Vec<&Candidate> = c.iter().filter(|x| x.playable && !x.pdf).collect();
+    let mut pdfs: Vec<&Candidate> = c.iter().filter(|x| x.pdf && !x.playable).collect();
+    let mut out = Vec::new();
+    let mut sorted = scores.clone();
+    sorted.sort_by(|a, b| a.stem.cmp(&b.stem));
+    for s in sorted {
+        let t = norm(&s.title);
+        if t.is_empty() {
+            continue;
+        }
+        let long_enough = t.contains(' ') || t.chars().count() >= 6;
+        let hit = pdfs.iter().position(|p| {
+            norm(&p.title) == t
+                || (long_enough && format!(" {} ", norm(&p.pdf_text)).contains(&format!(" {t} ")))
+        });
+        if let Some(i) = hit {
+            out.push((s.stem.clone(), pdfs.remove(i).stem.clone()));
+        }
+    }
+    out
+}
+
+/// Combine a PDF-only entry into a score: rename `<pdf_stem>.pdf` (and its
+/// `.measures.json`, if any) to `<score_stem>.*`. Fails without touching
+/// anything if the score has no MusicXML or already has a PDF.
+pub fn combine(dir: &Path, score_stem: &str, pdf_stem: &str) -> Result<(), String> {
+    if !SCORE_EXT
+        .iter()
+        .any(|e| dir.join(format!("{score_stem}.{e}")).exists())
+    {
+        return Err(format!("{score_stem}: no MusicXML to combine with"));
+    }
+    let to = dir.join(format!("{score_stem}.pdf"));
+    if to.exists() {
+        return Err(format!("{score_stem} already has a PDF"));
+    }
+    let from = dir.join(format!("{pdf_stem}.pdf"));
+    if !from.exists() {
+        return Err(format!("{pdf_stem}.pdf not found"));
+    }
+    std::fs::rename(&from, &to).map_err(|e| e.to_string())?;
+    let m_from = dir.join(format!("{pdf_stem}.measures.json"));
+    let m_to = dir.join(format!("{score_stem}.measures.json"));
+    if m_from.exists() && !m_to.exists() {
+        let _ = std::fs::rename(m_from, m_to);
+    }
+    Ok(())
 }

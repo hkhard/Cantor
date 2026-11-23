@@ -27,6 +27,44 @@ const GS_HIGHLIGHT: &str = "CantorGSHi";
 /// Return a copy of `pdf` with the visible page-anchored annotations of `doc` drawn
 /// onto their pages (`Anchor::Page::page` is 1-based). Pages without items are left
 /// untouched.
+/// What a PDF says about itself, for matching it to a MusicXML of the same
+/// piece (LIB-05): the document `/Title` and the text of page 1, plus the
+/// page count. Best effort: scans have no text.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PdfInfo {
+    pub title: String,
+    pub first_page_text: String,
+    pub pages: u32,
+}
+
+pub fn pdf_info(pdf: &[u8]) -> Option<PdfInfo> {
+    let d = lopdf::Document::load_mem(pdf).ok()?;
+    let title = d
+        .trailer
+        .get(b"Info")
+        .ok()
+        .and_then(|i| i.as_reference().ok())
+        .and_then(|r| d.get_dictionary(r).ok())
+        .and_then(|i| i.get(b"Title").ok())
+        .and_then(|t| lopdf::decode_text_string(t).ok())
+        .unwrap_or_default();
+    let text = d.extract_text(&[1]).unwrap_or_default();
+    // Words only (music fonts produce private-use glyphs).
+    let first_page_text = text
+        .split_whitespace()
+        .filter(|w| {
+            w.chars().any(|c| c.is_alphanumeric())
+                && !w.chars().any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c))
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(PdfInfo {
+        title: title.trim().to_string(),
+        first_page_text,
+        pages: d.get_pages().len() as u32,
+    })
+}
+
 pub fn annotate_pdf(pdf: &[u8], doc: &Document) -> Result<Vec<u8>, String> {
     annotate_pdf_with_layout(pdf, doc, &|_| None)
 }

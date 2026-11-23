@@ -43,6 +43,12 @@ exports.setup = async function setup(page, dir) {
         { file: '1:Mine', title: 'Min egen', playable: false, pdf: true, user: true },
         { file: '1:Scanned', title: 'Skannad', playable: true, pdf: false, user: true },
       ]
+      // Test hook: add scores (e.g. a MusicXML and a PDF that arrived apart).
+      window.__addScores = (list) => scores.push(...list)
+      window.__removeScore = (file) => {
+        const i = scores.findIndex((x) => x.file === file)
+        if (i >= 0) scores.splice(i, 1)
+      }
       const defSettings = () => ({ my_part: null, strips: [], tempo_percent: 100, view: 'pdf', choir: 'auto', presets: [], transpose: 0, hidden_parts: [] })
       let pos = 0
       let playing = false
@@ -69,6 +75,20 @@ exports.setup = async function setup(page, dir) {
           store.ocrBytes = png.length
           store.ocrPng = png
           return { title: 'Vårvindar friska', subtitle: 'för blandad kör', composer: 'Svensk folkmelodi', arranger: 'Hugo Alfvén', lyricist: 'Julia Nyberg', choir: 'SATB' }
+        },
+        pair_suggestions: () => (store.pairs ?? []).filter((p) => !(store.dismissed ?? []).includes(p.join('|'))),
+        combine_scores: ({ score, pdf, dismiss }) => {
+          if (dismiss) {
+            store.dismissed = [...(store.dismissed ?? []), score + '|' + pdf]
+            return
+          }
+          const s = scores.find((x) => x.file === score)
+          const i = scores.findIndex((x) => x.file === pdf)
+          if (!s || i < 0) throw 'not found'
+          s.pdf = true
+          scores.splice(i, 1)
+          store.pairs = (store.pairs ?? []).filter((p) => p[1] !== pdf)
+          store.combined = [score, pdf]
         },
         set_home_view: ({ view }) => {
           store.home = view

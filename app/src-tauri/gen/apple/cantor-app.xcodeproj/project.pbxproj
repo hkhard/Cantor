@@ -187,18 +187,18 @@
 			path = "cantor-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_0CC07560-08FF-40F0-906C-B43326B952CE" /* x86_64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = x86_64;
-			sourceTree = "<group>";
-		};
-		"TEMP_32788CA6-32FF-4CD0-B05E-A36E1C59E3F2" /* arm64 */ = {
+		"TEMP_8BF1FF75-6955-48EA-904A-7E30160504D8" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
+			sourceTree = "<group>";
+		};
+		"TEMP_B80EC700-1E46-41C4-AF3B-C6425707657B" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
