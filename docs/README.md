@@ -23,6 +23,7 @@
 | [../MusicXML Score Reader — PRD & Test-Driven Development Plan.md](../MusicXML%20Score%20Reader%20%E2%80%94%20PRD%20%26%20Test-Driven%20Development%20Plan.md) | Requirements with ids (LIB-, PLAY-, VIEW-, ANN-, SET-, DATA-, VOX-, NFR-) and acceptance criteria |
 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Work packages and milestones; section 7 is the honest status: what is done, measured, and not verified |
 | [ROADMAP.md](ROADMAP.md) | Phases from now on; what waits for the sole trader firm or company |
+| [store/testflight.md](store/testflight.md) | TestFlight: public link, beta description and what to test (sv/en), what must be true before external testing |
 
 ## Decisions and studies
 
