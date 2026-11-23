@@ -481,7 +481,17 @@ tests (NFR-11: 100% of P0 criteria automated).
       - Choir type found on the 4 pages that state it.
       - 0.2–0.5 s per page once warm. The first call after a restart took 66 s on the Mac while macOS compiled the model.
     - Not verified: speed and the Swedish language list on the iPad mini itself, and the first-call delay there.
-    - Note recognition on the iPad (step 2): homr and oemer are being measured against Audiveris on the same pages; findings go to `docs/omr-engine-comparison.md`.
+    - Note recognition on the iPad (step 2), measured 2026-11-23 (`docs/omr-engine-comparison.md`):
+      - **oemer is ruled out.** It needs 5–7 GB of memory, takes about 5 minutes per page and agrees 13% with Audiveris.
+      - **homr is the only candidate.**
+        - On 6 of 12 scores its notes match Audiveris at 85–100% once the octave is allowed for.
+        - It is right where Audiveris is wrong on Jag och min far and I bröllopsgården.
+        - It takes about 15 s per page on a Mac M2.
+        - Peak memory is 1.4–2.0 GB RSS and up to 3.1 GB footprint, right at the iPad mini's limit.
+        - Its models are 129 MB (ONNX).
+        - Weak points: it reads every system as "Piano", ignores the tenor 8vb clef, reads no lyrics, and crashed on 8 of 60 pages.
+        - Its licence is AGPL-3.0, which blocks shipping it in the App Store app without a licence decision.
+      - Next, if wanted: a time-boxed spike running homr on the iPad (ONNX Runtime + CoreML) to measure memory and speed. Until then Audiveris on the desktop stays the way scores get notes.
 
 ## 8. Future features (parked)
 
