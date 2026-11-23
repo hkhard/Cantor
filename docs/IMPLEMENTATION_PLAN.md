@@ -481,6 +481,10 @@ tests (NFR-11: 100% of P0 criteria automated).
       - Choir type found on the 4 pages that state it.
       - 0.2–0.5 s per page once warm. The first call after a restart took 66 s on the Mac while macOS compiled the model.
     - Not verified: speed and the Swedish language list on the iPad mini itself, and the first-call delay there.
+    - Checked end to end on the Mac:
+      - pdf.js in WebKit rendered the Glimmande Nymf scan to a PNG, the same way the app does. The real recogniser read that exact PNG in 357 ms and found the title and the arranger.
+      - Edge cases: a blank page returns nothing (no error). A 300 px wide thumbnail still gives the title. A lyrics-only page gives a wrong "title" taken from the verse; the user sees what was filled before saving.
+    - Packaging: the first iPad build did not link Vision.framework. objc2 only names the framework inside the static `libapp.a`, which Xcode's link step does not see. Fixed in `project.yml`; `otool -L` now shows Vision in the app binary.
     - Note recognition on the iPad (step 2), measured 2026-11-23 (`docs/omr-engine-comparison.md`):
       - **oemer is ruled out.** It needs 5–7 GB of memory, takes about 5 minutes per page and agrees 13% with Audiveris.
       - **homr is the only candidate.**
