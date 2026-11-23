@@ -8,17 +8,33 @@
   import TrackPanel from './lib/TrackPanel.svelte'
   import VoicePanel from './lib/VoicePanel.svelte'
   import { scoreFileUrl, type PageMode } from './lib/pdf'
-  import { t } from './lib/i18n.svelte'
+  import { t, type Key } from './lib/i18n.svelte'
   import { ask } from './lib/prompts.svelte'
   import Dialog from './lib/Dialog.svelte'
   import Icon from './lib/Icon.svelte'
   import { listen } from '@tauri-apps/api/event'
   import { openAnnotations, editAnnotations, STAMPS, type AnnDoc, type AnnCommand, type Tool, type Box } from './lib/annot'
   import AnnotLayer from './lib/AnnotLayer.svelte'
+  import InstructionsPanel from './lib/InstructionsPanel.svelte'
+  import type { InstructionsData } from './lib/api'
 
   let scores: ScoreEntry[] = $state([])
   let notice = $state('')
   let opened: Opened | null = $state(null)
+  // First run (phase P): a one-time hint in the reader, remembered in the
+  // library store (not only localStorage), so it stays dismissed.
+  let readerHint = $state(false)
+  let hintChecked = false
+  async function maybeShowHint() {
+    if (hintChecked) return
+    hintChecked = true
+    const d = await api.libraryData().catch(() => null)
+    readerHint = !!d && !(d.hints ?? []).includes('reader')
+  }
+  function dismissHint() {
+    readerHint = false
+    api.markHintSeen('reader').catch(() => {})
+  }
   let engraved: Engraved | null = $state(null)
   let page = $state(1)
   let svg = $state('')
@@ -90,6 +106,26 @@
   let pageMode: PageMode = $state((localStorage.getItem('cantor.pageMode') as PageMode) ?? 'single')
   /** Open from a setlist: position for previous/next piece (SET-01). */
   let setCtx: { list: Setlist; index: number } | null = $state(null)
+  // SET-03/04/05: instructions panel, the score's instructions and hints.
+  let insOpen = $state(false)
+  let ins: InstructionsData | null = $state(null)
+  let setNote = $derived.by(() => {
+    const it = setCtx?.list.items[setCtx.index]
+    return it?.kind === 'score' ? (it.note ?? '') : ''
+  })
+  /** Mixer channel of the member's hinted part (SET-03). */
+  let hintedPart = $derived(partIndex(ins, opened))
+  function partIndex(d: InstructionsData | null, o: Opened | null): number {
+    const want = d?.member_part?.toLowerCase()
+    return want && o ? o.channels.findIndex((c) => c.label.toLowerCase() === want) : -1
+  }
+  async function loadInstructions(file: string) {
+    ins = await api.scoreInstructions(file).catch(() => null)
+  }
+  /** SET-03: a bar reference ("t. 12") seeks to that bar (1-based). */
+  async function goBar(bar: number) {
+    await seekMeasure(bar - 1)
+  }
 
   let persistTimer: number | undefined
   function persist() {
@@ -168,7 +204,7 @@
 
   async function savePreset() {
     if (!settings) return
-    const name = await ask(t('mix.presetName'), `Mix ${settings.presets.length + 1}`)
+    const name = await ask(t('mix.presetName'), t('mix.default', { n: settings.presets.length + 1 }))
     if (!name) return
     settings.presets.push({ name, strips: strips.map((s) => ({ ...s, volume_db: s.volume_db === -Infinity ? -1000 : s.volume_db })) })
     persist()
@@ -296,6 +332,14 @@
       if (settings && choir) settings.choir = choir as ScoreSettings['choir']
       opened = await api.openScore(entry.file, choir, settings?.transpose ?? 0, settings?.concert_pitch ?? false)
       parts = opened.musicxml ? partNames(opened.musicxml) : []
+      maybeShowHint()
+      await loadInstructions(entry.file)
+      // Show the director's words when there are any for this piece, its
+      // set item or the set (the first piece of a set).
+      const it = set?.list.items[set.index]
+      insOpen =
+        !!ins &&
+        (!!ins.text.trim() || (it?.kind === 'score' && !!it.note?.trim()) || (!!set?.list.instructions?.trim() && set.index === set.list.items.findIndex((x) => x.kind === 'score')))
       strips = opened.channels.map(() => ({ volume_db: 0, mute: false, solo: false }))
       mine = null
       view = opened.pdf_url ? 'pdf' : 'notation'
@@ -311,6 +355,8 @@
         }
         if (settings.my_part !== null && settings.my_part < strips.length) mine = settings.my_part
       }
+      // SET-03: no own choice yet: the part the director gave this member.
+      if (mine === null && hintedPart >= 0) mine = hintedPart
       annotating = false
       annLayer = 0
       ann = await openAnnotations(entry.file).catch(() => null)
@@ -354,6 +400,7 @@
 
   function close() {
     persist()
+    insOpen = false
     setCtx = null
     stopPolling()
     api.pause().catch(() => {})
@@ -767,11 +814,11 @@
     <nav class="top glass">
       <button class="icon" onclick={close} aria-label={t('read.library')}><Icon name="back" size={20} /> <span class="wide">{t('read.library')}</span></button>
       {#if setCtx}
-        <button class="icon" onclick={() => stepSet(-1)} disabled={setCtx.index === 0} aria-label="◀">◀</button>
+        <button class="icon" onclick={() => stepSet(-1)} disabled={setCtx.index === 0} aria-label={t('read.prevScore')}>◀</button>
       {/if}
       <h2>{opened.title}{#if setCtx}<span class="setpos"> · {setCtx.list.name} {setCtx.index + 1}/{setCtx.list.items.length}</span>{/if}</h2>
       {#if setCtx}
-        <button class="icon" onclick={() => stepSet(1)} disabled={setCtx.index >= setCtx.list.items.length - 1} aria-label="▶">▶</button>
+        <button class="icon" onclick={() => stepSet(1)} disabled={setCtx.index >= setCtx.list.items.length - 1} aria-label={t('read.nextScore')}>▶</button>
       {/if}
       {#if opened.pdf_url && opened.musicxml}
         <div class="seg" role="group" aria-label={t('read.pageMode')}>
@@ -787,6 +834,11 @@
       {#if ann && (view === 'pdf' ? !!opened.pdf_url : !!engraved)}
         <button class="icon annotate" class:active={annotating} aria-pressed={annotating} onclick={() => (annotating = !annotating)}
           >{annotating ? t('common.done') : t('read.annotate')}</button
+        >
+      {/if}
+      {#if !performance}
+        <button class="icon" class:active={insOpen} aria-pressed={insOpen} onclick={() => (insOpen = !insOpen)} aria-label={t('ins.title')}
+          >ℹ︎ <span class="wide">{t('ins.title')}</span>{#if ins && (ins.text.trim() || setNote.trim())}<span class="dot" aria-hidden="true"></span>{/if}</button
         >
       {/if}
       <button class="icon" class:active={moreOpen} onclick={() => { moreOpen = !moreOpen; pedalsOpen = false; appearanceOpen = false }} aria-haspopup="dialog" aria-expanded={moreOpen} aria-label={t('read.more')}>•••</button>
@@ -919,7 +971,7 @@
         {#if tool === 'stamp'}
           <span class="stamps" role="group" aria-label={t('ann.stamp')}>
             {#each STAMPS as st}
-              <button class:on={stamp === st.id} aria-pressed={stamp === st.id} aria-label={st.name} onclick={() => (stamp = st.id)}>{st.label}</button>
+              <button class:on={stamp === st.id} aria-pressed={stamp === st.id} aria-label={st.name.startsWith('stamp.') ? t(st.name as Key) : st.name} onclick={() => (stamp = st.id)}>{st.label}</button>
             {/each}
           </span>
         {/if}
@@ -947,6 +999,23 @@
           {/if}
         </span>
       </div>
+    {/if}
+
+    {#if insOpen && ins && currentEntry && !performance}
+      <InstructionsPanel
+        file={currentEntry.file}
+        parts={opened.channels.map((c) => c.label)}
+        setName={setCtx?.list.name ?? ''}
+        setText={setCtx?.list.instructions ?? ''}
+        note={setNote}
+        data={ins}
+        onbar={goBar}
+        onclose={() => (insOpen = false)}
+        onchanged={async () => {
+          if (currentEntry) await loadInstructions(currentEntry.file)
+          if (hintedPart >= 0 && mine === null) mine = hintedPart
+        }}
+      />
     {/if}
 
     <div class="body">
@@ -1013,7 +1082,7 @@
             <button onclick={savePreset}>{t('mix.savePreset')}</button>
           </div>
           {#each opened.channels as c, i (i)}
-            <div class="strip {roleClass(c)}" class:mine={mine === i}>
+            <div class="strip {roleClass(c)}" class:mine={mine === i} class:hinted={hintedPart === i}>
               <button class="name" aria-pressed={mine === i} onclick={() => { mine = mine === i ? null : i; persist() }} title={t('mix.hint')}>
                 <span class="label">{c.label}</span>
                 <span class="inst">{c.instrument}</span>
@@ -1113,7 +1182,36 @@
       {#if engraved && view === 'notation'}<span class="page">{page}/{engraved.pages}</span>{/if}
     </footer>
     {/if}
+    {#if readerHint && !performance}
+      <div class="hintbg" role="presentation" onclick={dismissHint}></div>
+      <div class="readerhint glass" role="dialog" aria-modal="true" aria-labelledby="hint-title">
+        <h3 id="hint-title">{t('hint.title')}</h3>
+        <ul>
+          <li>{t('hint.tap')}</li>
+          <li>{t('hint.mixer')}</li>
+          <li>{t('hint.turn')}</li>
+        </ul>
+        <!-- svelte-ignore a11y_autofocus -->
+        <button class="primary" autofocus onclick={dismissHint}>{t('hint.ok')}</button>
+      </div>
+    {/if}
   </main>
 {/if}
 
 <Dialog />
+
+<style>
+  /* SET-03: the part the director gave this member, and a marker on the
+     instructions button when there is something to read. */
+  :global(.strip.hinted) {
+    box-shadow: inset 0.25rem 0 0 #a9620a;
+  }
+  .dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-left: 0.25rem;
+    border-radius: 50%;
+    background: #a9620a;
+  }
+</style>

@@ -10,6 +10,7 @@
   import { t } from './i18n.svelte'
   import { ask, confirmBox, primeKeyboard } from './prompts.svelte'
   import { sortable } from './reorder'
+  import Instructions from './Instructions.svelte'
 
   interface Props {
     scores: ScoreEntry[]
@@ -22,6 +23,10 @@
   }
   let { scores, notice = $bindable(), error, loading, onopen, onrefresh }: Props = $props()
 
+  // First run (phase P): no scores of the user's own yet, only the bundled
+  // demo or nothing. Explain how to add scores and offer Lacrymosa.
+  let firstRun = $derived(!scores.some((s) => s.user))
+  let demo = $derived(scores.find((s) => !s.user && /lacrymosa/i.test(s.title)))
   let metadata: Record<string, Metadata> = $state({})
   let setlists: Setlist[] = $state([])
   // LIB-04: the start view is a grouping (setlists by default, or genre,
@@ -158,7 +163,41 @@
     }
     pairs = await api.pairSuggestions().catch(() => [])
   }
+  /** LIB-05: your own scores that are the other half of `s` (a PDF for
+   * notes-only, notes for a PDF-only score), suggested pairs first. */
+  function combinePartners(s: ScoreEntry): { file: string; title: string }[] {
+    if (!s.user || s.playable === s.pdf) return []
+    const other = scores.filter((x) => x.user && x.file !== s.file && x.playable === s.pdf && x.pdf === s.playable)
+    const hinted = new Set(pairs.flat())
+    return other
+      .sort((a, b) => Number(hinted.has(b.file)) - Number(hinted.has(a.file)) || a.title.localeCompare(b.title))
+      .map((x) => ({ file: x.file, title: x.title }))
+  }
+  // SET-03: editing the setlist's instructions; SET-04: a set just received.
+  let setInsEdit: string | null = $state(null)
+  let received = $state(false)
+  async function saveSetInstructions(sl: Setlist) {
+    sl.instructions = (setInsEdit ?? '').trim()
+    setInsEdit = null
+    await saveList(sl)
+  }
+  /** SET-05: edit the note of one setlist item. */
+  async function editNote(sl: Setlist, i: number) {
+    const it = sl.items[i]
+    if (it.kind !== 'score') return
+    const v = await ask(t('set.noteFor', { title: byId.get(it.score)?.title ?? it.score }), it.note ?? '')
+    if (v === null) return
+    it.note = v.trim()
+    await saveList(sl)
+  }
   async function reload() {
+    // SET-04: a received .cantorset opens on its setlist with instructions.
+    const got = await api.takeReceivedSet().catch(() => null)
+    if (got) {
+      group = 'setlists'
+      tab = got
+      received = true
+    }
     pending = await api.pendingBackups().catch(() => [])
     pairs = await api.pairSuggestions().catch(() => [])
     const d = await api.libraryData()
@@ -417,6 +456,23 @@
       />
       {#if notice}<span class="notice">{notice}</span>{/if}
     </div>
+    {#if firstRun}
+      <section class="welcome glass" aria-labelledby="welcome-title">
+        <h2 id="welcome-title">{t('first.title')}</h2>
+        <p>{t('first.body')}</p>
+        <ul class="how">
+          <li><button class="linklike" onclick={() => fileInput?.click()}>{t('first.import')}</button></li>
+          <li>{t('first.share')}</li>
+          <li>{t('first.files')}</li>
+        </ul>
+        {#if demo}
+          <button class="trycard" onclick={() => demo && onopen(demo)}>
+            <b>{t('first.try')}</b>
+            <span>{t('first.tryBody')}</span>
+          </button>
+        {/if}
+      </section>
+    {/if}
     <ul
       class="scores"
       use:sortable={{
@@ -475,6 +531,32 @@
       <button class="chip" onclick={() => share('4ss', current!.id)}>forScore</button>
       <button class="chip" onclick={() => deleteList(current!)}>{t('common.delete')}</button>
     </div>
+    {#if received}
+      <p class="pending glass" role="status">{t('set.received', { name: current.name })}</p>
+    {/if}
+    <section class="setins glass" aria-label={t('ins.forSet', { name: current.name })}>
+      {#if setInsEdit !== null}
+        <label class="col"
+          >{t('ins.forSet', { name: current.name })}
+          <textarea bind:value={setInsEdit} rows="5" placeholder={t('ins.placeholder')}></textarea>
+        </label>
+        <p class="hint">{t('ins.syntax')}</p>
+        <div class="row">
+          <button class="chip" onclick={() => (setInsEdit = null)}>{t('common.cancel')}</button>
+          <button class="chip on" onclick={() => saveSetInstructions(current!)}>{t('common.save')}</button>
+        </div>
+      {:else}
+        <div class="row">
+          <h3>{t('ins.title')}</h3>
+          <button class="chip" onclick={() => (setInsEdit = current!.instructions ?? '')}>{t('ins.edit')}</button>
+        </div>
+        {#if current.instructions?.trim()}
+          <Instructions text={current.instructions} />
+        {:else}
+          <p class="hint">{t('ins.emptySet')}</p>
+        {/if}
+      {/if}
+    </section>
     <ol
       class="scores setlist"
       use:sortable={{
@@ -487,7 +569,15 @@
       {#each current.items as it, i (`${i}-${it.kind === 'score' ? it.score : it.title}`)}
         <li data-sort-id={String(i)}>
           {#if it.kind === 'score' && byId.get(it.score)}
-            <button class="open" onclick={() => openItem(current!, i)}><span class="num">{i + 1}</span> {byId.get(it.score)!.title}</button>
+            <button class="open" onclick={() => openItem(current!, i)}
+              ><span class="num">{i + 1}</span>
+              <span class="t"
+                ><span>{byId.get(it.score)!.title}</span>{#if it.note}<span class="meta itemnote">{it.note}</span>{/if}</span
+              ></button
+            >
+            <button class="side notebtn" data-nodrag onclick={() => editNote(current!, i)} aria-label={t('set.noteFor', { title: byId.get(it.score)!.title })}
+              >✎</button
+            >
           {:else}
             <span class="open missing"
               ><span class="num">{i + 1}</span>
@@ -519,6 +609,16 @@
     title={editing.title}
     pdf={editing.pdf}
     initial={metadata[editing.file]}
+    partners={combinePartners(editing)}
+    oncombine={async (other) => {
+      const e = editing!
+      const [score, pdf] = e.pdf ? [other, e.file] : [e.file, other]
+      await api.combineScores(score, pdf, false)
+      notice = t('lib.combined', { title: byId.get(score)?.title ?? '' })
+      editing = null
+      await onrefresh()
+      await reload()
+    }}
     onclose={async (saved) => {
       editing = null
       if (saved) {
@@ -651,7 +751,7 @@
   }
   .setlist li > :global(.open) {
     min-height: 56px;
-    padding-right: 130px;
+    padding-right: 170px;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: flex-start !important;
@@ -699,5 +799,85 @@
   .empty {
     opacity: 0.65;
     padding: 12px;
+  }
+  .setins {
+    max-width: 760px;
+    margin: 0 0 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+  }
+  .setins .row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: space-between;
+  }
+  .setins h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .setins .col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .setins textarea {
+    font: inherit;
+    font-size: 1rem;
+    padding: 0.4rem 0.6rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--line, rgba(0, 0, 0, 0.2));
+    background: var(--surface, #fff);
+    color: var(--text, inherit);
+  }
+  .itemnote {
+    font-style: italic;
+  }
+  .scores :global(.side.notebtn) {
+    right: 126px;
+    bottom: auto;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .welcome {
+    margin: 0.75rem 0;
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+  }
+  .welcome h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1.25rem;
+  }
+  .welcome .how {
+    margin: 0.5rem 0 0.75rem;
+    padding-left: 1.25rem;
+    line-height: 1.5;
+  }
+  .welcome .linklike {
+    all: unset;
+    cursor: pointer;
+    text-decoration: underline;
+    color: var(--accent);
+  }
+  .welcome .linklike:focus-visible,
+  .trycard:focus-visible {
+    outline: 0.125rem solid var(--accent);
+    outline-offset: 0.125rem;
+  }
+  .trycard {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    border: 0.0625rem solid var(--accent);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 </style>

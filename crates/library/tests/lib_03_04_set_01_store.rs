@@ -467,3 +467,17 @@ fn play_09_instruments_per_score_and_voice_sets() {
     s.remove_voice_set("classic");
     assert!(s.voice_sets().iter().any(|v| v.id == "classic"));
 }
+
+#[test]
+fn lib_01_first_run_hint_is_remembered_in_the_store() {
+    let d = std::env::temp_dir().join(format!("cantor-hint-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let mut s = Store::open(&d);
+    assert!(!s.hint_seen("reader"));
+    s.mark_hint_seen("reader");
+    s.save().unwrap();
+    let s = Store::open(&d);
+    assert!(s.hint_seen("reader"));
+    assert!(!s.hint_seen("other"));
+}

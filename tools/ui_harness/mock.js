@@ -24,7 +24,7 @@ exports.setup = async function setup(page, dir) {
       window.__xml = xml
       const calls = []
       window.__calls = calls
-      const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [], scoreOrder: [], setlistOrder: [], home: { group: 'setlists', tab: '' } }
+      const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [], scoreOrder: [], setlistOrder: [], home: { group: 'setlists', tab: '' }, hints: ['reader'] }
       // Survives page reloads within one harness run (like library.json).
       try {
         const kept = JSON.parse(sessionStorage.getItem('__cantorStore') || 'null')
@@ -45,10 +45,13 @@ exports.setup = async function setup(page, dir) {
       ]
       // Test hook: add scores (e.g. a MusicXML and a PDF that arrived apart).
       window.__addScores = (list) => scores.push(...list)
-      window.__removeScore = (file) => {
+      // keep = true: stays removed after a reload (first-run scenarios).
+      window.__removeScore = (file, keep) => {
         const i = scores.findIndex((x) => x.file === file)
         if (i >= 0) scores.splice(i, 1)
+        if (keep) store.gone = [...(store.gone ?? []), file]
       }
+      for (const f of store.gone ?? []) window.__removeScore(f)
       const defSettings = () => ({ my_part: null, strips: [], tempo_percent: 100, view: 'pdf', choir: 'auto', presets: [], transpose: 0, hidden_parts: [] })
       let pos = 0
       let playing = false
@@ -68,7 +71,7 @@ exports.setup = async function setup(page, dir) {
             return i < 0 ? 1e9 : i
           }
           const setlists = store.setlists.map((s, i) => [s, i]).sort((a, b) => pos(a[0].id) - pos(b[0].id) || a[1] - b[1]).map((x) => x[0])
-          return { metadata: store.metadata, setlists, home: store.home }
+          return { metadata: store.metadata, setlists, home: store.home, hints: store.hints }
         },
         pdf_url_of: ({ file }) => (scores.find((s) => s.file === file)?.pdf ? '0/x.pdf' : null),
         read_title_page: ({ png }) => {
@@ -89,6 +92,28 @@ exports.setup = async function setup(page, dir) {
           scores.splice(i, 1)
           store.pairs = (store.pairs ?? []).filter((p) => p[1] !== pdf)
           store.combined = [score, pdf]
+        },
+        mark_hint_seen: ({ id }) => {
+          if (!store.hints.includes(id)) store.hints.push(id)
+        },
+        // SET-03/04: instructions, part hints, member, received set, practice.
+        score_instructions: ({ id }) => {
+          const ins = (store.instructions ?? {})[id] ?? { text: '', parts: [] }
+          const member = store.member ?? ''
+          const hint = ins.parts.find((h) => member && h.who.toLowerCase() === member.toLowerCase())
+          const practice = ((store.practice ?? {})[id] ?? []).map((part) => ({ part, url: `practice/x/${part}.m4a` }))
+          return { text: ins.text, parts: ins.parts, member, member_part: hint ? hint.part : null, practice }
+        },
+        set_instructions: ({ id, instructions }) => {
+          store.instructions = { ...(store.instructions ?? {}), [id]: { text: instructions.text, parts: instructions.parts.filter((h) => h.who.trim() && h.part.trim()) } }
+        },
+        set_member: ({ name }) => {
+          store.member = name.trim()
+        },
+        take_received_set: () => {
+          const r = store.receivedSet ?? null
+          store.receivedSet = null
+          return r
         },
         set_home_view: ({ view }) => {
           store.home = view

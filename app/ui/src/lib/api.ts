@@ -80,13 +80,31 @@ export interface Metadata {
 }
 
 export type SetItem =
-  | { kind: 'score'; score: string; start_page: number | null }
+  /** SET-05: `note` ("start at bar 9", "skip verse 2"). */
+  | { kind: 'score'; score: string; start_page: number | null; note?: string }
   | { kind: 'placeholder'; title: string }
 
 export interface Setlist {
   id: string
   name: string
   items: SetItem[]
+  /** SET-03: the director's instructions for the set. */
+  instructions?: string
+}
+
+/** SET-03: who sings what ("Anna" -> "Soprano"). */
+export interface PartHint {
+  who: string
+  part: string
+}
+
+/** SET-03/04: a score's instructions, hints, the member and practice tracks. */
+export interface InstructionsData {
+  text: string
+  parts: PartHint[]
+  member: string
+  member_part: string | null
+  practice: { part: string; url: string }[]
 }
 
 export interface Preset {
@@ -116,7 +134,9 @@ export const api = {
   listScores: () => invoke<ScoreEntry[]>('list_scores'),
   openScore: (file: string, choir?: string, transpose?: number, concert?: boolean) =>
     invoke<Opened>('open_score', { file, choir, transpose, concert }),
-  libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[]; home?: HomeView }>('library_data'),
+  libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[]; home?: HomeView; hints?: string[] }>('library_data'),
+  /** First run: remember that a one-time hint was dismissed. */
+  markHintSeen: (id: string) => invoke<void>('mark_hint_seen', { id }),
   /** PLAY-09: instruments and voice sets. */
   instruments: () => invoke<[number, string][]>('instruments'),
   setInstrument: (file: string, index: number, program: number | null) => invoke<void>('set_instrument', { file, index, program }),
@@ -131,6 +151,13 @@ export const api = {
   /** LIB-04: what the library opens on. */
   setHomeView: (view: HomeView) => invoke<void>('set_home_view', { view }),
   setMetadata: (id: string, metadata: Metadata) => invoke<void>('set_metadata', { id, metadata }),
+  /** SET-03: instructions and part hints per score; the member using this library. */
+  scoreInstructions: (id: string) => invoke<InstructionsData>('score_instructions', { id }),
+  setInstructions: (id: string, instructions: { text: string; parts: PartHint[] }) =>
+    invoke<void>('set_instructions', { id, instructions }),
+  setMember: (name: string) => invoke<void>('set_member', { name }),
+  /** SET-04: setlist id of a just-received .cantorset (once). */
+  takeReceivedSet: () => invoke<string | null>('take_received_set'),
   search: (query: string) => invoke<string[]>('search_scores', { query }),
   createSetlist: (name: string) => invoke<string>('save_setlist', { name, setlist: null }),
   saveSetlist: (setlist: Setlist) => invoke<string>('save_setlist', { setlist, name: null }),

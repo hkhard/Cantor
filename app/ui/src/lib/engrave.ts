@@ -2,6 +2,7 @@
 // lookup for the play cursor.
 import createVerovioModule from 'verovio/wasm'
 import { VerovioToolkit } from 'verovio/esm'
+import { t } from './i18n.svelte'
 
 let toolkitPromise: Promise<VerovioToolkit> | null = null
 
@@ -76,7 +77,7 @@ export async function engrave(
 export function partNames(musicxml: string): string[] {
   const doc = new DOMParser().parseFromString(musicxml, 'application/xml')
   return [...doc.querySelectorAll('part-list > score-part')].map(
-    (sp, i) => sp.querySelector('part-name')?.textContent?.trim() || `Stämma ${i + 1}`,
+    (sp, i) => sp.querySelector('part-name')?.textContent?.trim() || t('part.default', { n: i + 1 }),
   )
 }
 

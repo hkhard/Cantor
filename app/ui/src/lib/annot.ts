@@ -75,8 +75,8 @@ export function placeOnPage(
 }
 
 export const STAMPS: { id: string; label: string; name: string }[] = [
-  { id: 'Breath', label: '∨', name: 'Andning / breath' },
-  { id: 'Fermata', label: '𝄐', name: 'Fermat / fermata' },
+  { id: 'Breath', label: '∨', name: 'stamp.Breath' },
+  { id: 'Fermata', label: '𝄐', name: 'stamp.Fermata' },
   { id: 'Pp', label: 'pp', name: 'pp, pianissimo' },
   { id: 'P', label: 'p', name: 'p, piano' },
   { id: 'Mp', label: 'mp', name: 'mp, mezzo piano' },
