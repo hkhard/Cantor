@@ -185,7 +185,7 @@ select {
     inset 0 1px 0 var(--glass-highlight),
     var(--glass-shadow);
 }
-.note {
+.libnote {
   color: var(--ink-muted);
   font-size: 0.8125rem;
   margin-top: 24px;
@@ -255,11 +255,19 @@ select {
   width: 100%;
   height: 100%;
 }
-/* Recolour Verovio engraving to the skin's paper ink. */
+/* Recolour Verovio engraving to the skin's paper ink. Everything in the
+   engraving (notes, stems, staff lines, text) is one solid colour: music is
+   read best as plain ink on plain paper (VIEW-06). */
 /* Verovio leaves fill unset (default black); fill inherits, so set it here. */
 .score svg.definition-scale {
   color: var(--paper-ink);
   fill: currentColor;
+}
+.score svg.definition-scale g,
+.score svg.definition-scale use,
+.score svg.definition-scale path,
+.score svg.definition-scale text {
+  color: var(--paper-ink);
 }
 .score svg [fill='#000000'] {
   fill: var(--paper-ink);

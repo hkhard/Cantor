@@ -213,7 +213,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #eceae4;
+    /* Desk around the page: a step away from the paper, never a glare
+       edge around a black night page. */
+    background: color-mix(in srgb, var(--paper, #fff) 88%, var(--paper-ink, #000));
   }
   .pdfhost.scroll {
     display: block;
@@ -245,7 +247,7 @@
     left: 0;
     right: 0;
     top: 50%;
-    border-top: 2px dashed rgba(184, 86, 43, 0.6);
+    border-top: 2px dashed var(--cursor-stroke);
     pointer-events: none;
   }
   .pageturn {
@@ -268,7 +270,8 @@
     bottom: 6px;
     right: 12px;
     font-size: 0.75rem;
-    color: #57524c;
+    /* Text on the desk: mostly ink, so >= 4.5:1 in every skin. */
+    color: color-mix(in srgb, var(--paper-ink, #000) 75%, var(--paper, #fff));
   }
   .nomap {
     position: absolute;
@@ -276,13 +279,14 @@
     left: 12px;
     right: 80px;
     font-size: 0.75rem;
-    color: #57524c;
+    /* Text on the desk: mostly ink, so >= 4.5:1 in every skin. */
+    color: color-mix(in srgb, var(--paper-ink, #000) 75%, var(--paper, #fff));
     margin: 0;
     pointer-events: none;
   }
   .error {
     position: absolute;
     top: 12px;
-    color: #b91c1c;
+    color: var(--danger, #b91c1c);
   }
 </style>

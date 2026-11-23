@@ -48,6 +48,35 @@
   let canvas: HTMLCanvasElement | undefined = $state()
   let size = $state({ w: 0, h: 0 })
   let task: RenderTask | null = null
+  // Re-render when the skin changes (paper and ink are tokens on <html>).
+  let skin = $state(document.documentElement.dataset.skin ?? '')
+  $effect(() => {
+    const mo = new MutationObserver(() => (skin = document.documentElement.dataset.skin ?? ''))
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] })
+    return () => mo.disconnect()
+  })
+
+  /** "#RRGGBB" to [r, g, b]. */
+  function hex(v: string): [number, number, number] | null {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(v)
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null
+  }
+  /** Map each pixel's lightness onto ink..paper (a duotone). Colours in the
+   * PDF become shades of the ink: right for reading music. */
+  function recolour(c: HTMLCanvasElement, bg: number[], fg: number[]) {
+    const ctx = c.getContext('2d')!
+    const img = ctx.getImageData(0, 0, c.width, c.height)
+    const d = img.data
+    const lut = [new Uint8ClampedArray(256), new Uint8ClampedArray(256), new Uint8ClampedArray(256)]
+    for (let l = 0; l < 256; l++) for (let k = 0; k < 3; k++) lut[k][l] = fg[k] + ((bg[k] - fg[k]) * l) / 255
+    for (let i = 0; i < d.length; i += 4) {
+      const l = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8
+      d[i] = lut[0][l]
+      d[i + 1] = lut[1][l]
+      d[i + 2] = lut[2][l]
+    }
+    ctx.putImageData(img, 0, 0)
+  }
 
   async function draw(d: PDFDocumentProxy, p: number, w: number, h: number) {
     if (!canvas || w < 10) return
@@ -61,6 +90,13 @@
     const off = document.createElement('canvas')
     off.width = Math.floor(vp.width)
     off.height = Math.floor(vp.height)
+    // VIEW-06: the page follows the skin's paper and ink (black on white,
+    // black on sepia, light grey on black). Rendered as usual, then every
+    // pixel's lightness is mapped from ink (dark) to paper (light), so
+    // vector music and scanned pages (images) are recoloured alike.
+    const css = getComputedStyle(document.documentElement)
+    const bg = hex(css.getPropertyValue('--paper').trim()) ?? [255, 255, 255]
+    const fg = hex(css.getPropertyValue('--paper-ink').trim()) ?? [0, 0, 0]
     const t = page.render({ canvasContext: off.getContext('2d')!, viewport: vp, canvas: off })
     task = t
     try {
@@ -69,6 +105,7 @@
       return // cancelled by a newer render
     }
     if (task !== t || !canvas) return
+    if (!(bg.every((v) => v === 255) && fg.every((v) => v === 0))) recolour(off, bg, fg)
     canvas.width = off.width
     canvas.height = off.height
     canvas.getContext('2d')!.drawImage(off, 0, 0)
@@ -78,6 +115,7 @@
   }
 
   $effect(() => {
+    void skin
     draw(doc, n, fitW, fitH)
   })
 
@@ -110,7 +148,7 @@
   .sheet {
     position: relative;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-    background: white;
+    background: var(--paper, white);
     flex: none;
   }
   canvas {
@@ -118,8 +156,8 @@
   }
   .cursor {
     position: absolute;
-    border: 3px solid rgba(184, 86, 43, 0.75);
-    background: rgba(184, 86, 43, 0.1);
+    border: 3px solid var(--cursor-stroke);
+    background: var(--cursor-fill);
     border-radius: 6px;
     pointer-events: none;
     transition:
@@ -129,9 +167,9 @@
   }
   .loopbox {
     position: absolute;
-    background: rgba(184, 86, 43, 0.08);
-    border-top: 3px solid rgba(184, 86, 43, 0.5);
-    border-bottom: 3px solid rgba(184, 86, 43, 0.5);
+    background: var(--accent-soft);
+    border-top: 3px solid var(--cursor-stroke);
+    border-bottom: 3px solid var(--cursor-stroke);
     pointer-events: none;
   }
 </style>

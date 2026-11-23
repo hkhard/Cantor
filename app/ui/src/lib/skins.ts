@@ -49,9 +49,11 @@ const light: Skin = {
     // the accent >= 4.5:1 (was #6B6F7B / #C77A12 at 4.4 / 3.4).
     'ink-muted': '#5D616C',
     line: 'rgba(20, 33, 61, 0.12)',
-    accent: '#A9620A',
+    // VIEW-06: accent as text on the background >= 4.5:1 (5.5), white on
+    // it 6.2 (was #A9620A at 4.2 / 4.7).
+    accent: '#8F5208',
     'accent-ink': '#FFFFFF',
-    'accent-soft': 'rgba(199, 122, 18, 0.14)',
+    'accent-soft': 'rgba(143, 82, 8, 0.12)',
     brand: brand.navy,
     danger: '#B91C1C',
     'glass-bg': 'rgba(255, 255, 255, 0.62)',
@@ -62,12 +64,15 @@ const light: Skin = {
     'glass-shadow': '0 8px 32px rgba(20, 33, 61, 0.12), 0 1px 2px rgba(20, 33, 61, 0.08)',
     control: 'rgba(20, 33, 61, 0.06)',
     'control-hover': 'rgba(20, 33, 61, 0.1)',
+    // VIEW-06: music is black on white, nothing in between (21:1).
     paper: '#FFFFFF',
-    'paper-ink': '#111111',
+    'paper-ink': '#000000',
     'paper-shadow': '0 2px 12px rgba(20, 33, 61, 0.10)',
-    'cursor-fill': 'rgba(242, 165, 65, 0.18)',
-    'cursor-stroke': 'rgba(199, 122, 18, 0.6)',
-    'note-playing': '#C77A12',
+    // The cursor tints the bar but leaves the notes black under it.
+    'cursor-fill': 'rgba(242, 165, 65, 0.16)',
+    'cursor-stroke': 'rgba(154, 52, 18, 0.75)',
+    // Playing notes: dark rust, 7.3:1 on white (was #C77A12 at 3.4).
+    'note-playing': '#9A3412',
     'mute-on': '#FCD34D',
     'solo-on': '#86EFAC',
     'on-toggle-ink': '#14213D',
@@ -104,12 +109,14 @@ const dark: Skin = {
     'glass-shadow': '0 10px 36px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.4)',
     control: 'rgba(244, 235, 221, 0.08)',
     'control-hover': 'rgba(244, 235, 221, 0.14)',
-    // Night paper: dark page, light engraving (recoloured, not inverted).
-    paper: '#151C2E',
-    'paper-ink': '#E8E1D4',
+    // VIEW-06: night paper is black with light grey engraving (16.8:1);
+    // not navy, not cream: colour casts cost contrast and read as a tint.
+    paper: '#000000',
+    'paper-ink': '#E6E6E6',
     'paper-shadow': '0 2px 18px rgba(0, 0, 0, 0.5)',
-    'cursor-fill': 'rgba(242, 165, 65, 0.16)',
-    'cursor-stroke': 'rgba(242, 165, 65, 0.7)',
+    'cursor-fill': 'rgba(242, 165, 65, 0.14)',
+    'cursor-stroke': 'rgba(242, 165, 65, 0.75)',
+    // Amber on black, 10.2:1.
     'note-playing': brand.amber,
     'mute-on': '#B45309',
     'solo-on': '#15803D',
@@ -137,8 +144,13 @@ const sepia: Skin = {
     line: 'rgba(59, 47, 34, 0.14)',
     'glass-bg': 'rgba(250, 244, 232, 0.66)',
     'glass-bg-strong': 'rgba(250, 244, 232, 0.86)',
-    paper: brand.cream,
-    'paper-ink': '#2A2118',
+    // Accent as text on sepia >= 4.5:1 (5.3), white on it 6.6.
+    accent: '#8A4F07',
+    'accent-soft': 'rgba(138, 79, 7, 0.12)',
+    // VIEW-06: music is black on sepia paper (17.9:1), not brown on cream.
+    paper: '#F5ECD7',
+    'paper-ink': '#000000',
+    'note-playing': '#9A3412',
   },
 }
 

@@ -1204,7 +1204,7 @@
   /* SET-03: the part the director gave this member, and a marker on the
      instructions button when there is something to read. */
   :global(.strip.hinted) {
-    box-shadow: inset 0.25rem 0 0 #a9620a;
+    box-shadow: inset 0.25rem 0 0 var(--accent);
   }
   .dot {
     display: inline-block;
@@ -1212,6 +1212,6 @@
     height: 0.5rem;
     margin-left: 0.25rem;
     border-radius: 50%;
-    background: #a9620a;
+    background: var(--accent);
   }
 </style>
