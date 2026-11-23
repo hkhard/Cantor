@@ -257,6 +257,7 @@ cantor/
 | NFR-09 | Licensing | Only SoundFonts and models with licences that allow redistribution or user-side download; licence of each listed in About |
 | NFR-10 | Localisation | English and Swedish UI at launch |
 | NFR-11 | Quality gates | ≥ 85% line coverage in core crates, 100% of P0 acceptance criteria automated, zero failing tests on main |
+| NFR-13 | Robustness | No panic reaches the app: every command returns a readable error; damaged or unsupported files are refused with a plain message and leave nothing half-imported; library files are written atomically |
 | NFR-12 | Cost control | Voice provider calls capped per render (default 10 min of audio) with a visible running total |
 
 ## Test-driven strategy
