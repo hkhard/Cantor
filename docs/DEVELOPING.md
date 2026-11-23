@@ -169,3 +169,21 @@ to get the exact source. Before handing out a build:
 2. Tag the commit, and check that About → Licence points at it.
 3. Run `python3 tools/licenses.py` and confirm `THIRD_PARTY_NOTICES.md` is
    current.
+
+### TestFlight
+
+1. Tag the commit (`git tag -a v0.2.0 -m …`, push the tag).
+2. App Store build of the tag in a clean worktree: `tools/ipad.sh release
+   app-store-connect` (version = tag, build number = commit count; the
+   bundled demo is Lacrymosa only).
+3. Upload the archive with Xcode's signed-in account:
+   `xcodebuild -exportArchive -archivePath gen/apple/build/cantor-app_iOS.xcarchive
+   -exportOptionsPlist upload-options.plist -exportPath out -allowProvisioningUpdates`,
+   where the options plist has `method = app-store-connect`,
+   `destination = upload`, `teamID = 33ZQ6Q226L`.
+4. **Internal testers only** until the repository is public (AGPL 6:
+   external testers must be able to get the exact source of their build).
+
+First upload: ChoirBird 0.2.0 (build 0.2.0.110, tag `v0.2.0`), 2026-11-23,
+"Upload succeeded". Processing and TestFlight availability are checked in
+App Store Connect.
