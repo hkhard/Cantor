@@ -1,0 +1,11 @@
+[package]
+name = "omrprobe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "half", "coreml", "api-31"] }
+half = "2"
+
+[features]
+download = ["ort/download-binaries", "ort/copy-dylibs"]

@@ -495,7 +495,15 @@ tests (NFR-11: 100% of P0 criteria automated).
         - Its models are 129 MB (ONNX).
         - Weak points: it reads every system as "Piano", ignores the tenor 8vb clef, reads no lyrics, and crashed on 8 of 60 pages.
         - Its licence is AGPL-3.0, which blocks shipping it in the App Store app without a licence decision.
-      - Next, if wanted: a time-boxed spike running homr on the iPad (ONNX Runtime + CoreML) to measure memory and speed. Until then Audiveris on the desktop stays the way scores get notes.
+      - **Spike done the same day:** homr's three models run natively on the iPad mini inside Cantor (ONNX Runtime 1.31.1 from Microsoft's NuGet package).
+        - One real page (4 staves) takes 16 s on the CPU and 12 s with CoreML once compiled. The first CoreML run is 30 s.
+        - Peak memory is 0.6 GB on the CPU and 1.2 GB with CoreML, well under the limit. The 3 GB seen before was Python.
+        - Results are identical to homr in Python: every segmentation pixel, and 117 of 117 decoder tokens.
+        - The app grows by 9 MB; the models add 129 MB.
+        - Not done: porting homr's non-ML half (about 6,000 lines of Python/OpenCV, estimated 2–4 weeks).
+        - Licence: homr's code and weights are AGPL, and no commercial licence is available. Its training data is permissive (CC0, CC BY, MIT).
+        - The options are in `docs/omr-engine-comparison.md`: accept AGPL, get a legal view on using only the weights, train our own models, or keep recognition off the device.
+        - Waiting on the product owner's licence decision.
 
 ## 8. Future features (parked)
 

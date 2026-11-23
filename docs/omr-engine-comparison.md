@@ -221,6 +221,83 @@ cover the first system or two of each page shown.
 4. If homr goes on the iPad, Cantor needs its own post-processing: map staves
    to voices, handle octave clefs (8vb), and handle lyrics if they matter.
 
+## Update: homr's models on the iPad mini (spike, 2026-11-23)
+
+The question was whether homr's memory and speed fit on the iPad. To answer
+it, homr's three ONNX models ran natively on the iPad mini (A17 Pro, 8 GB),
+inside Cantor, with ONNX Runtime 1.31.1 from Microsoft's NuGet package
+(SHA-512 checked against nuget.org). There was no Python. The inputs were
+captured from homr on a real page (Olaf Trygvason p1, 300 DPI, 4 staves),
+and the outputs were compared with Python's. Code: `tools/omr/spike/`.
+
+| | iPad mini, CPU | iPad mini, CoreML first run | iPad mini, CoreML later runs | Mac M2, CPU |
+|---|---|---|---|---|
+| Segmentation, one page (9 batches of 8 patches) | 8.3 s | 1.6 s | 0.9 s | 4.8 s |
+| Encoder, 4 staves | 1.5 s | 2.6 s | 0.4 s | 0.9 s |
+| Decoder, 4 staves (464 tokens, CPU in every run) | 5.9 s (12.6 ms/token) | 6.0 s | 6.0 s | 3.7 s |
+| Model loading | 0.2 s | 20 s (CoreML compiles the models) | 4.8 s | 1.1 s |
+| **Total for the page** | **16 s** | **30 s** | **12 s** | 10.6 s |
+| **Peak memory footprint** | **609 MB** | **1.17 GB** | **1.18 GB** | 0.92 GB |
+| Same result as Python | segmentation 100% of pixels, decoder 117/117 tokens | same | same | same |
+
+What this shows:
+
+- **Memory fits.** The models peak at 0.6 GB on the CPU and 1.2 GB with
+  CoreML. That is well under the iPad mini's limit. The 2.7–3.1 GB measured
+  before was Python, OpenCV and homr's title-OCR model, not the networks.
+  Not measured yet: the non-ML steps (staff detection, dewarping) in native
+  code. They work on one page image at a time and should add tens of MB, not
+  GB.
+- **Speed is fine for importing.** A page takes 12–16 s, a 4-page score about
+  1 minute. It runs in the background while the PDF is already readable.
+  CoreML makes segmentation about 10× faster. The decoder (one token at a
+  time) is the slow part and stays on the CPU because its shapes change every
+  step.
+- **Results are identical** to homr in Python on the Mac, with the fp32 CPU
+  models (decoder) and with CoreML (segmentation, encoder). The pitfall:
+  `ort` silently uses CoreML in fp16 by default on Apple. That changed 55 of
+  117 decoder tokens until it was pinned to the CPU.
+- **App size:** the app grew by 9 MB (ONNX Runtime, static). The models add
+  129 MB, either bundled or downloaded on first use.
+
+Not covered by the spike:
+
+- The non-ML half of homr is not ported: about 6,000 lines of Python with
+  OpenCV and numpy.
+  - The biggest parts are staff detection (1,000 lines), the MusicXML writer
+    (1,300), bounding boxes (570) and dewarping (500).
+  - They use about 25 OpenCV functions: morphology, contours, `minAreaRect`,
+    `remap`, `resize`, thresholds.
+  - Rough estimate, not measured: 2–4 weeks to port to Rust (`imageproc`, or
+    OpenCV's iOS framework), plus tests against homr's output page by page.
+- Heat and battery over a long score.
+- Older or smaller iPads.
+
+### Licence, read from homr's `LICENSE_FAQ.md` (checked 2026-11-23)
+
+- **Code: AGPL-3.0.** No commercial licence is offered. The FAQ says:
+  "nobody can relicense the code on their own". It asks people not to email
+  about licensing. A port of homr's Python code to Rust would be a derivative
+  work, so it is also AGPL.
+- **Model weights: published under AGPL too.** The FAQ adds that the AGPL
+  can't grant more rights than the training data allows. The training data is
+  permissive or public domain: DeepScoresV2 (CC BY 4.0), OpenScore Lieder and
+  StringQuartets (CC0), GrandStaff (MIT on Hugging Face, no licence at the
+  original source), PDMX public-domain subset (CC BY 4.0).
+- **What that means for Cantor (not legal advice):**
+  1. **Accept AGPL.** Cantor's source becomes public under AGPL. There is a
+     known App Store conflict with GPL-family licences (Apple's terms add
+     restrictions). Some AGPL apps ship there anyway because the copyright
+     holders allow it. Here the holders are homr's contributors, not us.
+  2. **Use only the models and write our own pipeline.** The weights are
+     AGPL-labelled, so this needs a lawyer's view on whether weights carry
+     the licence.
+  3. **Train our own models** on the same permissive datasets with homr's
+     published architecture ideas (the architecture is from
+     Polyphonic-TrOMR). This is clean, but costs weeks plus GPU time.
+  4. **Keep note recognition off the device**: Audiveris (also AGPL) on the
+     desktop, or the parked server, as today.
+
 ## Reproducing
 
 Engine setup and runs used throwaway venvs (`uv venv`), not committed:
