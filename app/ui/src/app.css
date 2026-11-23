@@ -594,14 +594,60 @@ select {
 .turnzone.right {
   right: 0;
 }
-.perfexit {
+/* PERF-07: the small performance bar, bottom centre, above the turn zones. */
+.perfbar {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 8px);
+  bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
   left: 50%;
   transform: translateX(-50%);
   z-index: 31;
-  font-size: 0.8125rem;
-  opacity: 0.6;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.875rem;
+  max-width: 90vw;
+}
+.perfbar button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.5rem;
+  background: transparent;
+  border: none;
+  font-size: 1.125rem;
+}
+.perfbar button.perfexit {
+  font-size: 0.875rem;
+}
+.perfbar select {
+  min-height: 2.75rem;
+  max-width: 14rem;
+  font: inherit;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+.perfbar .sep {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--line);
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* The bar shows the page; no second page number in the corner. */
+.reader.performance .pageno {
+  visibility: hidden;
+}
+.reader.performance .turnzone {
+  bottom: calc(env(safe-area-inset-bottom) + 4rem);
 }
 .popover.pedals {
   display: flex;
@@ -863,6 +909,19 @@ select {
 }
 .readerhint h3 {
   margin: 0 0 0.5rem;
+}
+.readerhint .never {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+}
+.readerhint .never input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--accent);
 }
 .readerhint ul {
   margin: 0 0 1rem;

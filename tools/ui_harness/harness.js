@@ -650,7 +650,7 @@ const H = Number(process.env.H || 1133)
     await page.waitForTimeout(1500)
     const last = await page.evaluate(() => window.__calls.filter((c) => c[0] === 'open_score').pop()[1])
     if (last.transpose !== 1) throw new Error('transpose not restored')
-    const view = await page.locator('.seg button.on').first().textContent()
+    const view = await page.locator('.top .seg button.on').first().textContent()
     if (!/Notation/.test(view)) throw new Error('view not restored: ' + view)
   })
 
@@ -659,8 +659,7 @@ const H = Number(process.env.H || 1133)
     await page.waitForTimeout(800)
     await page.click('.top button:has-text("Annotate")')
     await page.waitForSelector('.annbar')
-    await page.click('.top button:has-text("•••")')
-    await page.click('.popover.more button:has-text("Perform")')
+    await page.click('.modeswitch button:has-text("Performance")')
     await page.waitForSelector('.perfexit')
     await shot('09-performance')
     // Annotation tools gone, overlay not drawable: no accidental ink.
@@ -683,6 +682,72 @@ const H = Number(process.env.H || 1133)
     const p1 = await page.locator('.pageno').textContent()
     if (parseInt(p1) !== parseInt(p0) + 1) throw new Error(`turn zone: ${p0} -> ${p1}`)
     await page.click('.perfexit')
+  })
+
+  await step('perf_07 practice and performance modes: small controls, step and jump through pages and pieces', async () => {
+    // A setlist of two pieces, opened from the library (added beside the
+    // others, removed again at the end).
+    await page.evaluate(() => {
+      window.__store.setlists = [...window.__store.setlists, { id: 'gig', name: 'Gig', items: [
+        { kind: 'score', score: '0:Lacrymosa', start_page: null },
+        { kind: 'score', score: '0:Christmas', start_page: null },
+      ] }]
+    })
+    const wasOpen = await page.locator('.top h2').innerText().catch(() => '')
+    if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
+    await page.reload()
+    await page.waitForSelector('ul.scores > li')
+    await page.click('[role=tab] >> text=Gig')
+    await page.locator('ol.setlist > li').first().locator('button.open').click()
+    await page.waitForSelector('.pdfhost canvas')
+    // Practice: rehearsal controls are there.
+    const mode = page.locator('.modeswitch')
+    if (!(await mode.locator('button[aria-pressed="true"]:has-text("Practice")').count())) throw new Error('not in practice mode')
+    if (!(await page.locator('.transport').isVisible())) throw new Error('no transport in practice')
+    await mode.locator('button:has-text("Performance")').click()
+    await page.waitForSelector('.perfbar')
+    await shot('53-performance-bar')
+    // Performance: no rehearsal controls, a small bar.
+    for (const sel of ['.transport', '.top', '.mixer']) if (await page.locator(sel).isVisible().catch(() => false)) throw new Error(sel + ' visible in performance')
+    const bar = await page.locator('.perfbar').boundingBox()
+    const vp = page.viewportSize()
+    if (bar.height > 72 || bar.width > vp.width * 0.9) throw new Error('performance bar is not small: ' + JSON.stringify(bar))
+    const pg = async () => (await page.locator('.perfbar select[aria-label="Go to page"] option:checked').innerText()).trim()
+    const pgsel = async () => (await page.locator('.perfbar select[aria-label="Go to page"] option:checked').innerText()).trim()
+    if (!/^1\s*\/\s*5$/.test(await pgsel())) throw new Error('page indicator ' + (await pgsel()))
+    await page.click('.perfbar button[aria-label="Next page"]')
+    await page.waitForTimeout(300)
+    if (!/^2\s*\//.test(await pg())) throw new Error('next page: ' + (await pg()))
+    // Jump to a chosen page.
+    await page.selectOption('.perfbar select[aria-label="Go to page"]', '4')
+    await page.waitForTimeout(300)
+    if (!/^4\s*\//.test(await pg())) throw new Error('jump to page: ' + (await pg()))
+    await page.click('.perfbar button[aria-label="Previous page"]')
+    await page.waitForTimeout(300)
+    if (!/^3\s*\//.test(await pg())) throw new Error('previous page: ' + (await pg()))
+    // Pieces in the setlist: next piece, and jump back to the first.
+    const piece = () => page.evaluate(() => document.querySelector('.perfbar select[aria-label="Go to piece"]')?.selectedOptions[0]?.textContent ?? '')
+    if (!(await piece()).startsWith('1/2')) throw new Error('piece position missing: ' + (await piece()))
+    await page.click('.perfbar button[aria-label="Next piece"]')
+    await page.waitForFunction(() => document.querySelector('.perfbar select[aria-label="Go to piece"]')?.selectedOptions[0]?.textContent.startsWith('2/2'))
+    if (!(await page.locator('.perfbar').isVisible())) throw new Error('left performance mode on next piece')
+    await page.selectOption('.perfbar select[aria-label="Go to piece"]', '0')
+    await page.waitForFunction(() => document.querySelector('.perfbar select[aria-label="Go to piece"]')?.selectedOptions[0]?.textContent.startsWith('1/2'))
+    // Back to practice: rehearsal controls return.
+    await page.click('.perfbar button:has-text("Practice")')
+    await page.waitForSelector('.transport')
+    if (await page.locator('.perfbar').count()) throw new Error('performance bar left in practice')
+    // Leave things as the later steps expect: no Gig list, the same score open.
+    await page.evaluate(() => {
+      window.__store.setlists = window.__store.setlists.filter((s) => s.id !== 'gig')
+      document.activeElement?.blur()
+    })
+    await page.click('.top button[aria-label="Library"]')
+    await page.click('[role=tab] >> text=All scores').catch(() => {})
+    const title = wasOpen.split('·')[0].trim() || 'Lacrymosa'
+    await page.locator('ul.scores > li', { hasText: title }).first().locator('button.open').click()
+    await page.waitForSelector('.top h2')
+    await page.waitForTimeout(800)
   })
 
   await step('perf_02 pedal keys are configurable', async () => {
@@ -1045,17 +1110,26 @@ const H = Number(process.env.H || 1133)
     await shot('40-first-run-sv')
   })
 
-  await step('lib_01 first open shows a one-time hint, dismissed and remembered in the store', async () => {
+  await step('lib_01 intro hint comes back until "do not show again" is ticked, then stays away', async () => {
     await page.evaluate(() => { window.__store.hints = [] })
     await page.click('.welcome .trycard')
     await page.waitForSelector('.readerhint')
     const txt = await page.locator('.readerhint').innerText()
     if (!/takt/.test(txt) || !/mixer/i.test(txt)) throw new Error('hint text: ' + txt)
     await shot('41-reader-hint-sv')
+    // OK without the box: the hint is shown again next time.
     await page.click('.readerhint button.primary')
     await page.waitForSelector('.readerhint', { state: 'detached' })
-    const hints = await page.evaluate(() => window.__store.hints)
-    if (!hints.includes('reader')) throw new Error('hint not saved in the store')
+    if ((await page.evaluate(() => window.__store.hints)).includes('reader')) throw new Error('saved without the box ticked')
+    await page.reload()
+    await page.waitForSelector('.welcome .trycard')
+    await page.click('.welcome .trycard')
+    await page.waitForSelector('.readerhint')
+    // Tick "do not show again": remembered in the store, never shown again.
+    await page.check('.readerhint label:has-text("Visa inte igen") input')
+    await page.click('.readerhint button.primary')
+    await page.waitForSelector('.readerhint', { state: 'detached' })
+    if (!(await page.evaluate(() => window.__store.hints)).includes('reader')) throw new Error('hint not saved in the store')
     await page.reload()
     await page.waitForSelector('.welcome .trycard')
     await page.click('.welcome .trycard')

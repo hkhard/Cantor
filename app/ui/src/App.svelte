@@ -30,14 +30,19 @@
   let readerHint = $state(false)
   let hintChecked = false
   async function maybeShowHint() {
+    // Once per app run: not again on every piece of a setlist.
     if (hintChecked) return
     hintChecked = true
     const d = await api.libraryData().catch(() => null)
+    hintNever = false
     readerHint = !!d && !(d.hints ?? []).includes('reader')
   }
+  /** The intro hint shows each time a score opens until the user ticks
+   * "do not show again"; that choice is saved in the library store. */
+  let hintNever = $state(false)
   function dismissHint() {
     readerHint = false
-    api.markHintSeen('reader').catch(() => {})
+    if (hintNever) api.markHintSeen('reader').catch(() => {})
   }
   let engraved: Engraved | null = $state(null)
   let page = $state(1)
@@ -792,9 +797,38 @@
 
   // PERF-01: performance mode hides everything but the music and makes the
   // left/right halves of the screen page-turn zones; editing is locked.
-  let performance = $state(false)
+  let performance = $state(false)  // PERF-07: false = Practice mode
 
-  let pdfView: { turn: (d: number) => void; goto: (p: number) => void; pageInfo: () => { page: number; pages: number } } | undefined = $state()
+  let pdfView: { turn: (d: number) => void; turnPage: (d: number) => void; goto: (p: number) => void; pageInfo: () => { page: number; pages: number } } | undefined = $state()
+  /** PERF-07: shown PDF page and count (for the performance bar). */
+  let pdfPage = $state({ page: 1, pages: 1 })
+  /** The page and count of whichever view is showing. */
+  let shownPage = $derived(view === 'pdf' && opened?.pdf_url ? pdfPage : { page, pages: engraved?.pages ?? 1 })
+  /** Score items of the open setlist, in order: [item index, title]. */
+  let setPieces = $derived(
+    setCtx
+      ? setCtx.list.items
+          .map((it, i) => [i, it.kind === 'score' ? scores.find((x) => x.file === it.score) : undefined] as const)
+          .filter((x): x is readonly [number, ScoreEntry] => !!x[1])
+          .map(([i, s]) => [i, s.title] as const)
+      : [],
+  )
+  let pieceNo = $derived(setCtx ? setPieces.findIndex(([i]) => i === setCtx!.index) : -1)
+  async function gotoPiece(itemIndex: number) {
+    if (!setCtx) return
+    const it = setCtx.list.items[itemIndex]
+    const s = it?.kind === 'score' ? scores.find((x) => x.file === it.score) : undefined
+    if (s) await open(s, undefined, { list: setCtx.list, index: itemIndex })
+  }
+  function setPerformance(on: boolean) {
+    performance = on
+    if (on) {
+      mixerOpen = false
+      annotating = false
+      moreOpen = false
+      insOpen = false
+    }
+  }
   function gotoPage(p: number) {
     if (view === 'pdf' && pdfView) pdfView.goto(p)
     else if (engraved && p >= 1 && p <= engraved.pages && p !== page) {
@@ -816,7 +850,7 @@
     if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
     const action = pedals[e.code]
     if (!action || action === 'none') {
-      if (e.code === 'Escape' && performance) performance = false
+      if (e.code === 'Escape' && performance) setPerformance(false)
       return
     }
     e.preventDefault()
@@ -842,10 +876,37 @@
 {:else}
   <main class="reader" class:performance>
     {#if performance}
-      <!-- PERF-01: big turn zones, no editing; a small exit button. -->
-      <button class="turnzone left" onclick={() => turnAny(-1)} aria-label={t('read.prev')}></button>
-      <button class="turnzone right" onclick={() => turnAny(1)} aria-label={t('read.next')}></button>
-      <button class="perfexit glass" onclick={() => (performance = false)}>{t('read.performExit')}</button>
+      <!-- PERF-01: big turn zones, no editing. PERF-07: a small bar with
+           the mode switch, pages and (from a setlist) pieces. -->
+      <button class="turnzone left" onclick={() => (barTaps ? stepBar(-1) : turnAny(-1))} aria-label={barTaps ? t('read.prevBar') : t('read.prev')}></button>
+      <button class="turnzone right" onclick={() => (barTaps ? stepBar(1) : turnAny(1))} aria-label={barTaps ? t('read.nextBar') : t('read.next')}></button>
+      <div class="perfbar glass" role="toolbar" aria-label={t('perf.bar')}>
+        <button class="perfexit" onclick={() => setPerformance(false)}>{t('mode.practice')}</button>
+        <span class="sep" aria-hidden="true"></span>
+        <button onclick={() => turnAny(-1)} disabled={shownPage.page <= 1} aria-label={t('perf.prevPage')}>‹</button>
+        <label class="pp"
+          ><span class="sr">{t('perf.gotoPage')}</span>
+          <select value={String(shownPage.page)} onchange={(e) => gotoPage(Number((e.target as HTMLSelectElement).value))} aria-label={t('perf.gotoPage')}>
+            {#each Array.from({ length: shownPage.pages }, (_, i) => i + 1) as n}
+              <option value={String(n)}>{n} / {shownPage.pages}</option>
+            {/each}
+          </select></label
+        >
+        <button onclick={() => turnAny(1)} disabled={shownPage.page >= shownPage.pages} aria-label={t('perf.nextPage')}>›</button>
+        {#if setCtx && setPieces.length > 1}
+          <span class="sep" aria-hidden="true"></span>
+          <button onclick={() => stepSet(-1)} disabled={pieceNo <= 0} aria-label={t('perf.prevPiece')}>«</button>
+          <label class="piece"
+            ><span class="sr">{t('perf.gotoPiece')}</span>
+            <select value={String(setCtx.index)} onchange={(e) => gotoPiece(Number((e.target as HTMLSelectElement).value))} aria-label={t('perf.gotoPiece')}>
+              {#each setPieces as [i, title], k}
+                <option value={String(i)}>{k + 1}/{setPieces.length} {title}</option>
+              {/each}
+            </select></label
+          >
+          <button onclick={() => stepSet(1)} disabled={pieceNo >= setPieces.length - 1} aria-label={t('perf.nextPiece')}>»</button>
+        {/if}
+      </div>
     {/if}
     <nav class="top glass">
       <button class="icon" onclick={close} aria-label={t('read.library')}><Icon name="back" size={20} /> <span class="wide">{t('read.library')}</span></button>
@@ -885,7 +946,6 @@
       {/if}
       {#if moreOpen}
         <div class="popover glass more">
-          <button class="primary" onclick={() => { performance = true; mixerOpen = false; annotating = false; moreOpen = false }}>{t('read.perform')}</button>
           {#if opened.channels.length}
             <label class="row"
               >{t('read.choir')}
@@ -1080,6 +1140,7 @@
             {stamp}
             onedit={annEdit}
             onside={barTaps ? stepBar : null}
+            onpage={(p, n) => (pdfPage = { page: p, pages: n })}
           />
         </div>
       {:else}
@@ -1173,6 +1234,10 @@
           <button class="chip" onclick={() => shareItem('4sc')}>{t('share.4sc')}</button>
         {/if}
         {#if exporting}<span class="exporting">{exporting}</span>{/if}
+        <div class="seg modeswitch" role="group" aria-label={t('mode.label')}>
+          <button class:on={!performance} aria-pressed={!performance} onclick={() => setPerformance(false)}>{t('mode.practice')}</button>
+          <button class:on={performance} aria-pressed={performance} onclick={() => setPerformance(true)}>{t('mode.performance')}</button>
+        </div>
       </footer>
     {:else}
     <footer class="transport glass">
@@ -1226,6 +1291,12 @@
         {/if}
       </span>
       {#if exporting}<span class="exporting">{exporting}</span>{/if}
+      <!-- PERF-07: Practice (these rehearsal controls) or Performance
+           (only the music and a small bar). -->
+      <div class="seg modeswitch" role="group" aria-label={t('mode.label')}>
+        <button class:on={!performance} aria-pressed={!performance} onclick={() => setPerformance(false)}>{t('mode.practice')}</button>
+        <button class:on={performance} aria-pressed={performance} onclick={() => setPerformance(true)}>{t('mode.performance')}</button>
+      </div>
       <label class="follow"><input type="checkbox" bind:checked={follow} /> {t('tr.follow')}</label>
       {#if engraved && view === 'notation'}<span class="page">{page}/{engraved.pages}</span>{/if}
     </footer>
@@ -1239,6 +1310,7 @@
           <li>{t('hint.mixer')}</li>
           <li>{t('hint.turn')}</li>
         </ul>
+        <label class="never"><input type="checkbox" bind:checked={hintNever} /> {t('hint.never')}</label>
         <!-- svelte-ignore a11y_autofocus -->
         <button class="primary" autofocus onclick={dismissHint}>{t('hint.ok')}</button>
       </div>

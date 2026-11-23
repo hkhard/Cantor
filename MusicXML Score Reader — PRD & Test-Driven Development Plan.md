@@ -157,6 +157,7 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | PERF-04 | P1 | Backing tracks with time-stretch and page turns on the track timeline | Turn markers fire within 50 ms |
 | PERF-05 | P1 | Turn by swipe: a left/right swipe turns the page with a quick page-fold animation (an option, on by default) | A swipe turns one page; a vertical drag or a slow drag does not; no animation with reduced motion |
 | PERF-06 | P1 | Bar by bar: an option where tapping the right or left side moves the cursor one bar forward or back, so the whole score can be tapped through; the page follows the bar | Tapping right N times lands on bar N+1; tapping left goes back; works on the PDF and the notation |
+| PERF-07 | P0 | Two reader modes: Practice (rehearsal controls: transport, tempo, loop, click, mixer, annotations) and Performance (only the music and a small control bar: page number, previous/next page, jump to a page, and, from a setlist, previous/next piece and jump to any piece in order) | One tap switches modes; Performance shows no rehearsal controls; from the small bar you can step through every page and piece in order and jump to a chosen page or piece |
 
 ### Sync and data (DATA)
 

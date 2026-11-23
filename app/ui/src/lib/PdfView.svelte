@@ -31,6 +31,8 @@
     /** PERF-06: when set, the side zones call this (bar by bar) instead of
      * turning the page. */
     onside?: ((d: number) => void) | null
+    /** PERF-07: the shown page and page count, whenever they change. */
+    onpage?: (page: number, pages: number) => void
   }
   let {
     url,
@@ -47,6 +49,7 @@
     stamp = 'Breath',
     onedit = () => {},
     onside = null,
+    onpage = () => {},
   }: Props = $props()
 
   let host: HTMLDivElement | undefined = $state()
@@ -58,6 +61,10 @@
   let box = $state({ w: 0, h: 0 })
   let error = $state('')
   let pageEls: (HTMLDivElement | undefined)[] = $state([])
+
+  $effect(() => {
+    onpage(page, pages)
+  })
 
   export function pageInfo() {
     return { page, pages }

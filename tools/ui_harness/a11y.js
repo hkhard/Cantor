@@ -72,8 +72,7 @@ const SCREENS = [
   ['performance', async (p) => {
     await p.locator('ul.scores > li').first().locator('button.open').click()
     await p.waitForSelector('.pdfhost canvas')
-    await p.click('.top button[aria-haspopup="dialog"]')
-    await p.click('.popover.more button.primary')
+    await p.click('.modeswitch button:nth-child(2)')
     await p.waitForSelector('.perfexit')
   }],
   // SET-03/04: instructions panel (with hints and a practice track) and a
