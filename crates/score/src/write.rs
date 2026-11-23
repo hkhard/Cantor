@@ -4,8 +4,50 @@
 //! `parse(write(s)) == s`. Used to save OMR results that were assembled
 //! page by page, and later for user corrections (WP-3.13).
 
-use crate::model::{EventKind, Header, Measure, Navigation, Part, Score, Step, PPQ};
+use crate::model::{EventKind, Harmony, Header, Measure, Navigation, Part, Score, Step, PPQ};
 use std::fmt::Write;
+
+fn write_harmony(x: &mut String, h: &Harmony) {
+    x.push_str("<harmony>");
+    if let Some((st, al)) = h.root {
+        let _ = write!(x, "<root><root-step>{}</root-step>", step_name(st));
+        if al != 0 {
+            let _ = write!(x, "<root-alter>{al}</root-alter>");
+        }
+        x.push_str("</root>");
+    }
+    match &h.kind_text {
+        Some(t) => {
+            let _ = write!(x, "<kind text=\"{}\">{}</kind>", esc(t), esc(&h.kind));
+        }
+        None => {
+            let _ = write!(x, "<kind>{}</kind>", esc(&h.kind));
+        }
+    }
+    if let Some((st, al)) = h.bass {
+        let _ = write!(x, "<bass><bass-step>{}</bass-step>", step_name(st));
+        if al != 0 {
+            let _ = write!(x, "<bass-alter>{al}</bass-alter>");
+        }
+        x.push_str("</bass>");
+    }
+    for d in &h.degrees {
+        let _ = write!(
+            x,
+            "<degree><degree-value>{}</degree-value><degree-alter>{}</degree-alter><degree-type>{}</degree-type></degree>",
+            d.value,
+            d.alter,
+            d.kind.as_str()
+        );
+    }
+    if h.offset != 0 {
+        let _ = write!(x, "<offset>{}</offset>", h.offset);
+    }
+    if h.staff != 1 {
+        let _ = write!(x, "<staff>{}</staff>", h.staff);
+    }
+    x.push_str("</harmony>");
+}
 
 fn esc(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -170,6 +212,11 @@ fn write_measure(x: &mut String, m: &Measure, first: bool, last: &mut LastAttrs)
         *last = (m.time_signature, m.key_fifths, m.transpose);
     }
     write_sound_nav(x, nav);
+    // BAND-01 chord symbols, each placed by <offset> from the measure start
+    // (divisions = PPQ) so the cursor and content length are untouched.
+    for h in &m.harmonies {
+        write_harmony(x, h);
+    }
     for &(off, bpm) in &m.tempos {
         // Tempo at an offset: move there with forward/backup is overkill for
         // OMR output; tempos are written at measure start + offset 0 only when

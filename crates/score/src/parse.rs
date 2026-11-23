@@ -2,8 +2,8 @@
 
 use crate::dom::{self, DomError, Element};
 use crate::model::{
-    Articulation, Event, EventKind, Header, Lyric, Measure, Navigation, Part, Pitch, Score, Step,
-    Swing, Syllabic, Tick, PPQ,
+    Articulation, Degree, DegreeKind, Event, EventKind, Harmony, Header, Lyric, Measure,
+    Navigation, Part, Pitch, Score, Step, Swing, Syllabic, Tick, PPQ,
 };
 use std::io::Read;
 
@@ -445,6 +445,7 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
         let mut events = Vec::new();
         let mut tempos = Vec::new();
         let mut swing: Vec<(Tick, Option<Swing>)> = Vec::new();
+        let mut harmonies = Vec::new();
         let mut nav = Navigation {
             ending: open_ending.clone(),
             ..Navigation::default()
@@ -490,6 +491,11 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                                 time_sig = Some((b, bt));
                             }
                         }
+                    }
+                }
+                "harmony" => {
+                    if let Some(h) = parse_harmony(child, cursor, divisions) {
+                        harmonies.push(h);
                     }
                 }
                 "backup" => {
@@ -651,9 +657,62 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
             nav,
             swing,
             events,
+            harmonies,
         });
     }
     Ok(out)
+}
+
+/// `(step, alter)` from e.g. `<root><root-step>B</root-step><root-alter>-1`.
+fn step_alter(el: &Element, step: &str, alter: &str) -> Option<(Step, i32)> {
+    let st = Step::parse(el.child_text(step)?)?;
+    let al = el
+        .child_text(alter)
+        .and_then(|a| a.parse::<f64>().ok())
+        .map_or(0, |a| a.round() as i32);
+    Some((st, al))
+}
+
+/// BAND-01: a `<harmony>` at `cursor` (ticks). Lenient: a chord symbol the
+/// model cannot hold is skipped, never an error.
+fn parse_harmony(h: &Element, cursor: Tick, divisions: u64) -> Option<Harmony> {
+    let kind_el = h.child("kind")?;
+    let kind = kind_el.text.trim().to_string();
+    let root = h
+        .child("root")
+        .and_then(|r| step_alter(r, "root-step", "root-alter"));
+    let bass = h
+        .child("bass")
+        .and_then(|b| step_alter(b, "bass-step", "bass-alter"));
+    let degrees = h
+        .children("degree")
+        .filter_map(|d| {
+            Some(Degree {
+                value: d.child_text("degree-value")?.parse().ok()?,
+                alter: d
+                    .child_text("degree-alter")
+                    .and_then(|a| a.parse::<f64>().ok())
+                    .map_or(0, |a| a.round() as i32),
+                kind: DegreeKind::parse(d.child_text("degree-type").unwrap_or("add")),
+            })
+        })
+        .collect();
+    let shift = h
+        .child_text("offset")
+        .and_then(|o| o.parse::<f64>().ok())
+        .map_or(0, |o| (o * PPQ as f64 / divisions as f64).round() as i64);
+    Some(Harmony {
+        offset: (cursor as i64 + shift).max(0) as Tick,
+        root,
+        kind,
+        kind_text: kind_el.attr("text").map(str::to_string),
+        bass,
+        degrees,
+        staff: h
+            .child_text("staff")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1),
+    })
 }
 
 /// `<sound>` navigation attributes (MusicXML playback semantics).

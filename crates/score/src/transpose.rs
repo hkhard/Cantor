@@ -90,9 +90,51 @@ fn spell(idx: i32, octave: i32, target: i32) -> Pitch {
     }
 }
 
+/// BAND-02: a chord root or bass `(step, alter)` moved like a note in the
+/// same key, so it follows the key's spelling (Bb in flat keys, A# never).
+fn transpose_chord_step(sa: (Step, i32), fifths: i32, semitones: i32) -> (Step, i32) {
+    let p = transpose_pitch(
+        Pitch {
+            step: sa.0,
+            alter: sa.1,
+            octave: 4,
+        },
+        fifths,
+        semitones,
+    );
+    (p.step, p.alter)
+}
+
+/// The new `<root>` / `<bass>` element of a chord symbol, or `None` if the
+/// element has no readable step.
+fn chord_step_xml(
+    name: &str,
+    fields: &[(String, String)],
+    fifths: i32,
+    semitones: i32,
+) -> Option<String> {
+    let get = |k: String| {
+        fields
+            .iter()
+            .find(|(n, _)| *n == k)
+            .map(|(_, v)| v.trim().to_string())
+    };
+    let step = Step::parse(&get(format!("{name}-step"))?)?;
+    let alter = get(format!("{name}-alter"))
+        .and_then(|a| a.parse::<f64>().ok())
+        .map_or(0, |a| a.round() as i32);
+    let (st, al) = transpose_chord_step((step, alter), fifths, semitones);
+    let mut out = format!("<{name}><{name}-step>{}</{name}-step>", step_name(st));
+    if al != 0 {
+        out.push_str(&format!("<{name}-alter>{al}</{name}-alter>"));
+    }
+    out.push_str(&format!("</{name}>"));
+    Some(out)
+}
+
 impl Score {
-    /// A copy with every pitch and key signature moved by `semitones`
-    /// (see the module docs for the spelling rule).
+    /// A copy with every pitch, chord symbol and key signature moved by
+    /// `semitones` (see the module docs for the spelling rule).
     pub fn transposed(&self, semitones: i32) -> Score {
         let mut s = self.clone();
         for m in s.parts.iter_mut().flat_map(|p| &mut p.measures) {
@@ -101,6 +143,10 @@ impl Score {
                 if let EventKind::Note(p) = &mut e.kind {
                     *p = transpose_pitch(*p, fifths, semitones);
                 }
+            }
+            for h in &mut m.harmonies {
+                h.root = h.root.map(|r| transpose_chord_step(r, fifths, semitones));
+                h.bass = h.bass.map(|b| transpose_chord_step(b, fifths, semitones));
             }
             m.key_fifths = m.key_fifths.map(|f| transposed_fifths(f, semitones));
         }
@@ -148,7 +194,7 @@ pub fn musicxml_transposed(xml: &str, semitones: i32) -> Result<String, ParseErr
                 match name.as_str() {
                     "part" => fifths = 0,
                     "note" => note_alter = None,
-                    "pitch" => {
+                    "pitch" | "root" | "bass" => {
                         pitch_start = before;
                         pitch_text.clear();
                     }
@@ -168,6 +214,11 @@ pub fn musicxml_transposed(xml: &str, semitones: i32) -> Result<String, ParseErr
                             fifths = f;
                             let new = transposed_fifths(f, semitones).to_string();
                             edits.push((content_start, before, new));
+                        }
+                    }
+                    ("root" | "bass", Some("harmony")) => {
+                        if let Some(out) = chord_step_xml(&name, &pitch_text, fifths, semitones) {
+                            edits.push((pitch_start, after, out));
                         }
                     }
                     ("pitch", _) => {
@@ -199,7 +250,7 @@ pub fn musicxml_transposed(xml: &str, semitones: i32) -> Result<String, ParseErr
                         out.push_str(&format!("<octave>{}</octave></pitch>", p.octave));
                         edits.push((pitch_start, after, out));
                     }
-                    (child, Some("pitch")) => {
+                    (child, Some("pitch" | "root" | "bass")) => {
                         pitch_text.push((child.to_string(), std::mem::take(&mut text)));
                     }
                     ("accidental", Some("note")) => {
@@ -265,7 +316,7 @@ pub fn musicxml_concert_pitch(xml: &str) -> Result<String, ParseError> {
                         fifths = 0;
                     }
                     "note" => note_alter = None,
-                    "pitch" => {
+                    "pitch" | "root" | "bass" => {
                         pitch_start = before;
                         pitch_text.clear();
                     }
@@ -313,6 +364,11 @@ pub fn musicxml_concert_pitch(xml: &str) -> Result<String, ParseError> {
                             }
                         }
                     }
+                    ("root" | "bass", Some("harmony")) if semis != 0 => {
+                        if let Some(out) = chord_step_xml(&name, &pitch_text, fifths, semis) {
+                            edits.push((pitch_start, after, out));
+                        }
+                    }
                     ("pitch", _) if semis != 0 => {
                         let get = |k: &str| {
                             pitch_text
@@ -342,7 +398,7 @@ pub fn musicxml_concert_pitch(xml: &str) -> Result<String, ParseError> {
                         out.push_str(&format!("<octave>{}</octave></pitch>", p.octave));
                         edits.push((pitch_start, after, out));
                     }
-                    (child, Some("pitch")) => {
+                    (child, Some("pitch" | "root" | "bass")) => {
                         pitch_text.push((child.to_string(), std::mem::take(&mut text)));
                     }
                     ("accidental", Some("note")) if semis != 0 => {

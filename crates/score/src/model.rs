@@ -107,6 +107,164 @@ pub struct Measure {
     /// Swing changes `(offset in measure, swing)`; `None` = straight.
     pub swing: Vec<(Tick, Option<Swing>)>,
     pub events: Vec<Event>,
+    /// Chord symbols (BAND-01), in file order, at written pitch.
+    pub harmonies: Vec<Harmony>,
+}
+
+/// A chord symbol, MusicXML `<harmony>` (BAND-01).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Harmony {
+    /// Onset in the measure: the position of the element plus its `<offset>`.
+    pub offset: Tick,
+    /// `(step, alter)`; `None` for a chord without a root (N.C. or a function).
+    pub root: Option<(Step, i32)>,
+    /// MusicXML `<kind>` value (`major`, `dominant`, `minor-seventh`, ...).
+    pub kind: String,
+    /// `<kind text="...">`: how the file wants the kind printed.
+    pub kind_text: Option<String>,
+    /// Slash bass `(step, alter)`.
+    pub bass: Option<(Step, i32)>,
+    pub degrees: Vec<Degree>,
+    /// 1-based staff (default 1).
+    pub staff: u32,
+}
+
+/// `<degree>`: an added, altered or removed chord tone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Degree {
+    /// 1..13 (9 = ninth).
+    pub value: u32,
+    pub alter: i32,
+    pub kind: DegreeKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DegreeKind {
+    Add,
+    Alter,
+    Subtract,
+}
+
+impl DegreeKind {
+    pub fn parse(s: &str) -> DegreeKind {
+        match s.trim() {
+            "alter" => DegreeKind::Alter,
+            "subtract" => DegreeKind::Subtract,
+            _ => DegreeKind::Add,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DegreeKind::Add => "add",
+            DegreeKind::Alter => "alter",
+            DegreeKind::Subtract => "subtract",
+        }
+    }
+}
+
+/// Semitones above the root of each chord tone of a MusicXML `<kind>`.
+fn kind_intervals(kind: &str) -> (&'static [i32], &'static str) {
+    match kind {
+        "major" => (&[0, 4, 7], ""),
+        "minor" => (&[0, 3, 7], "m"),
+        "augmented" => (&[0, 4, 8], "+"),
+        "diminished" => (&[0, 3, 6], "dim"),
+        "dominant" => (&[0, 4, 7, 10], "7"),
+        "major-seventh" => (&[0, 4, 7, 11], "maj7"),
+        "minor-seventh" => (&[0, 3, 7, 10], "m7"),
+        "diminished-seventh" => (&[0, 3, 6, 9], "dim7"),
+        "augmented-seventh" => (&[0, 4, 8, 10], "+7"),
+        "half-diminished" => (&[0, 3, 6, 10], "m7b5"),
+        "major-minor" => (&[0, 3, 7, 11], "m(maj7)"),
+        "major-sixth" => (&[0, 4, 7, 9], "6"),
+        "minor-sixth" => (&[0, 3, 7, 9], "m6"),
+        "dominant-ninth" => (&[0, 4, 7, 10, 14], "9"),
+        "major-ninth" => (&[0, 4, 7, 11, 14], "maj9"),
+        "minor-ninth" => (&[0, 3, 7, 10, 14], "m9"),
+        "dominant-11th" => (&[0, 4, 7, 10, 14, 17], "11"),
+        "major-11th" => (&[0, 4, 7, 11, 14, 17], "maj11"),
+        "minor-11th" => (&[0, 3, 7, 10, 14, 17], "m11"),
+        "dominant-13th" => (&[0, 4, 7, 10, 14, 21], "13"),
+        "major-13th" => (&[0, 4, 7, 11, 14, 21], "maj13"),
+        "minor-13th" => (&[0, 3, 7, 10, 14, 21], "m13"),
+        "suspended-second" => (&[0, 2, 7], "sus2"),
+        "suspended-fourth" => (&[0, 5, 7], "sus4"),
+        "power" => (&[0, 7], "5"),
+        "none" => (&[], "N.C."),
+        // pedal, Neapolitan, Italian, ..., other: the root alone.
+        _ => (&[0], ""),
+    }
+}
+
+/// Semitones above the root of chord degree `value` (major scale, but the
+/// 7th is the dominant seventh as in chord-symbol practice).
+fn degree_semitones(value: u32) -> i32 {
+    let v = value.max(1) - 1;
+    let octave = (v / 7) as i32 * 12;
+    octave + [0, 2, 4, 5, 7, 9, 10][(v % 7) as usize]
+}
+
+fn note_name(step: Step, alter: i32) -> String {
+    let acc = match alter {
+        a if a < 0 => "b".repeat((-a) as usize),
+        a => "#".repeat(a as usize),
+    };
+    format!("{step:?}{acc}")
+}
+
+impl Harmony {
+    /// Printable symbol, e.g. `Bb7`, `Am7`, `F/A`, `C7(b9)`, `N.C.`.
+    pub fn symbol(&self) -> String {
+        let (_, suffix) = kind_intervals(&self.kind);
+        let mut s = match self.root {
+            Some((st, al)) if self.kind != "none" => note_name(st, al),
+            _ => String::new(),
+        };
+        s.push_str(suffix);
+        for d in &self.degrees {
+            let acc = match d.alter {
+                a if a < 0 => "b",
+                a if a > 0 => "#",
+                _ => "",
+            };
+            let text = match d.kind {
+                DegreeKind::Add if acc.is_empty() => format!("(add{})", d.value),
+                DegreeKind::Subtract => format!("(no{})", d.value),
+                _ => format!("({acc}{})", d.value),
+            };
+            s.push_str(&text);
+        }
+        if let Some((st, al)) = self.bass {
+            s.push('/');
+            s.push_str(&note_name(st, al));
+        }
+        s
+    }
+
+    /// Chord tones as semitones above the root (BAND-05), sorted, degrees
+    /// applied. Empty for N.C. or a chord without a root.
+    pub fn intervals(&self) -> Vec<i32> {
+        if self.root.is_none() {
+            return Vec::new();
+        }
+        let mut v: Vec<i32> = kind_intervals(&self.kind).0.to_vec();
+        for d in &self.degrees {
+            let base = degree_semitones(d.value);
+            let same = |x: &i32| x.rem_euclid(12) == base.rem_euclid(12);
+            match d.kind {
+                DegreeKind::Add => v.push(base + d.alter),
+                DegreeKind::Alter => {
+                    v.retain(|x| !same(x));
+                    v.push(base + d.alter);
+                }
+                DegreeKind::Subtract => v.retain(|x| !same(x)),
+            }
+        }
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
 }
 
 /// Swing feel (PLAY-10): within each pair of `unit` notes (eighths or
