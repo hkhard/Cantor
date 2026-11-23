@@ -13,9 +13,11 @@ mod write;
 
 pub use edit::{edit_note, NoteEdit};
 pub use model::{
-    Articulation, Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Swing,
-    Syllabic, Tick, PPQ,
+    Articulation, Event, EventKind, Header, Lyric, Measure, Navigation, Part, Pitch, Score, Step,
+    Swing, Syllabic, Tick, PPQ,
 };
-pub use parse::{musicxml_bytes, parse_musicxml, parse_mxl, parse_score_file, ParseError};
+pub use parse::{
+    musicxml_bytes, parse_musicxml, parse_mxl, parse_score_file, read_header, ParseError,
+};
 pub use transpose::{musicxml_concert_pitch, musicxml_transposed, transposed_fifths};
 pub use write::write_musicxml;

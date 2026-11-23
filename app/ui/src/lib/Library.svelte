@@ -3,7 +3,7 @@
   // setlists (SET-01, incl. ones imported from forScore, LIB-08), import and
   // remove (LIB-01/02), About (NFR-09).
   import { onMount } from 'svelte'
-  import { api, type Metadata, type ScoreEntry, type Setlist } from './api'
+  import { api, type HomeGroup, type Metadata, type ScoreEntry, type Setlist } from './api'
   import Appearance from './Appearance.svelte'
   import MetaEditor from './MetaEditor.svelte'
   import About from './About.svelte'
@@ -24,8 +24,60 @@
 
   let metadata: Record<string, Metadata> = $state({})
   let setlists: Setlist[] = $state([])
-  /** '' = all scores, else a setlist id. */
+  // LIB-04: the start view is a grouping (setlists by default, or genre,
+  // tags, composer ...) and a selected tab ('' = all scores). Saved in the
+  // library store, so it is restored on start and synced between devices.
+  let group: HomeGroup = $state('setlists')
+  /** '' = all scores; a setlist id (group 'setlists') or a group value. */
   let tab = $state(localStorage.getItem('cantor.tab') ?? '')
+  let homeLoaded = false
+  const GROUPS: HomeGroup[] = ['setlists', 'genre', 'tags', 'composer', 'arranger', 'rating', 'difficulty']
+  /** Marker tab for scores without a value in the current grouping. */
+  const NONE = '\u0000none'
+
+  /** The values of `s` in grouping `g` (several for tags). */
+  function valuesOf(s: ScoreEntry, g: HomeGroup): string[] {
+    const m = metadata[s.file]
+    switch (g) {
+      case 'genre':
+        return m?.genre?.trim() ? [m.genre.trim()] : []
+      case 'tags':
+        return (m?.tags ?? []).map((x) => x.trim()).filter(Boolean)
+      case 'composer':
+        return m?.composer?.trim() ? [m.composer.trim()] : []
+      case 'arranger':
+        return m?.arranger?.trim() ? [m.arranger.trim()] : []
+      case 'rating':
+        return m?.rating ? ['★'.repeat(m.rating)] : []
+      case 'difficulty':
+        return m?.difficulty ? ['●'.repeat(m.difficulty)] : []
+      default:
+        return []
+    }
+  }
+
+  /** Tabs for the current non-setlist grouping: each value with its count. */
+  let groupTabs = $derived.by(() => {
+    if (group === 'setlists') return [] as { value: string; label: string; n: number }[]
+    const counts = new Map<string, number>()
+    let none = 0
+    for (const s of scores) {
+      const v = valuesOf(s, group)
+      if (!v.length) none++
+      for (const x of new Set(v)) counts.set(x, (counts.get(x) ?? 0) + 1)
+    }
+    const ordered = [...counts.entries()].sort((a, b) =>
+      group === 'rating' || group === 'difficulty' ? b[0].length - a[0].length : a[0].localeCompare(b[0], 'sv'),
+    )
+    const tabs = ordered.map(([value, n]) => ({ value, label: value, n }))
+    if (none && tabs.length) tabs.push({ value: NONE, label: t('lib.groupNone'), n: none })
+    return tabs
+  })
+
+  function setGroup(g: HomeGroup) {
+    group = g
+    tab = ''
+  }
   let query = $state('')
   let hits: Set<string> | null = $state(null)
   let editing: ScoreEntry | null = $state(null)
@@ -98,7 +150,13 @@
     const d = await api.libraryData()
     metadata = d.metadata
     setlists = d.setlists
-    if (tab && !setlists.some((s) => s.id === tab)) tab = ''
+    if (!homeLoaded && d.home) {
+      // The saved start view, once per launch.
+      homeLoaded = true
+      if (GROUPS.includes(d.home.group)) group = d.home.group
+      tab = d.home.tab ?? ''
+    }
+    if (group === 'setlists' && tab && !setlists.some((s) => s.id === tab)) tab = ''
   }
   onMount(() => {
     reload()
@@ -121,8 +179,13 @@
     void scores
     reload()
   })
+  let homeTimer: number | undefined
   $effect(() => {
+    const v = { group, tab }
     localStorage.setItem('cantor.tab', tab)
+    if (!homeLoaded) return
+    clearTimeout(homeTimer)
+    homeTimer = setTimeout(() => api.setHomeView(v).catch(() => {}), 300) as unknown as number
   })
 
   let searchTimer: number | undefined
@@ -138,8 +201,14 @@
     }, 120) as unknown as number
   }
 
-  let shown = $derived(hits ? scores.filter((s) => hits!.has(s.file)) : scores)
-  let current = $derived(setlists.find((s) => s.id === tab) ?? null)
+  let shown = $derived.by(() => {
+    let v = hits ? scores.filter((s) => hits!.has(s.file)) : scores
+    if (group !== 'setlists' && tab) {
+      v = tab === NONE ? v.filter((s) => !valuesOf(s, group).length) : v.filter((s) => valuesOf(s, group).includes(tab))
+    }
+    return v
+  })
+  let current = $derived(group === 'setlists' ? (setlists.find((s) => s.id === tab) ?? null) : null)
   let byId = $derived(new Map(scores.map((s) => [s.file, s])))
 
   function sub(s: ScoreEntry): string {
@@ -256,7 +325,29 @@
     </div>
   {/each}
 
+  <div class="viewbar">
+    <label class="viewsel"
+      >{t('lib.show')}
+      <select value={group} onchange={(e) => setGroup((e.target as HTMLSelectElement).value as HomeGroup)}>
+        {#each GROUPS as g}
+          <option value={g}>{t(`lib.group.${g}`)}</option>
+        {/each}
+      </select>
+    </label>
+  </div>
   <div class="tabs" bind:this={tabsEl}>
+    {#if group !== 'setlists'}
+      <div class="tablist" role="tablist" aria-label={t(`lib.group.${group}`)}>
+        <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
+        {#each groupTabs as g (g.value)}
+          <button role="tab" class="chip" class:on={tab === g.value} aria-selected={tab === g.value} onclick={() => (tab = g.value)}
+            >{g.label} <span class="count">{g.n}</span></button
+          >
+        {:else}
+          <span class="hint">{t('lib.groupEmpty')}</span>
+        {/each}
+      </div>
+    {:else}
     <div
       class="tablist"
       role="tablist"
@@ -277,6 +368,7 @@
       {/each}
     </div>
     <button class="chip" onclick={newSetlist}>{t('lib.newSetlist')}</button>
+    {/if}
     {#if editMode}
       <button class="chip on done" onclick={() => (editMode = false)}>{t('common.done')}</button>
     {/if}
@@ -431,6 +523,31 @@
     padding: 10px 14px;
     border-radius: 14px;
     margin-bottom: 10px;
+  }
+  .viewbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 6px;
+  }
+  .viewsel {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .viewsel select {
+    font: inherit;
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .count {
+    opacity: 0.7;
+    font-size: 0.85em;
+    margin-left: 2px;
   }
   .tablist {
     display: flex;

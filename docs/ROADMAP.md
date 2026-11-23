@@ -30,6 +30,7 @@ Each phase lists its exit check, so "done" means something you can observe.
 | **Make the repository public** (needed before anyone outside your own devices gets a build: AGPL 6(d)) | Before step: check history for private scores and secrets (`scores/`, `resources/scores/` are ignored; verify with `git log --all -- '*.pdf' '*.mxl' '*.musicxml'`), then flip `hkhard/Cantor` to public, or push a clean copy |
 | Tag each build given to others; the About link points at that tag | Build script writes the tag into About |
 | UI harness without private scores: generate the PDF and measure map from a public fixture (`fixtures/musicxml/satb_chorale_24.musicxml`), so outside contributors and forks can run it | `SCORE=` defaults to the public fixture; CI passes with no `scores/` folder |
+| Clear or remove *The Anchor Song* (the song's copyright is Björk's; only the arrangement is ours) before the repository is public | Publisher permission on file, or `fixtures/scores/the-anchor-song` removed from history |
 | Keep homr code out of the client | Licence check (homr is AGPL; it would need an explicit review entry) |
 
 Who: you. Cost: nothing.

@@ -8,7 +8,49 @@ pub type Tick = u64;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Score {
+    /// Title and credits from the file (`<work>`, `<movement-*>`,
+    /// `<identification>`, `<credit>`).
+    pub header: Header,
     pub parts: Vec<Part>,
+}
+
+/// The score's own header (LIB-01/LIB-03): what the notation program wrote
+/// as title, composer and so on. Empty strings when absent.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Header {
+    pub work_title: String,
+    pub work_number: String,
+    pub movement_title: String,
+    pub movement_number: String,
+    pub composer: String,
+    pub arranger: String,
+    /// Lyricist or poet.
+    pub lyricist: String,
+    pub rights: String,
+    /// Title from `<credit>` text on page 1, used when `<work>` and
+    /// `<movement-title>` are missing (common in Dorico and PDF converters).
+    pub credit_title: String,
+}
+
+/// Titles notation programs write when the user never set one.
+const PLACEHOLDER_TITLES: &[&str] = &[
+    "untitled",
+    "untitled score",
+    "title",
+    "score",
+    "titel",
+    "namnlös",
+];
+
+impl Header {
+    /// The title to show: work title, else movement title, else the title
+    /// printed on page 1. `None` when the file has no real title.
+    pub fn title(&self) -> Option<String> {
+        [&self.work_title, &self.movement_title, &self.credit_title]
+            .into_iter()
+            .map(|t| t.split_whitespace().collect::<Vec<_>>().join(" "))
+            .find(|t| !t.is_empty() && !PLACEHOLDER_TITLES.contains(&t.to_lowercase().as_str()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

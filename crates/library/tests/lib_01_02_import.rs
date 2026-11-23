@@ -36,14 +36,51 @@ fn lib_01_musicxml_imported_and_listed_as_playable() {
     assert_eq!(
         lib,
         vec![LibraryEntry {
-            title: "Que medley".into(),
+            // The file's own <work-title>, not the file name.
+            title: "Que?".into(),
             stem: "Que medley".into(),
             dir: d.clone(),
             score_file: Some("Que medley.musicxml".into()),
             pdf_file: None,
             track_file: None,
+            header: cantor_score::Header {
+                work_title: "Que?".into(),
+                ..Default::default()
+            },
         }]
     );
+}
+
+#[test]
+fn lib_01_title_composer_arranger_from_the_file_not_the_file_name() {
+    let d = tmp("anchor");
+    let mxl = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/scores/the-anchor-song/the-anchor-song.mxl"
+    ))
+    .unwrap();
+    import_file(&d, "the-anchor-song.mxl", &mxl).unwrap();
+    let pdf = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../fixtures/scores/the-anchor-song/the-anchor-song.pdf"
+    ))
+    .unwrap();
+    import_file(&d, "the-anchor-song.pdf", &pdf).unwrap();
+    let lib = list_library(&[d.as_path()]);
+    assert_eq!(lib.len(), 1, "MXL and PDF with the same stem are one score");
+    assert_eq!(lib[0].title, "The Anchor Song");
+    assert_eq!(lib[0].header.composer, "B. Gudmundsdottir");
+    assert_eq!(lib[0].header.arranger, "HKH");
+    // No header in the file: the file name is the fallback, tidied.
+    let bare = XML.replace("<work><work-title>Que?</work-title></work>", "");
+    import_file(&d, "ave_verum.musicxml", bare.as_bytes()).unwrap();
+    let lib = list_library(&[d.as_path()]);
+    assert!(lib.iter().any(|e| e.title == "ave verum"), "{lib:?}");
+    // A corrupt file is listed under its file name instead of disappearing.
+    std::fs::write(d.join("broken.musicxml"), b"<score-partwise>").unwrap();
+    assert!(list_library(&[d.as_path()])
+        .iter()
+        .any(|e| e.title == "broken"));
 }
 
 #[test]

@@ -542,6 +542,33 @@ tests (NFR-11: 100% of P0 criteria automated).
       - Remove the maintainer path from the CI runner config.
       - Have a lawyer review the section 7 permission and the CLA.
 
+  - **Score header on import, and a choosable start view (2026-11-23):**
+    - **Bug fixed:** MusicXML imports showed the file name ("the-anchor-song") instead of the file's own title.
+      - Fix: `cantor_score::Header` now reads, in order:
+        - `<work-title>` / `<work-number>`
+        - `<movement-title>` / `<movement-number>`
+        - `<creator>` composer, arranger and lyricist/poet, plus `<rights>`
+        - typed `<credit>` text
+        - for untyped credits, the biggest font on page 1
+      - Placeholder titles such as "Untitled score" are ignored.
+      - The writer keeps the header, so OMR results and note corrections no longer lose it.
+      - `read_header` reads only the part before `<part-list>`, so listing the library stays cheap.
+      - The library shows the file's title. Metadata (title, composer, arranger, lyricist as a "Text: …" tag) is filled once per score from the header and never overwrites user edits (`seeded` set in `library.json`).
+      - A PDF imported after its MusicXML, or the other way round, now pairs with it instead of becoming "name (2)".
+      - Tests:
+        - `lib_01_header_*` (6): MuseScore, Finale-style movement title, Dorico-style typed credits, untyped credits, placeholders, round trip, note correction.
+        - `lib_01_title_composer_arranger_from_the_file_not_the_file_name`.
+        - `lib_03_metadata_seeded_from_the_file_header_never_over_user_edits`.
+      - The old test `lib_01_musicxml_imported_and_listed_as_playable` had encoded the bug (it expected the file name); it is corrected.
+    - **Start view (LIB-04):** "Visa:" picks setlists (default, "All scores" selected), genre, tags, composer, arranger, rating or difficulty.
+      - Each value gets a tab with a count; scores without a value appear under "None".
+      - The choice and the selected tab are saved in `library.json` (`home`) and restored on start.
+      - Tests: `lib_04_home_view_defaults_to_all_scores_and_persists`, plus UI scenario `lib_04 start view` (group by tags, filter, restart, restored).
+    - **Public test scores in `fixtures/scores/`:**
+      - *The Anchor Song*, TB arrangement by the product owner. Arrangement © HKH; the song's copyright belongs to Björk / her publisher, so it must be cleared or removed before going public (README there).
+      - Mozart *Lacrymosa*, SATB + piano: MusicXML, PDF, MuseScore and MP3; public domain. Its title and composer exist only as untyped credits, which tests the fallback.
+    - Not verified on the iPad yet: the start view and the titles of the user's own imported files.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.

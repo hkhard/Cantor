@@ -4,7 +4,7 @@
 //! `parse(write(s)) == s`. Used to save OMR results that were assembled
 //! page by page, and later for user corrections (WP-3.13).
 
-use crate::model::{EventKind, Measure, Navigation, Part, Score, Step, PPQ};
+use crate::model::{EventKind, Header, Measure, Navigation, Part, Score, Step, PPQ};
 use std::fmt::Write;
 
 fn esc(s: &str) -> String {
@@ -26,11 +26,66 @@ fn step_name(s: Step) -> &'static str {
     }
 }
 
+/// `<work>`, `<movement-*>`, `<identification>` and a title `<credit>`, in
+/// the order the MusicXML schema requires.
+fn write_header(x: &mut String, h: &Header) {
+    if !h.work_number.is_empty() || !h.work_title.is_empty() {
+        x.push_str("  <work>");
+        if !h.work_number.is_empty() {
+            let _ = write!(x, "<work-number>{}</work-number>", esc(&h.work_number));
+        }
+        if !h.work_title.is_empty() {
+            let _ = write!(x, "<work-title>{}</work-title>", esc(&h.work_title));
+        }
+        x.push_str("</work>\n");
+    }
+    if !h.movement_number.is_empty() {
+        let _ = writeln!(
+            x,
+            "  <movement-number>{}</movement-number>",
+            esc(&h.movement_number)
+        );
+    }
+    if !h.movement_title.is_empty() {
+        let _ = writeln!(
+            x,
+            "  <movement-title>{}</movement-title>",
+            esc(&h.movement_title)
+        );
+    }
+    let creators = [
+        ("composer", &h.composer),
+        ("arranger", &h.arranger),
+        ("lyricist", &h.lyricist),
+    ];
+    if creators.iter().any(|(_, v)| !v.is_empty()) || !h.rights.is_empty() {
+        x.push_str("  <identification>");
+        for (t, v) in creators {
+            if !v.is_empty() {
+                let _ = write!(x, "<creator type=\"{t}\">{}</creator>", esc(v));
+            }
+        }
+        if !h.rights.is_empty() {
+            let _ = write!(x, "<rights>{}</rights>", esc(&h.rights));
+        }
+        x.push_str("</identification>\n");
+    }
+    if !h.credit_title.is_empty() {
+        let _ = writeln!(
+            x,
+            "  <credit page=\"1\"><credit-type>title</credit-type><credit-words>{}</credit-words></credit>",
+            esc(&h.credit_title)
+        );
+    }
+}
+
 /// Serialise to an uncompressed `score-partwise` document.
 pub fn write_musicxml(score: &Score) -> String {
     let mut x = String::from(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<score-partwise version=\"4.0\">\n  <part-list>\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<score-partwise version=\"4.0\">\n",
     );
+    write_header(&mut x, &score.header);
+    x.push_str("  <part-list>\n");
     for p in &score.parts {
         let _ = write!(
             x,

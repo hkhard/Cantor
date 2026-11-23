@@ -288,3 +288,93 @@ fn set_01_manual_order_of_library_and_setlist_tabs_persists() {
         .collect();
     assert_eq!(sorted, vec!["1:B", "0:A", "1:C", "1:N"]);
 }
+
+#[test]
+fn lib_03_metadata_seeded_from_the_file_header_never_over_user_edits() {
+    let d = std::env::temp_dir().join(format!("cantor-seed-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let mut s = Store::open(&d);
+    let h = cantor_score::Header {
+        work_title: "The Anchor Song".into(),
+        composer: "B. Gudmundsdottir".into(),
+        arranger: "HKH".into(),
+        lyricist: "Björk".into(),
+        ..Default::default()
+    };
+    // New score: everything from the file.
+    assert!(s.seed_metadata("1:anchor", &h));
+    let m = s.metadata("1:anchor").unwrap().clone();
+    assert_eq!(
+        (m.title.as_str(), m.composer.as_str(), m.arranger.as_str()),
+        ("The Anchor Song", "B. Gudmundsdottir", "HKH")
+    );
+    assert_eq!(m.tags, vec!["Text: Björk".to_string()]);
+    // The user edits the composer and clears the arranger on purpose:
+    // seeding again changes nothing (a seeded score is never re-seeded).
+    let mut edited = m.clone();
+    edited.composer = "Björk Guðmundsdóttir".into();
+    edited.arranger = String::new();
+    s.set_metadata("1:anchor", edited.clone());
+    assert!(!s.seed_metadata("1:anchor", &h));
+    assert_eq!(s.metadata("1:anchor").unwrap(), &edited);
+    // Existing metadata from before this feature (title only, typed by the
+    // user): only the empty fields are filled, the title stays.
+    s.set_metadata(
+        "1:old",
+        Metadata {
+            title: "Mitt namn".into(),
+            ..Default::default()
+        },
+    );
+    assert!(s.seed_metadata("1:old", &h));
+    let m = s.metadata("1:old").unwrap();
+    assert_eq!(
+        (m.title.as_str(), m.composer.as_str()),
+        ("Mitt namn", "B. Gudmundsdottir")
+    );
+    // An empty header seeds nothing.
+    assert!(!s.seed_metadata("1:none", &cantor_score::Header::default()));
+    assert!(s.metadata("1:none").is_none());
+    // Persisted.
+    s.save().unwrap();
+    assert_eq!(Store::open(&d).metadata("1:anchor").unwrap(), &edited);
+}
+
+#[test]
+fn lib_04_home_view_defaults_to_all_scores_and_persists() {
+    use cantor_library::store::HomeView;
+    let d = std::env::temp_dir().join(format!("cantor-home-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    let mut s = Store::open(&d);
+    // Default: grouped by setlists, "All scores" selected.
+    assert_eq!(
+        s.home_view(),
+        &HomeView {
+            group: "setlists".into(),
+            tab: String::new()
+        }
+    );
+    s.set_home_view(HomeView {
+        group: "genre".into(),
+        tab: "Julsånger".into(),
+    });
+    s.save().unwrap();
+    let s = Store::open(&d);
+    assert_eq!(
+        s.home_view(),
+        &HomeView {
+            group: "genre".into(),
+            tab: "Julsånger".into()
+        }
+    );
+    // Unknown grouping from a newer version falls back to the default.
+    let mut s = s;
+    s.set_home_view(HomeView {
+        group: "mood".into(),
+        tab: "x".into(),
+    });
+    assert_eq!(s.home_view().group, "setlists");
+    assert_eq!(s.home_view().tab, "");
+}

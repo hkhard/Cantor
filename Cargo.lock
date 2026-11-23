@@ -135,6 +135,7 @@ dependencies = [
 name = "cantor-library"
 version = "0.1.0"
 dependencies = [
+ "cantor-score",
  "flate2",
  "plist",
  "serde",

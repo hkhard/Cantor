@@ -84,6 +84,33 @@ const H = Number(process.env.H || 1133)
     await page.click('.metasheet button >> text=Cancel')
   })
 
+  await step('lib_04 start view: group by tags, pick one, restored after restart', async () => {
+    // Default: setlists grouping with "All scores".
+    if ((await page.locator('.viewsel select').inputValue()) !== 'setlists') throw new Error('default grouping')
+    await page.selectOption('.viewsel select', 'tags')
+    await page.click('[role=tab] >> text=vår')
+    const titles = await page.locator('ul.scores > li .t > span:first-child').allInnerTexts()
+    if (titles.length !== 1 || titles[0] !== 'Glimmande Nymf') throw new Error('filter ' + titles)
+    // Scores without tags are reachable under "None".
+    await page.click('[role=tab] >> text=None')
+    const rest = await page.locator('ul.scores > li').count()
+    if (rest !== 3) throw new Error('none ' + rest)
+    await page.click('[role=tab] >> text=vår')
+    await shot('32-group-tags')
+    await page.waitForTimeout(500)
+    const saved = await page.evaluate(() => window.__store.home)
+    if (saved.group !== 'tags' || saved.tab !== 'vår') throw new Error('not saved ' + JSON.stringify(saved))
+    // Restart: the app opens on the same view.
+    await page.reload()
+    await page.waitForSelector('ul.scores > li')
+    if ((await page.locator('.viewsel select').inputValue()) !== 'tags') throw new Error('grouping not restored')
+    const sel = (await page.locator('[role=tab][aria-selected=true]').innerText()).replace(/\s+/g, ' ').trim()
+    if (sel !== 'vår 1') throw new Error('tab not restored: ' + sel)
+    // Back to the default for the following steps.
+    await page.selectOption('.viewsel select', 'setlists')
+    await page.waitForTimeout(400)
+  })
+
   await step('lib_04 search by composer', async () => {
     await page.fill('input[type=search]', 'bellman')
     await page.waitForTimeout(400)

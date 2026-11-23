@@ -18,8 +18,9 @@ pub struct Imported {
     pub pdf: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LibraryEntry {
+    /// The score's own title (MusicXML header), else the tidied file name.
     pub title: String,
     pub stem: String,
     pub dir: PathBuf,
@@ -27,6 +28,9 @@ pub struct LibraryEntry {
     pub pdf_file: Option<String>,
     /// PERF-04 backing track `<stem>.track.<ext>` (audio recording).
     pub track_file: Option<String>,
+    /// Header of the MusicXML file (empty for PDF-only scores or when the
+    /// file has none).
+    pub header: cantor_score::Header,
 }
 
 /// Folder (inside a library dir) holding the original forScore files.
@@ -59,6 +63,25 @@ pub(crate) fn safe_stem(name: &str) -> String {
     } else {
         cleaned
     }
+}
+
+/// Stem for a new file of kind `kind` ("score" or "pdf"): the plain stem if
+/// a score with that stem exists but lacks this kind (the MusicXML and PDF
+/// of one piece pair up, LIB-05), else the first free stem.
+pub(crate) fn pairing_stem(dir: &Path, stem: &str, kind: &str) -> String {
+    let has = |exts: &[&str]| {
+        exts.iter()
+            .any(|e| dir.join(format!("{stem}.{e}")).exists())
+    };
+    let (mine, other): (&[&str], &[&str]) = if kind == "pdf" {
+        (&["pdf"], SCORE_EXT)
+    } else {
+        (SCORE_EXT, &["pdf"])
+    };
+    if has(other) && !has(mine) {
+        return stem.to_string();
+    }
+    free_stem(dir, stem)
 }
 
 /// First stem not used by any file in `dir`: "Que", "Que (2)", ...
@@ -96,7 +119,7 @@ pub fn import_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<Vec<Imported>
     match ext {
         "mxl" | "musicxml" | "xml" => {
             check_musicxml(bytes)?;
-            let stem = free_stem(dir, &safe_stem(name));
+            let stem = pairing_stem(dir, &safe_stem(name), "score");
             write(&stem, ext, bytes)?;
             Ok(vec![Imported {
                 stem,
@@ -108,7 +131,7 @@ pub fn import_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<Vec<Imported>
             if !bytes.starts_with(b"%PDF") {
                 return Err(format!("{name}: not a PDF file"));
             }
-            let stem = free_stem(dir, &safe_stem(name));
+            let stem = pairing_stem(dir, &safe_stem(name), "pdf");
             write(&stem, "pdf", bytes)?;
             Ok(vec![Imported {
                 stem,
@@ -205,6 +228,7 @@ pub fn list_library(dirs: &[&Path]) -> Vec<LibraryEntry> {
                             score_file: None,
                             pdf_file: None,
                             track_file: None,
+                            header: Default::default(),
                         })
                         .track_file = Some(n.clone());
                 }
@@ -222,6 +246,7 @@ pub fn list_library(dirs: &[&Path]) -> Vec<LibraryEntry> {
                 score_file: None,
                 pdf_file: None,
                 track_file: None,
+                header: Default::default(),
             });
             if is_score {
                 // Prefer .mxl over .musicxml over .xml.
@@ -239,6 +264,20 @@ pub fn list_library(dirs: &[&Path]) -> Vec<LibraryEntry> {
         .into_values()
         .filter(|e| e.score_file.is_some() || e.pdf_file.is_some())
         .collect();
+    // The title the file itself carries (LIB-01): read only the header.
+    for e in &mut out {
+        if let Some(f) = &e.score_file {
+            if let Ok(h) = std::fs::read(e.dir.join(f))
+                .map_err(|_| ())
+                .and_then(|b| cantor_score::read_header(&b).map_err(|_| ()))
+            {
+                if let Some(t) = h.title() {
+                    e.title = t;
+                }
+                e.header = h;
+            }
+        }
+    }
     out.sort_by_key(|e| e.title.to_lowercase());
     out
 }

@@ -24,7 +24,18 @@ exports.setup = async function setup(page, dir) {
       window.__xml = xml
       const calls = []
       window.__calls = calls
-      const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [], scoreOrder: [], setlistOrder: [] }
+      const store = { metadata: {}, setlists: [], settings: {}, ann: null, pipe: [], scoreOrder: [], setlistOrder: [], home: { group: 'setlists', tab: '' } }
+      // Survives page reloads within one harness run (like library.json).
+      try {
+        const kept = JSON.parse(sessionStorage.getItem('__cantorStore') || 'null')
+        if (kept) Object.assign(store, kept)
+      } catch {}
+      // Everything except the transient annotation document survives.
+      addEventListener('beforeunload', () => {
+        const { ann, ...keep } = store
+        void ann
+        sessionStorage.setItem('__cantorStore', JSON.stringify(keep))
+      })
       window.__store = store
       const scores = [
         { file: '0:Glimmande Nymf', title: 'Glimmande Nymf', playable: true, pdf: true, user: false },
@@ -51,13 +62,16 @@ exports.setup = async function setup(page, dir) {
             return i < 0 ? 1e9 : i
           }
           const setlists = store.setlists.map((s, i) => [s, i]).sort((a, b) => pos(a[0].id) - pos(b[0].id) || a[1] - b[1]).map((x) => x[0])
-          return { metadata: store.metadata, setlists }
+          return { metadata: store.metadata, setlists, home: store.home }
         },
         pdf_url_of: ({ file }) => (scores.find((s) => s.file === file)?.pdf ? '0/x.pdf' : null),
         read_title_page: ({ png }) => {
           store.ocrBytes = png.length
           store.ocrPng = png
           return { title: 'Vårvindar friska', subtitle: 'för blandad kör', composer: 'Svensk folkmelodi', arranger: 'Hugo Alfvén', lyricist: 'Julia Nyberg', choir: 'SATB' }
+        },
+        set_home_view: ({ view }) => {
+          store.home = view
         },
         set_order: ({ kind, ids }) => {
           if (kind === 'scores') store.scoreOrder = ids

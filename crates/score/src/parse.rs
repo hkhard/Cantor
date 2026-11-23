@@ -2,8 +2,8 @@
 
 use crate::dom::{self, DomError, Element};
 use crate::model::{
-    Articulation, Event, EventKind, Lyric, Measure, Navigation, Part, Pitch, Score, Step, Swing,
-    Syllabic, Tick, PPQ,
+    Articulation, Event, EventKind, Header, Lyric, Measure, Navigation, Part, Pitch, Score, Step,
+    Swing, Syllabic, Tick, PPQ,
 };
 use std::io::Read;
 
@@ -37,6 +37,32 @@ pub fn parse_score_file(bytes: &[u8]) -> Result<Score, ParseError> {
     } else {
         parse_musicxml(bytes)
     }
+}
+
+/// Only the header of a score file (MXL or MusicXML), cheaply: the document
+/// is cut before `<part-list>` (the header elements come first by schema), so
+/// listing a large library does not parse every note.
+pub fn read_header(bytes: &[u8]) -> Result<Header, ParseError> {
+    let xml = musicxml_bytes(bytes)?;
+    let text = String::from_utf8_lossy(&xml);
+    let Some(root_at) = ["<score-partwise", "<score-timewise"]
+        .iter()
+        .find_map(|r| text.find(r))
+    else {
+        return Err(ParseError::UnsupportedRoot("no score root".into()));
+    };
+    let root_name = if text[root_at..].starts_with("<score-partwise") {
+        "score-partwise"
+    } else {
+        "score-timewise"
+    };
+    let head = match text[root_at..].find("<part-list") {
+        Some(i) => &text[..root_at + i],
+        None => &text[..],
+    };
+    let doc = format!("{head}</{root_name}>");
+    let root = dom::parse(doc.as_bytes())?;
+    Ok(header(&root))
 }
 
 /// Parse a compressed MusicXML (`.mxl`) container.
@@ -137,6 +163,110 @@ fn part_list(root: &Element) -> Vec<PartInfo> {
         .collect()
 }
 
+/// Strip "arr." / "Music:" style prefixes from credit text.
+fn credit_name(s: &str) -> String {
+    let t = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = t.to_lowercase();
+    for p in [
+        "arranged by",
+        "arr.",
+        "arr",
+        "music by",
+        "music:",
+        "musik:",
+        "words by",
+        "text:",
+        "lyrics by",
+        "words:",
+        "by",
+    ] {
+        if let Some(rest) = lower.strip_prefix(p) {
+            if p.ends_with(['.', ':']) || rest.starts_with([' ', ':', '.']) {
+                return t[t.len() - rest.len()..]
+                    .trim_start_matches([':', '.', ' '])
+                    .trim()
+                    .to_string();
+            }
+        }
+    }
+    t
+}
+
+fn header(root: &Element) -> Header {
+    let text = |e: Option<&Element>| e.map(|e| e.text.trim().to_string()).unwrap_or_default();
+    let mut h = Header {
+        work_title: text(root.child("work").and_then(|w| w.child("work-title"))),
+        work_number: text(root.child("work").and_then(|w| w.child("work-number"))),
+        movement_title: text(root.child("movement-title")),
+        movement_number: text(root.child("movement-number")),
+        ..Header::default()
+    };
+    if let Some(id) = root.child("identification") {
+        for c in id.children("creator") {
+            let v = c.text.trim().to_string();
+            let slot = match c.attr("type").unwrap_or("").to_lowercase().as_str() {
+                "composer" => &mut h.composer,
+                "arranger" => &mut h.arranger,
+                "lyricist" | "poet" | "words" | "librettist" => &mut h.lyricist,
+                _ => continue,
+            };
+            if slot.is_empty() && !v.is_empty() {
+                *slot = v;
+            }
+        }
+        h.rights = text(id.child("rights"));
+    }
+    // <credit>: typed credits first, then the biggest text on page 1.
+    let mut biggest: Option<(f64, String)> = None;
+    for c in root.children("credit") {
+        if c.attr("page").is_some_and(|p| p != "1") {
+            continue;
+        }
+        let words: Vec<&Element> = c.children("credit-words").collect();
+        let joined = words
+            .iter()
+            .map(|w| w.text.trim())
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if joined.is_empty() {
+            continue;
+        }
+        match c.child_text("credit-type").map(|t| t.trim().to_lowercase()) {
+            Some(t) if t == "title" && h.credit_title.is_empty() => h.credit_title = joined,
+            Some(t) if t == "composer" && h.composer.is_empty() => {
+                h.composer = credit_name(&joined)
+            }
+            Some(t) if t == "arranger" && h.arranger.is_empty() => {
+                h.arranger = credit_name(&joined)
+            }
+            Some(t) if (t == "lyricist" || t == "poet") && h.lyricist.is_empty() => {
+                h.lyricist = credit_name(&joined)
+            }
+            Some(t) if t == "rights" && h.rights.is_empty() => h.rights = joined,
+            Some(_) => {}
+            None => {
+                let size = words
+                    .first()
+                    .and_then(|w| w.attr("font-size"))
+                    .and_then(|s| s.parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                if biggest.as_ref().is_none_or(|(b, _)| size > *b) {
+                    biggest = Some((size, joined));
+                }
+            }
+        }
+    }
+    if h.credit_title.is_empty() {
+        if let Some((size, t)) = biggest {
+            if size > 0.0 {
+                h.credit_title = t;
+            }
+        }
+    }
+    h
+}
+
 fn parse_partwise(root: &Element) -> Result<Score, ParseError> {
     let infos = part_list(root);
     let mut parts = Vec::new();
@@ -152,7 +282,10 @@ fn parse_partwise(root: &Element) -> Result<Score, ParseError> {
             measures,
         });
     }
-    Ok(Score { parts })
+    Ok(Score {
+        header: header(root),
+        parts,
+    })
 }
 
 struct Ctx<'a> {

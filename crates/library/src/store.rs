@@ -107,6 +107,36 @@ pub enum Choir {
     Mixed,
 }
 
+/// What the library screen opens on (LIB-04): a grouping and the selected
+/// tab in it. `tab` "" = all scores; otherwise a setlist id or a group value
+/// such as a genre or tag.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HomeView {
+    pub group: String,
+    pub tab: String,
+}
+
+/// Groupings the library can show.
+pub const HOME_GROUPS: &[&str] = &[
+    "setlists",
+    "genre",
+    "tags",
+    "composer",
+    "arranger",
+    "rating",
+    "difficulty",
+];
+
+impl Default for HomeView {
+    fn default() -> Self {
+        HomeView {
+            group: "setlists".into(),
+            tab: String::new(),
+        }
+    }
+}
+
 /// Per-score playback/view settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -152,6 +182,11 @@ struct Data {
     score_order: Vec<String>,
     /// Manual order of the setlist tabs (setlist ids).
     setlist_order: Vec<String>,
+    /// Scores whose metadata was filled from the file header once. They are
+    /// never seeded again, so a field the user cleared stays cleared.
+    seeded: std::collections::BTreeSet<String>,
+    /// The library's start view.
+    home: HomeView,
 }
 
 /// The persisted library store.
@@ -257,6 +292,42 @@ impl Store {
     pub fn all_metadata(&self) -> &BTreeMap<String, Metadata> {
         &self.data.metadata
     }
+    /// Fill empty metadata fields of `id` from the score file's own header
+    /// (LIB-03): title, composer, arranger; the lyricist becomes a
+    /// "Text: …" tag. Runs once per score; user edits are never overwritten.
+    /// Returns whether anything changed (the caller saves).
+    pub fn seed_metadata(&mut self, id: &str, h: &cantor_score::Header) -> bool {
+        if self.data.seeded.contains(id) {
+            return false;
+        }
+        let title = h.title().unwrap_or_default();
+        if title.is_empty()
+            && h.composer.is_empty()
+            && h.arranger.is_empty()
+            && h.lyricist.is_empty()
+        {
+            return false;
+        }
+        let mut m = self.data.metadata.get(id).cloned().unwrap_or_default();
+        let before = m.clone();
+        for (slot, v) in [
+            (&mut m.title, &title),
+            (&mut m.composer, &h.composer),
+            (&mut m.arranger, &h.arranger),
+        ] {
+            if slot.trim().is_empty() && !v.trim().is_empty() {
+                *slot = v.trim().to_string();
+            }
+        }
+        if !h.lyricist.trim().is_empty() && !m.tags.iter().any(|t| t.starts_with("Text: ")) {
+            m.tags.push(format!("Text: {}", h.lyricist.trim()));
+        }
+        self.data.seeded.insert(id.to_string());
+        if m != before {
+            self.set_metadata(id, m);
+        }
+        true
+    }
     pub fn set_metadata(&mut self, id: &str, mut m: Metadata) {
         clamp(&mut m);
         self.data.metadata.insert(id.to_string(), m);
@@ -272,6 +343,18 @@ impl Store {
     }
     pub fn set_settings(&mut self, id: &str, s: ScoreSettings) {
         self.data.settings.insert(id.to_string(), s);
+    }
+
+    // --- start view ---
+    pub fn home_view(&self) -> &HomeView {
+        &self.data.home
+    }
+    pub fn set_home_view(&mut self, v: HomeView) {
+        self.data.home = if HOME_GROUPS.contains(&v.group.as_str()) {
+            v
+        } else {
+            HomeView::default()
+        };
     }
 
     // --- manual order (drag to rearrange) ---

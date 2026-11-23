@@ -112,7 +112,9 @@ export const api = {
   listScores: () => invoke<ScoreEntry[]>('list_scores'),
   openScore: (file: string, choir?: string, transpose?: number, concert?: boolean) =>
     invoke<Opened>('open_score', { file, choir, transpose, concert }),
-  libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[] }>('library_data'),
+  libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[]; home?: HomeView }>('library_data'),
+  /** LIB-04: what the library opens on. */
+  setHomeView: (view: HomeView) => invoke<void>('set_home_view', { view }),
   setMetadata: (id: string, metadata: Metadata) => invoke<void>('set_metadata', { id, metadata }),
   search: (query: string) => invoke<string[]>('search_scores', { query }),
   createSetlist: (name: string) => invoke<string>('save_setlist', { name, setlist: null }),
@@ -187,4 +189,11 @@ export interface TitlePage {
   arranger: string
   lyricist: string
   choir: 'SATB' | 'TTBB' | 'SSAA' | null
+}
+
+/** Library start view: grouping and the selected tab ('' = all scores). */
+export type HomeGroup = 'setlists' | 'genre' | 'tags' | 'composer' | 'arranger' | 'rating' | 'difficulty'
+export interface HomeView {
+  group: HomeGroup
+  tab: string
 }

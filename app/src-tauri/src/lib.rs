@@ -218,15 +218,28 @@ fn save_store(st: &cantor_library::store::Store) -> Result<(), String> {
 struct LibraryData {
     metadata: std::collections::BTreeMap<String, cantor_library::store::Metadata>,
     setlists: Vec<cantor_library::store::Setlist>,
+    home: cantor_library::store::HomeView,
 }
 
 /// Metadata (LIB-03) and setlists (SET-01) for the library screen.
 #[tauri::command]
 fn library_data(paths: State<'_, Paths>) -> LibraryData {
-    let st = store(&paths);
+    let mut st = store(&paths);
+    // LIB-03: fill empty metadata from each MusicXML file's own header
+    // (title, composer, arranger, lyricist) once; user edits win.
+    let mut changed = false;
+    for (d, dir) in paths.dirs().iter().enumerate() {
+        for e in cantor_library::import::list_library(&[dir]) {
+            changed |= st.seed_metadata(&format!("{d}:{}", e.stem), &e.header);
+        }
+    }
+    if changed {
+        let _ = save_store(&st);
+    }
     LibraryData {
         metadata: st.all_metadata().clone(),
         setlists: st.setlists_ordered().into_iter().cloned().collect(),
+        home: st.home_view().clone(),
     }
 }
 
@@ -600,6 +613,17 @@ async fn read_title_page(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// LIB-04: remember what the library opens on (grouping + selected tab).
+#[tauri::command]
+fn set_home_view(
+    view: cantor_library::store::HomeView,
+    paths: State<'_, Paths>,
+) -> Result<(), String> {
+    let mut st = store(&paths);
+    st.set_home_view(view);
+    save_store(&st)
 }
 
 /// Save the manual order of the library (score ids) or of the setlist tabs.
@@ -1875,6 +1899,7 @@ pub fn run() {
             forget_sync_folder,
             sync_folder_name,
             set_order,
+            set_home_view,
             pdf_url_of,
             read_title_page
         ])

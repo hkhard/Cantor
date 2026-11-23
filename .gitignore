@@ -2,8 +2,9 @@ target/
 .DS_Store
 node_modules/
 
-# Private sample files from the product owner (copyrighted scores), never commit
-scores/
+# Private sample files from the product owner (copyrighted scores), never commit.
+# Anchored to the repo root: fixtures/scores/ holds the public test scores.
+/scores/
 
 # Python venvs for tools
 tools/**/.venv/
