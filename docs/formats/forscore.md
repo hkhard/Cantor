@@ -76,6 +76,34 @@ an item with no matching file as a placeholder.
 
 No sample yet. LIB-08 backup import stays open until one is provided.
 
+## Sample 2026-11-23: an 18-piece Christmas setlist (`.4ss`, 18 MB)
+
+Kept locally in `scores/julkonsert/` (private, not committed). Same container
+as before (gzip + NSKeyedArchiver; `setlist` and `files`). **No piece carries
+music notation**: every file holds `pdfData` plus page geometry and ink, never
+MusicXML, MIDI or audio. Fields seen for the first time:
+
+| Field | Type | Seen | Meaning (inferred) |
+| --- | --- | --- | --- |
+| `X.pdf\|composer` | string | 2 files | forScore metadata, user-typed ("Hasse", "Sven-Börje Krafft") |
+| `X.pdf\|genre` | string | 1 | metadata ("Lorelei ht 16") |
+| `X.pdf\|bpm` | integer | 1 | forScore metronome tempo (112) |
+| `X.pdf\|version`, `X.pdf\|printNumber` | integer | most | 0 in every file; meaning unknown |
+| `X.pdf\|N\|rotation` | real | 9 | page rotation |
+| `X.pdf\|textAnnotations` | array of dict | 1 | text boxes: `text`, `origin.x/y` and `size.x/y` (page fractions / points), `fontFace`, `fontSize`, `fontColor`, `layerID`, `layerVisible` |
+| `X.pdf&BLU;N&BLU;bluePoints` | array of string | 1 | forScore "links/buttons" (blue points): `x&BLU;y&BLU;page&ORG;x&ORG;y&ORG;page` jump pairs |
+
+The PDFs themselves: 11 of 18 are scans (CanoScan, Photoshop, camera), 5 are
+vector (iOS print, Ghostscript, Cubase), 2 mixed. So notes come only from
+note recognition (Audiveris, `cantor-omr convert`), as before.
+
+Tried on three of them (2026-11-23, `cantor-omr convert`, ~30 s per piece on
+the 8 GB Mac): "Jul, jul, strålande jul" (scan) 2 parts, 32 bars, lyrics read;
+"Abide with Me" (vector) 5 parts, 75 bars, lyrics read; "Dagen är kommen"
+(scan) 2 parts, 19 bars, title misread from the printed hymn number. Parts
+came out as "Voice" (two staves of TTBB read as 2 parts, not 4): the voices
+share staves, so splitting T1/T2 and B1/B2 is still open. Not listened to.
+
 ## Open points for more samples
 
 What to send and why, for the product owner: `docs/forscore-samples-needed.md`.
