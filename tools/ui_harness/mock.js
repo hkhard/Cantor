@@ -48,7 +48,16 @@ exports.setup = async function setup(page, dir) {
         { file: '1:Scanned', title: 'Skannad', playable: true, pdf: false, user: true },
       ]
       // Test hook: add scores (e.g. a MusicXML and a PDF that arrived apart).
-      window.__addScores = (list) => scores.push(...list)
+      window.__addScores = (list) => scores.push(...list.filter((n) => !scores.some((x) => x.file === n.file)))
+      window.__listeners = {}
+      window.__emit = (event, payload) =>
+        (window.__listeners[event] ?? []).forEach((h) => window['_' + h]?.({ event, id: 1, payload }))
+      // A converted score now has notes (open_score / list_scores follow).
+      window.__converted = (file) => {
+        store.convertedFiles = [...(store.convertedFiles ?? []), file]
+        const s = scores.find((x) => x.file === file)
+        if (s) s.playable = true
+      }
       // keep = true: stays removed after a reload (first-run scenarios).
       window.__removeScore = (file, keep) => {
         const i = scores.findIndex((x) => x.file === file)
@@ -99,6 +108,16 @@ exports.setup = async function setup(page, dir) {
         },
         mark_hint_seen: ({ id }) => {
           if (!store.hints.includes(id)) store.hints.push(id)
+        },
+        // Tauri events: listen registers a callback; __emit fires it.
+        'plugin:event|listen': ({ event, handler }) => {
+          ;(window.__listeners[event] ??= []).push(handler)
+          return handler
+        },
+        // LIB-10: on-device note reading (the harness drives the events).
+        convert_status: () => [true, []],
+        convert_score: ({ file }) => {
+          store.converts = [...(store.converts ?? []), file]
         },
         forget_hints: ({ ids }) => {
           store.hints = store.hints.filter((h) => !ids.includes(h))
@@ -191,9 +210,9 @@ exports.setup = async function setup(page, dir) {
         },
         open_score: ({ file, transpose }) => ({
           title: file.split(':')[1],
-          musicxml: file === '1:Mine' || file === '1:Imported' ? '' : xml,
+          musicxml: file === '1:Mine' || (file === '1:Imported' && !store.convertedFiles?.includes(file)) ? '' : xml,
           channels:
-            file === '1:Imported'
+            file === '1:Imported' && !store.convertedFiles?.includes(file)
               ? []
               : file === '1:Mine'
               ? store.track

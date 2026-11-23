@@ -504,6 +504,12 @@ tests (NFR-11: 100% of P0 criteria automated).
         - Licence: homr's code and weights are AGPL, and no commercial licence is available. Its training data is permissive (CC0, CC BY, MIT).
         - The options are in `docs/omr-engine-comparison.md`: accept AGPL, get a legal view on using only the weights, train our own models, or keep recognition off the device.
         - Waiting on the product owner's licence decision.
+        - Decided 2026-11-23: the product owner accepts AGPL for homr. `crates/homr` (port of homr 0.7.1) is AGPL-only, without the app store permission.
+      - **LIB-10 on-device conversion (2026-11-23, in progress):**
+        - Done, app side: `app/src-tauri/src/convert.rs` is a one-thread background queue. It writes `<stem>.musicxml` atomically beside the PDF and emits `convert` events (Progress/Done/Failed). `apple_convert.rs` renders PDF pages to 300 DPI grey PNGs with CoreGraphics and posts a local notification on iOS. Tests: `lib_10_*` (5) pass on the Mac.
+        - Done, UI: "Read the notes" on a PDF-only score, progress "page n of m", a notice with Open when done, and failures in plain words. Harness step `lib_10 …` passes against mocked events.
+        - Behind the `homr` cargo feature, which is off by default. Without it the button is hidden and `convert_status` reports no recognition.
+        - Not done: the homr stages in `crates/homr` (swarm workers), bundling the 129 MB of models and the ONNX Runtime xcframework, and a device run. The notification text and the reload of an open piece are not verified on a device.
 
   - **Licence and monetisation (decision 2026-11-23):**
     - The Cantor client app becomes AGPL-3.0.

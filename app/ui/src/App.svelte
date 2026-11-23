@@ -8,7 +8,7 @@
   import TrackPanel from './lib/TrackPanel.svelte'
   import VoicePanel from './lib/VoicePanel.svelte'
   import { scoreFileUrl, type PageMode } from './lib/pdf'
-  import { t, type Key } from './lib/i18n.svelte'
+  import { t, i18n, type Key } from './lib/i18n.svelte'
   import { ask } from './lib/prompts.svelte'
   import Dialog from './lib/Dialog.svelte'
   import Icon from './lib/Icon.svelte'
@@ -110,6 +110,52 @@
   let countIn = $state(false)
   let exportOpen = $state(false)
   let exporting = $state('')
+  // LIB-10: on-device note reading. busy: score id -> progress text.
+  const conv = $state<{ available: boolean; busy: Record<string, string> }>({ available: false, busy: {} })
+  let convNote: { text: string; file?: string } | null = $state(null)
+  type ConvEvent =
+    | { kind: 'Progress'; id: string; title: string; page: number; pages: number; fraction: number }
+    | { kind: 'Done'; id: string; title: string; measures: number }
+    | { kind: 'Failed'; id: string; title: string; error: string }
+  async function onConvert(ev: ConvEvent) {
+    if (ev.kind === 'Progress') {
+      conv.busy[ev.id] = t('conv.progress', { page: ev.page + 1, pages: ev.pages })
+      return
+    }
+    delete conv.busy[ev.id]
+    if (ev.kind === 'Failed') {
+      convNote = { text: t('conv.failed', { title: ev.title, error: ev.error }) }
+      return
+    }
+    scores = await api.listScores()
+    convNote = { text: t('conv.done', { title: ev.title }), file: ev.id }
+    // The piece is open: reload it so it plays at once.
+    if (opened && currentEntry?.file === ev.id) {
+      const s = scores.find((x) => x.file === ev.id)
+      if (s) await open(s, undefined, setCtx ?? undefined)
+      convNote = { text: t('conv.done', { title: ev.title }) }
+    }
+  }
+  async function startConvert() {
+    if (!currentEntry) return
+    const f = currentEntry.file
+    conv.busy[f] = t('conv.queued')
+    try {
+      await api.convertScore(f)
+    } catch (e) {
+      delete conv.busy[f]
+      convNote = { text: t('conv.failed', { title: currentEntry.title, error: String(e) }) }
+    }
+  }
+  async function openConverted() {
+    const f = convNote?.file
+    convNote = null
+    const s = f && scores.find((x) => x.file === f)
+    if (s) await open(s)
+  }
+  $effect(() => {
+    api.setUiLang(i18n.lang).catch(() => {})
+  })
 
   // ANN-01..03: annotation mode on the original page.
   let ann: AnnDoc | null = $state(null)
@@ -371,6 +417,12 @@
   onMount(async () => {
     try {
       scores = await api.listScores().finally(() => (started = true))
+      listen<ConvEvent>('convert', (ev) => onConvert(ev.payload))
+      api.convertStatus().then((st) => {
+        if (!st) return
+        conv.available = st[0]
+        for (const id of st[1]) conv.busy[id] ??= t('conv.queued')
+      }).catch(() => {})
       // Files shared to Cantor from other apps (share sheet, AirDrop, Files).
       listen<string[]>('library-changed', async (ev) => {
         scores = await api.listScores()
@@ -1333,6 +1385,13 @@
     {#if !opened.channels.length}
       <footer class="transport glass silent">
         <span>{t('read.pdfOnly')}</span>
+        {#if conv.available && currentEntry?.file.startsWith('1:') && opened.pdf_url}
+          {#if conv.busy[currentEntry.file]}
+            <span class="convprog" role="status">{conv.busy[currentEntry.file]}</span>
+          {:else}
+            <button class="chip conv" onclick={startConvert} title={t('conv.startHint')}>{t('conv.start')}</button>
+          {/if}
+        {/if}
         {#if opened.pdf_url && currentEntry}
           <button class="chip" onclick={() => shareItem('pdf')}>{t('share.pdf')}</button>
           <button class="chip" onclick={() => shareItem('4sc')}>{t('share.4sc')}</button>
@@ -1416,8 +1475,16 @@
           {#if mine !== null && opened.channels[mine]}<span class="chip mine">{opened.channels[mine].label}</span>{/if}
           <button class="icon" onclick={() => (sheetOpen = true)} aria-label={t('phone.sheet')} aria-expanded={sheetOpen}>⌃</button>
         {:else}
-          <!-- A PDF without notes: nothing to play, only the mode toggle. -->
+          <!-- A PDF without notes: nothing to play; the mode toggle and, where
+               the device can read notes, "Read the notes". -->
           <span class="spacer"></span>
+          {#if conv.available && currentEntry?.file.startsWith('1:') && opened.pdf_url}
+          {#if conv.busy[currentEntry.file]}
+            <span class="convprog" role="status">{conv.busy[currentEntry.file]}</span>
+          {:else}
+            <button class="chip conv" onclick={startConvert} title={t('conv.startHint')}>{t('conv.start')}</button>
+          {/if}
+        {/if}
           <div class="seg modeswitch" role="group" aria-label={t('mode.label')}>
             <button class:on={!performance} aria-pressed={!performance} onclick={() => setPerformance(false)}>{t('mode.practice')}</button>
             <button class:on={performance} aria-pressed={performance} onclick={() => setPerformance(true)}>{t('mode.performance')}</button>
@@ -1443,10 +1510,38 @@
   </main>
 {/if}
 
+{#if convNote}
+  <div class="convnote glass" role="status">
+    <span>{convNote.text}</span>
+    {#if convNote.file && !opened}<button class="chip" onclick={openConverted}>{t('conv.open')}</button>{/if}
+    <button class="icon" onclick={() => (convNote = null)} aria-label={t('conv.dismiss')}>✕</button>
+  </div>
+{/if}
+
 <Dialog />
 <Splash ready={started} />
 
 <style>
+  /* LIB-10: progress of on-device note reading, and the notice when done. */
+  .convprog {
+    font-size: 0.85rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .convnote {
+    position: fixed;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0) + 5rem);
+    transform: translateX(-50%);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    max-width: min(36rem, calc(100vw - 2rem));
+    padding: 0.6rem 0.8rem 0.6rem 1rem;
+    border-radius: 0.9rem;
+    font-size: 0.95rem;
+  }
   /* SET-03: the part the director gave this member, and a marker on the
      instructions button when there is something to read. */
   :global(.strip.hinted) {

@@ -138,6 +138,11 @@ export const api = {
   /** First run: remember that a one-time hint was dismissed. */
   markHintSeen: (id: string) => invoke<void>('mark_hint_seen', { id }),
   forgetHints: (ids: string[]) => invoke<void>('forget_hints', { ids }),
+  /** LIB-10: read the notes of a PDF-only score on the device (background). */
+  convertScore: (file: string) => invoke<void>('convert_score', { file }),
+  /** LIB-10: [recognition in this build, ids being converted]. */
+  convertStatus: () => invoke<[boolean, string[]] | null>('convert_status'),
+  setUiLang: (lang: string) => invoke<void>('set_ui_lang', { lang }),
   /** PLAY-09: instruments and voice sets. */
   instruments: () => invoke<[number, string][]>('instruments'),
   setInstrument: (file: string, index: number, program: number | null) => invoke<void>('set_instrument', { file, index, program }),

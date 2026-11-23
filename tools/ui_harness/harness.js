@@ -1444,7 +1444,8 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('.pdfhost canvas')
     await page.waitForTimeout(600)
     const mini = (await page.locator('.minibar').innerText()).trim().replace(/\s+/g, ' ')
-    if (mini !== 'Practice Performance') throw new Error('PDF-only bar: ' + mini)
+    // LIB-10: plus "Read the notes" where the device can read them.
+    if (mini !== 'Read the notes Practice Performance') throw new Error('PDF-only bar: ' + mini)
     if (await page.locator('.nomap').isVisible().catch(() => false)) throw new Error('no-map note over the music')
     o = await overlap()
     if (o.length) throw new Error('PDF-only: ' + o.join(', '))
@@ -1480,6 +1481,51 @@ const H = Number(process.env.H || 1133)
     if (!(await page.locator('.about select[aria-label="Hide controls in landscape"]').count())) throw new Error('auto-hide setting missing')
     await page.click('.about button.primary')
     await page.setViewportSize({ width: W, height: H })
+  })
+
+  await step('lib_10 a PDF-only score: "Read the notes" runs in the background, shows progress, and the piece plays when done', async () => {
+    await page.setViewportSize({ width: W, height: H })
+    if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
+    await page.waitForSelector('ul.scores')
+    await page.evaluate(() => {
+      window.__addScores([{ file: '1:Imported', title: 'Imported 4sc', playable: false, pdf: true, user: true }])
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(400)
+    const it = page.locator('ul.scores > li', { hasText: 'Imported 4sc' }).first().locator('button.open')
+    await it.scrollIntoViewIfNeeded()
+    await it.click()
+    await page.waitForSelector('.pdfhost canvas')
+    await page.click('footer button.conv')
+    const calls = await page.evaluate(() => window.__store.converts)
+    if (!calls?.includes('1:Imported')) throw new Error('convert_score not called: ' + JSON.stringify(calls))
+    await page.evaluate(() =>
+      window.__emit('convert', { kind: 'Progress', id: '1:Imported', title: 'Imported 4sc', page: 1, pages: 3, fraction: 0.4 }),
+    )
+    const prog = (await page.locator('footer .convprog').innerText()).trim()
+    if (prog !== 'Reading the notes… page 2 of 3') throw new Error('progress: ' + prog)
+    await shot('70-convert-progress')
+    // Back in the library while it runs; the notice offers to open the piece.
+    await page.click('.top button[aria-label="Library"]')
+    await page.evaluate(() => {
+      window.__converted('1:Imported')
+      window.__emit('convert', { kind: 'Done', id: '1:Imported', title: 'Imported 4sc', measures: 12 })
+    })
+    await page.waitForSelector('.convnote')
+    const note = (await page.locator('.convnote').innerText()).replace(/\s+/g, ' ')
+    if (!note.includes('Imported 4sc is ready')) throw new Error('notice: ' + note)
+    await shot('71-convert-done')
+    await page.click('.convnote button.chip')
+    await page.waitForSelector('footer.transport button.play')
+    if (await page.locator('.convnote').count()) throw new Error('notice still shown after Open')
+    // A failure says why, in plain words.
+    await page.evaluate(() =>
+      window.__emit('convert', { kind: 'Failed', id: '1:Other', title: 'Other', error: 'no staves found' }),
+    )
+    const fail = (await page.locator('.convnote').innerText()).replace(/\s+/g, ' ')
+    if (!fail.includes('Could not read the notes in Other: no staves found')) throw new Error('failure: ' + fail)
+    await page.click('.convnote button[aria-label="Close"]')
+    await page.click('.top button[aria-label="Library"]')
   })
 
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors')

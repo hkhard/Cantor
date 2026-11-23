@@ -88,6 +88,7 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | LIB-07 | P0 | Import forScore .4SC scores: PDF, metadata, annotations, bookmarks, links, audio/MIDI attachments | Every example file imports; page count, metadata and annotation positions match screenshots from forScore within 2 pt; unknown fields kept, never dropped silently |
 | LIB-08 | P0 | Import forScore .4SS setlists and .4SB backups | Setlist order, placeholders and item start pages match; a full backup imports into a library with the same score count and setlists |
 | LIB-09 | P2 | Export to .4SC / .4SS for users going back to forScore | Round trip Cantor → forScore → Cantor keeps annotations |
+| LIB-10 | P1 | Read the notes of a PDF-only score on the device, in the background, with progress and a notice when done | A queued PDF produces `<name>.musicxml` beside it without blocking the UI; progress shows page n of m; on success the piece plays without reopening the app; a failure says why; the client makes no network call |
 
 ### Rendering and display (VIEW)
 
