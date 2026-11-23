@@ -5,9 +5,14 @@
 //! drives transport and mixer. Audio runs in Rust: cpal output stream ->
 //! `cantor_audio::Engine` (rustysynth + GeneralUser GS).
 
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+mod apple_convert;
 mod audio;
+mod convert;
 mod folder;
 mod guard;
+#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+mod homr_recognizer;
 mod m4a;
 mod remote;
 mod share;
@@ -1007,6 +1012,95 @@ fn mark_hint_seen(id: String, paths: State<'_, Paths>) -> Result<(), String> {
     let mut st = store(&paths);
     st.mark_hint_seen(&id);
     save_store(&st)
+}
+
+/// LIB-10: the background converter (PDF -> notes on the device). Events go
+/// to the UI as `convert` and a finished job posts a local notification.
+fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
+    #[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+    {
+        use tauri::{Emitter, Manager};
+        let models = app.path().resource_dir().ok()?.join("resources/homr");
+        let cache = app.path().app_cache_dir().ok()?.join("coreml");
+        let h = app.clone();
+        return Some(convert::Converter::start(
+            move || homr_recognizer::HomrRecognizer::load(&models, &cache),
+            apple_convert::CgPdfPages::default(),
+            move |ev| {
+                if let convert::JobEvent::Done { title, .. } = &ev {
+                    let lang_sv = h
+                        .state::<UiLang>()
+                        .0
+                        .load(std::sync::atomic::Ordering::Relaxed);
+                    let (t, b) = if lang_sv {
+                        (
+                            format!("{title} är klar"),
+                            "Noterna är inlästa. Öppna stycket och spela.".to_string(),
+                        )
+                    } else {
+                        (
+                            format!("{title} is ready"),
+                            "The notes are read. Open the piece and play.".to_string(),
+                        )
+                    };
+                    apple_convert::notify(&t, &b);
+                }
+                let _ = h.emit("convert", ev);
+            },
+        ));
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = app;
+        None
+    }
+}
+
+/// LIB-10: read the notes of a PDF-only score on the device, in the
+/// background. Returns at once; progress and the result arrive as `convert`
+/// events. Errors only when this build has no note recognition.
+#[tauri::command]
+fn convert_score(
+    file: String,
+    paths: State<'_, Paths>,
+    conv: State<'_, Option<convert::Converter>>,
+) -> Result<(), String> {
+    let Some(c) = conv.inner() else {
+        return Err("on-device note recognition is not in this build".into());
+    };
+    if !file.starts_with("1:") {
+        return Err("only scores in your own library can be converted".into());
+    }
+    let e = paths.entry(&file)?;
+    let pdf = e.pdf_file.as_ref().ok_or("this score has no PDF")?;
+    if e.score_file.is_some() {
+        return Err("this score already has notes".into());
+    }
+    c.submit(convert::Job {
+        id: file.clone(),
+        title: e.title.clone(),
+        pdf: e.dir.join(pdf),
+    });
+    Ok(())
+}
+
+/// The UI's language (true = Swedish), for texts the backend shows itself
+/// (notifications). Set by the UI at start and when the language changes.
+#[derive(Default)]
+struct UiLang(std::sync::atomic::AtomicBool);
+
+#[tauri::command]
+fn set_ui_lang(lang: String, ui: State<'_, UiLang>) {
+    ui.0.store(lang == "sv", std::sync::atomic::Ordering::Relaxed);
+}
+
+/// LIB-10: is on-device note recognition in this build, and what is queued.
+#[tauri::command]
+fn convert_status(conv: State<'_, Option<convert::Converter>>) -> (bool, Vec<String>) {
+    match conv.inner() {
+        Some(c) => (true, guard::lock(&c.busy).clone()),
+        None => (false, Vec::new()),
+    }
 }
 
 /// Settings > "Show Getting started": show these hints again.
@@ -2406,6 +2500,8 @@ pub fn run() {
             let slot: remote::SharedEngine = Default::default();
             remote::install(slot.clone());
             app.manage(slot);
+            app.manage(UiLang::default());
+            app.manage(start_converter(app.handle().clone()));
             Ok(())
         })
         .register_uri_scheme_protocol("cantor", |ctx, req| {
@@ -2511,6 +2607,9 @@ pub fn run() {
             set_home_view,
             mark_hint_seen,
             forget_hints,
+            convert_score,
+            convert_status,
+            set_ui_lang,
             score_instructions,
             set_instructions,
             set_member,

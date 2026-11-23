@@ -34,6 +34,7 @@ Verovio (LGPL-3.0, https://github.com/rism-digital/verovio).
 | bumpalo | 3.20.4 | MIT OR Apache-2.0 | crates.io |
 | bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | crates.io |
 | byteorder | 1.5.0 | Unlicense OR MIT | crates.io |
+| byteorder-lite | 0.1.0 | Unlicense OR MIT | crates.io |
 | bytes | 1.12.2 | MIT | crates.io |
 | camino | 1.2.6 | MIT OR Apache-2.0 | crates.io |
 | cargo-platform | 0.1.9 | MIT OR Apache-2.0 | crates.io |
@@ -133,6 +134,7 @@ Verovio (LGPL-3.0, https://github.com/rism-digital/verovio).
 | ident_case | 1.0.1 | MIT/Apache-2.0 | crates.io |
 | idna | 1.1.0 | MIT OR Apache-2.0 | crates.io |
 | idna_adapter | 1.2.2 | Apache-2.0 OR MIT | crates.io |
+| image | 0.25.10 | MIT OR Apache-2.0 | crates.io |
 | indexmap | 1.9.3 | Apache-2.0 OR MIT | crates.io |
 | indexmap | 2.14.2 | Apache-2.0 OR MIT | crates.io |
 | infer | 0.22.0 | MIT | crates.io |
@@ -161,6 +163,7 @@ Verovio (LGPL-3.0, https://github.com/rism-digital/verovio).
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 | crates.io |
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 | crates.io |
 | mio | 1.2.5 | MIT | crates.io |
+| moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | crates.io |
 | muda | 0.20.0 | Apache-2.0 OR MIT | crates.io |
 | multiversion_no_op | 1.0.0 | Apache-2.0 OR MIT | crates.io |
 | new_debug_unreachable | 1.0.6 | MIT | crates.io |
@@ -211,6 +214,7 @@ Verovio (LGPL-3.0, https://github.com/rism-digital/verovio).
 | powerfmt | 0.2.1 | MIT OR Apache-2.0 | crates.io |
 | precomputed-hash | 0.1.1 | MIT | crates.io |
 | proc-macro2 | 1.0.107 | MIT OR Apache-2.0 | crates.io |
+| pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | crates.io |
 | quick-xml | 0.37.5 | MIT | crates.io |
 | quick-xml | 0.42.0 | MIT | crates.io |
 | quote | 1.0.47 | MIT OR Apache-2.0 | crates.io |

@@ -32,11 +32,23 @@ tauri = { version = "2", features = [] }
 url = "2"
 tauri-plugin-log = "2"
 
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
+cantor-homr = { path = "../../crates/homr", optional = true }
+# LIB-10: render PDF pages for on-device note recognition.
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage", "CGDataProvider", "CGPDFDocument", "CGPDFPage"] }
+objc2-core-foundation = { version = "0.3", features = ["CFData", "CFCGTypes"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
 [target.'cfg(target_os = "ios")'.dependencies]
+objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "block2", "UNUserNotificationCenter", "UNNotificationContent", "UNNotificationRequest", "UNNotificationSound", "UNNotificationTrigger"] }
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL", "NSDictionary", "NSValue", "NSObject", "NSData", "NSError"] }
-objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
 objc2-media-player = { version = "0.3", features = ["MPRemoteCommand", "MPRemoteCommandCenter", "MPRemoteCommandEvent", "MPNowPlayingInfoCenter", "MPMediaItem", "MPMediaEntity", "block2"] }
 block2 = "0.6"
 objc2-ui-kit = { version = "0.3", features = ["UIActivity", "UIActivityViewController", "UIApplication", "UIPopoverPresentationController", "UIPresentationController", "UIResponder", "UIView", "UIViewController", "UIWindow", "UIDocumentPickerViewController", "objc2-core-foundation", "objc2-uniform-type-identifiers", "block2"] }
 objc2-uniform-type-identifiers = { version = "0.3", features = ["UTType", "UTCoreTypes"] }
+
+[features]
+# LIB-10: on-device note recognition (homr port, AGPL-only crate, 129 MB of
+# models in resources/homr). Off by default until the port is complete.
+homr = ["dep:cantor-homr"]
