@@ -620,6 +620,8 @@ tests (NFR-11: 100% of P0 criteria automated).
     - **Not verified:** how the sets sound on the iPad (GeneralUser GS samples). The built-in sets are a first proposal to adjust by ear.
   - **Demo scores (2026-11-23):** app builds bundle only what `tools/demo-scores.txt` lists. Today that is Lacrymosa only (public domain), with its PDF and a measure map from its layout. `tools/bundle_demo_scores.sh` empties the folder first, and `tools/ipad.sh` uses it.
 
+- **Priority change (2026-11-23):** the product owner put the finished iPad app first (ROADMAP phase P). Sharing with instructions and Band groundwork were started by two agents, stopped the same day with no code committed, and moved to ROADMAP phase 5. The UI harness on Lacrymosa (phase 0) and the `cantor-omr` director command (phase 1) continue.
+
 ## 8. Future features (parked)
 
 - **Server-side OMR** (decision 2026-11-22: parked until the app earns money; containers cost). A plain Cloudflare Worker cannot run it (Audiveris needs Java, Tesseract and a few GB of RAM). Plan when revived: Worker as the front door, Cloudflare Containers (standard-2/3, linux/amd64 image with Audiveris, Tesseract swe+eng, the Python cleanup tools) behind it; app uploads PDF/.4sc, polls a job id, receives MusicXML plus the measure map (`<name>.measures.json`). Audiveris stays a separate AGPL process, as today. Rough estimate, not measured: about 1 cent per score on Containers pricing; cold start with a 1-2 GB image unmeasured. Until then OMR runs on a desktop (`cantor-omr`, `export_pdf_maps`) and scores come into the app as MusicXML + PDF.

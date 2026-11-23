@@ -35,17 +35,35 @@ Each phase lists its exit check, so "done" means something you can observe.
 
 Who: you. Cost: nothing.
 
-## Phase 1: free features that the paid editions build on (no firm)
+## Phase P: the finished iPad app (now, first priority; no firm)
 
-These ship in the free AGPL client and make the paid services worth having
-later.
+Decided 2026-11-23: before new features, make Cantor a finished, dependable
+iPad app. "Finished" means a choir member could use it daily without help,
+and it is ready to submit the day publishing is decided. Submitting it is
+not part of this phase (see "held back").
 
 | Work | Exit check |
 |---|---|
-| Account-free sharing between members: `.cantorset` with practice sheets and instructions (a text page per piece, with a voice part per member) | A director sends a set by AirDrop or Files; a member opens it and sees the instructions and their part highlighted (UI scenario plus a device test) |
-| "Instructions" page per score and setlist (text, links, rehearsal marks) | Saved, synced through folder sync, shown in the reader |
-| Practice tracks per part exported with the set | Opening the set offers "practise my part" without a re-render |
-| Band groundwork: chord symbols in the notation view, lead-sheet mode, transposition per instrument | PRD entries written first (no BAND requirements exist yet), then tests |
+| **Device check of everything marked "not verified"** in plan section 7: combine MXL+PDF, PDF cursor, voice sets by ear, real share sheet, Apple Pencil, lock-screen controls, keyboard and pedal, two-device sync, drag feel | Each item ticked by the product owner on the iPad mini, or turned into a bug with a test |
+| **First run:** an empty library explains what to do (import, AirDrop, Files), Lacrymosa is there to try, a short hint for tap-to-play and the mixer | UI scenario from a fresh install; product owner check |
+| **Robustness:** no panic crosses into the app (every command returns an error the user can read), damaged or unsupported files give a clear message, low-memory and backgrounding do not lose work | Fuzz/corrupt-file tests per importer; panic guard test; device test: background, kill, reopen |
+| **Performance on the iPad mini:** 60 fps for page turns, scrolling the library and the mixer; cold start and score open times logged | `.perf.log` numbers recorded in plan section 7, within NFR-01/03 |
+| **Accessibility on the device:** VoiceOver through library, reader, mixer; larger text; reduced motion | Product owner or VoiceOver walkthrough notes; axe stays at 0 |
+| **Swedish and English complete** | `nfr_10_sv_en_localisation_complete` passes; no hard-coded strings in the UI |
+| **Long-session soak:** 2 hours of playback without drift or memory growth | `nfr_02_no_drift_gt_5ms`; memory probe in `.perf.log` |
+| **Release build:** version and build number from a git tag, shown in About with the source link; Release (not debug) configuration; final app icon and launch screen; `PrivacyInfo.xcprivacy` (no tracking, no data collected) | `tools/ipad.sh release` builds an archive; About shows the tag |
+| **Store-ready material (not submitted):** description sv/en, screenshots of the iPad mini and 13", privacy statement, support page | Files in `docs/store/`; submission waits for the decision below |
+
+Who: you plus agents. Cost: nothing.
+
+## Phase 1: free features that the paid editions build on (no firm)
+
+These ship in the free AGPL client and make the paid services worth having
+later. Sharing-with-instructions and Band groundwork were moved to phase 5
+(2026-11-23) so phase P comes first.
+
+| Work | Exit check |
+|---|---|
 | Note recognition on a desktop (Audiveris, as today), cleanup of the `cantor-omr` CLI so a choir director can run it | A non-developer turns a PDF into a playable score with one command, documented |
 
 Who: you. Cost: nothing.
@@ -122,6 +140,18 @@ One review covering:
 | Choir and Band as individual subscriptions (in-app purchase plus web at the same price) | IAP approved in App Review |
 | Prepared S/A/T/B voices as content | Recorded with consent under the firm's licence |
 | On-device note recognition (only if phase L clears homr's weights, or own models are trained) | The same accuracy gate as the server, on device |
+
+## Phase 5: moved here from phase 1 (2026-11-23, after phase P)
+
+Started and stopped on 2026-11-23 so the iPad app is finished first. No
+code from these was committed. Same exit checks as before.
+
+| Work | Exit check |
+|---|---|
+| Account-free sharing between members: `.cantorset` with practice sheets and instructions (a text page per piece, with a voice part per member) | A director sends a set by AirDrop or Files; a member opens it and sees the instructions and their part highlighted (UI scenario plus a device test) |
+| "Instructions" page per score and setlist (text, links, rehearsal marks such as "t. 12" that jump to the bar), synced and in backups | Saved, synced through folder sync, shown in the reader |
+| Practice tracks per part exported with the set | Opening the set offers "practise my part" without a re-render |
+| Band groundwork: PRD BAND requirements first, then chord symbols (`<harmony>`) parsed, transposed with key-aware spelling and shown; per-player instrument transposition (C, B♭, E♭, F) with sound at concert pitch; optional chord comping playback | PRD entries written first (no BAND requirements exist yet), then tests |
 
 ## What is held back right now
 
