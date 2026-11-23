@@ -25,3 +25,5 @@ default = ["download"]
 download = ["ort/download-binaries", "ort/copy-dylibs", "ort/tls-native"]
 
 [dev-dependencies]
+# The golden test checks our own MusicXML parser reads homr's output.
+cantor-score = { workspace = true }
