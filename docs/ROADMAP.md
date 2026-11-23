@@ -52,7 +52,7 @@ not part of this phase (see "held back").
 | **Swedish and English complete** | `nfr_10_sv_en_localisation_complete` passes; no hard-coded strings in the UI |
 | **Long-session soak:** 2 hours of playback without drift or memory growth | `nfr_02_no_drift_gt_5ms`; memory probe in `.perf.log` |
 | **Release build:** version and build number from a git tag, shown in About with the source link; Release (not debug) configuration; final app icon and launch screen; `PrivacyInfo.xcprivacy` (no tracking, no data collected) | `tools/ipad.sh release` builds an archive; About shows the tag |
-| **Store-ready material (not submitted):** description sv/en, screenshots of the iPad mini and 13", privacy statement, support page | Files in `docs/store/`; submission waits for the decision below |
+| **Store-ready material (not submitted):** description sv/en, screenshots of the iPad mini and 13", privacy statement, support page | Files in a new store folder under docs; submission waits for the decision below |
 
 Who: you plus agents. Cost: nothing.
 
@@ -143,8 +143,8 @@ One review covering:
 
 ## Phase 5: moved here from phase 1 (2026-11-23, after phase P)
 
-Started and stopped on 2026-11-23 so the iPad app is finished first. No
-code from these was committed. Same exit checks as before.
+Started and stopped on 2026-11-23 so the iPad app is finished first. Only
+the PRD rows BAND-01..05 were committed (text, no code). Same exit checks as before.
 
 | Work | Exit check |
 |---|---|
