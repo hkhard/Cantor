@@ -335,6 +335,9 @@ pub struct ScoreSettings {
     /// PLAY-09: voice set used for this score (`None` = the default for its
     /// choir type).
     pub voice_set: Option<String>,
+    /// BAND-03: key of this player's instrument ("C", "Bb", "Eb", "F"):
+    /// notation is shown written for it, sound stays at concert pitch.
+    pub instrument_key: String,
 }
 
 impl Default for ScoreSettings {
@@ -351,6 +354,7 @@ impl Default for ScoreSettings {
             concert_pitch: false,
             programs: Vec::new(),
             voice_set: None,
+            instrument_key: "C".into(),
         }
     }
 }

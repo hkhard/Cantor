@@ -198,6 +198,7 @@ fn play_04_custom_presets_and_settings_persist() {
         concert_pitch: true,
         programs: vec![None, Some(52)],
         voice_set: Some("organ".into()),
+        instrument_key: "Eb".into(),
     };
     s.set_settings("1:A", st.clone());
     s.save().unwrap();

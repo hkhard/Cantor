@@ -90,6 +90,64 @@ fn spell(idx: i32, octave: i32, target: i32) -> Pitch {
     }
 }
 
+/// BAND-03: the key a player's instrument is pitched in. Notation is shown
+/// written for that instrument; sound stays at concert pitch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InstrumentKey {
+    /// Concert pitch (piano, flute, guitar, voice).
+    #[default]
+    C,
+    /// B-flat instruments (trumpet, clarinet, tenor sax): a major second up.
+    Bb,
+    /// E-flat instruments (alto and baritone sax): a major sixth up.
+    Eb,
+    /// F instruments (horn): a perfect fifth up.
+    F,
+}
+
+impl InstrumentKey {
+    /// From the settings value (`"C"`, `"Bb"`, `"Eb"`, `"F"`); anything else is C.
+    pub fn parse(s: &str) -> InstrumentKey {
+        match s.trim() {
+            "Bb" | "B♭" | "bb" => InstrumentKey::Bb,
+            "Eb" | "E♭" | "eb" => InstrumentKey::Eb,
+            "F" | "f" => InstrumentKey::F,
+            _ => InstrumentKey::C,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            InstrumentKey::C => "C",
+            InstrumentKey::Bb => "Bb",
+            InstrumentKey::Eb => "Eb",
+            InstrumentKey::F => "F",
+        }
+    }
+
+    /// Semitones from concert to written pitch.
+    pub fn written_semitones(self) -> i32 {
+        match self {
+            InstrumentKey::C => 0,
+            InstrumentKey::Bb => 2,
+            InstrumentKey::Eb => 9,
+            InstrumentKey::F => 7,
+        }
+    }
+}
+
+/// BAND-03: the MusicXML to show a player of an `key` instrument. The score
+/// is first brought to concert pitch (transposing parts written for other
+/// instruments), then written up for this instrument. Only the display
+/// changes; playback keeps using the concert-pitch model.
+pub fn musicxml_for_instrument(xml: &str, key: InstrumentKey) -> Result<String, ParseError> {
+    if key == InstrumentKey::C {
+        return Ok(xml.to_string());
+    }
+    let concert = musicxml_concert_pitch(xml)?;
+    musicxml_transposed(&concert, key.written_semitones())
+}
+
 /// BAND-02: a chord root or bass `(step, alter)` moved like a note in the
 /// same key, so it follows the key's spelling (Bb in flat keys, A# never).
 fn transpose_chord_step(sa: (Step, i32), fifths: i32, semitones: i32) -> (Step, i32) {
