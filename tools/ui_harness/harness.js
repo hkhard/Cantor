@@ -65,7 +65,7 @@ const H = Number(process.env.H || 1133)
     await page.locator('.metasheet .stars').first().locator('button').nth(3).click()
     await page.locator('.metasheet button.primary').click()
     await page.waitForSelector('.metasheet', { state: 'detached' })
-    const m = await page.evaluate(() => window.__store.metadata['0:Lacrymosa'])
+    const m = await page.evaluate(() => window.__store.metadata['1:Lacrymosa'])
     if (m.composer !== 'Bellman' || m.tags.length !== 2 || m.rating !== 4) throw new Error(JSON.stringify(m))
     await page.waitForSelector('text=Bellman')
   })
@@ -220,7 +220,7 @@ const H = Number(process.env.H || 1133)
     await page.locator('ol.setlist > li').nth(1).locator('button.up').click()
     await page.waitForTimeout(200)
     const first = await page.evaluate(() => window.__store.setlists[0].items[0].score)
-    if (first !== '0:Lacrymosa') throw new Error('reorder failed ' + first)
+    if (first !== '1:Lacrymosa') throw new Error('reorder failed ' + first)
   })
 
   // Drag with a long press, measuring every frame while the item moves.
@@ -349,7 +349,7 @@ const H = Number(process.env.H || 1133)
     if (domChangesDuringDrag > 12) throw new Error('DOM churn during drag ' + domChangesDuringDrag)
     // The saved order is what the backend gets back on the next start
     // (persistence itself: set_01_manual_order_… in the library crate).
-    const t2 = await page.evaluate(async () => (await window.__TAURI_INTERNALS__.invoke('list_scores', {})).map((s) => s.title))
+    const t2 = await page.evaluate(async () => (await window.__TAURI_INTERNALS__.invoke('list_scores', {})).filter((s) => s.user).map((s) => s.title))
     if (JSON.stringify(t2) !== JSON.stringify(want)) throw new Error('not saved in order ' + t2)
     await shot('28-library-reordered')
   })
@@ -467,7 +467,7 @@ const H = Number(process.env.H || 1133)
     await page.fill('.dlg input', 'Utan T1')
     await page.click('.dlg button.primary')
     await page.waitForTimeout(600)
-    const s = await page.evaluate(() => window.__store.settings['0:Lacrymosa'])
+    const s = await page.evaluate(() => window.__store.settings['1:Lacrymosa'])
     if (!s || s.presets[0]?.name !== 'Utan T1' || !s.presets[0].strips[0].mute) throw new Error(JSON.stringify(s))
     await page.click('.top button:has-text("Hide mixer")')
   })
@@ -637,7 +637,7 @@ const H = Number(process.env.H || 1133)
     const after = await page.evaluate(() => document.querySelector('.score svg g.system')?.querySelectorAll('g.staff').length ?? 0)
     await shot('08-notation-hidden')
     if (!(after < before)) throw new Error(`staves ${before} -> ${after}`)
-    const s = await page.evaluate(() => window.__store.settings['0:Lacrymosa'])
+    const s = await page.evaluate(() => window.__store.settings['1:Lacrymosa'])
     if (s.transpose !== 1 || s.hidden_parts[0] !== 0) throw new Error(JSON.stringify(s))
   })
 
@@ -689,8 +689,8 @@ const H = Number(process.env.H || 1133)
     // others, removed again at the end).
     await page.evaluate(() => {
       window.__store.setlists = [...window.__store.setlists, { id: 'gig', name: 'Gig', items: [
-        { kind: 'score', score: '0:Lacrymosa', start_page: null },
-        { kind: 'score', score: '0:Christmas', start_page: null },
+        { kind: 'score', score: '1:Lacrymosa', start_page: null },
+        { kind: 'score', score: '1:Christmas', start_page: null },
       ] }]
     })
     const wasOpen = await page.locator('.top h2').innerText().catch(() => '')
@@ -788,7 +788,7 @@ const H = Number(process.env.H || 1133)
     await page.locator('.inspanel select[aria-label="Part"]').selectOption('Tenor 1')
     await page.click('.inspanel button:has-text("Save")')
     await page.waitForSelector('.inspanel .barref')
-    const saved = await page.evaluate(() => window.__store.instructions['0:Lacrymosa'])
+    const saved = await page.evaluate(() => window.__store.instructions['1:Lacrymosa'])
     if (!saved.text.includes('m. 3') || saved.parts[0].who !== 'Bo' || saved.parts[0].part !== 'Tenor 1') throw new Error('saved ' + JSON.stringify(saved))
     if ((await page.locator('.inspanel .ins p').count()) !== 2) throw new Error('paragraphs')
     if ((await page.locator('.inspanel .ins strong', { hasText: 'Piano' }).count()) !== 1) throw new Error('bold')
@@ -842,9 +842,9 @@ const H = Number(process.env.H || 1133)
 
   await step('set_04 a received set opens with its instructions and offers practise my part', async () => {
     await page.evaluate(() => {
-      window.__store.setlists.push({ id: 'rx', name: 'Mottagen', instructions: 'Welcome! Learn **m. 5** first.', items: [{ kind: 'score', score: '0:Lacrymosa', start_page: null, note: '' }] })
+      window.__store.setlists.push({ id: 'rx', name: 'Mottagen', instructions: 'Welcome! Learn **m. 5** first.', items: [{ kind: 'score', score: '1:Lacrymosa', start_page: null, note: '' }] })
       window.__store.receivedSet = 'rx'
-      window.__store.practice = { '0:Lacrymosa': ['Tenor 1', 'Bas 1'] }
+      window.__store.practice = { '1:Lacrymosa': ['Tenor 1', 'Bas 1'] }
       document.dispatchEvent(new Event('visibilitychange'))
     })
     await page.waitForSelector('[role=status] >> text=You received the setlist')
@@ -1097,21 +1097,27 @@ const H = Number(process.env.H || 1133)
   })
 
   // Phase P first run. Swedish is on after the nfr_10 step above.
-  await step('lib_01 first run: empty library explains how to add scores and offers Lacrymosa', async () => {
+  await step('lib_01 Getting started: how to add scores and the demo; the demo is never in the score list', async () => {
     if (await page.locator('.top button[aria-label="Bibliotek"]').count()) await page.click('.top button[aria-label="Bibliotek"]')
-    if (await page.locator('.welcome').count()) throw new Error('welcome shown while the user has scores')
+    // Dismissed (the default in these tests): no card, no demo anywhere.
+    if (await page.locator('.welcome').count()) throw new Error('Getting started shown after "do not show again"')
+    if (await page.locator('ul.scores > li', { hasText: '(demo)' }).count()) throw new Error('demo listed among scores')
     await page.evaluate(() => {
+      window.__store.hints = []
       for (const f of ['1:Mine', '1:Scanned']) window.__removeScore(f, true)
     })
     await page.reload()
     await page.waitForSelector('.welcome .trycard')
     const txt = await page.locator('.welcome').innerText()
     for (const w of ['Importera', 'AirDrop', 'Filer', 'Lacrymosa']) if (!txt.includes(w)) throw new Error('welcome lacks ' + w)
+    if (await page.locator('ul.scores > li', { hasText: '(demo)' }).count()) throw new Error('demo listed among scores')
     await shot('40-first-run-sv')
   })
 
   await step('lib_01 intro hint comes back until "do not show again" is ticked, then stays away', async () => {
     await page.evaluate(() => { window.__store.hints = [] })
+    await page.reload()
+    await page.waitForSelector('.welcome .trycard')
     await page.click('.welcome .trycard')
     await page.waitForSelector('.readerhint')
     const txt = await page.locator('.readerhint').innerText()
@@ -1131,11 +1137,33 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('.readerhint', { state: 'detached' })
     if (!(await page.evaluate(() => window.__store.hints)).includes('reader')) throw new Error('hint not saved in the store')
     await page.reload()
-    await page.waitForSelector('.welcome .trycard')
-    await page.click('.welcome .trycard')
+    await page.waitForSelector('ul.scores > li')
+    if (await page.locator('.welcome').count()) throw new Error('Getting started still shown')
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).first().locator('button.open').click()
     await page.waitForSelector('.pdfhost canvas')
     await page.waitForTimeout(500)
     if (await page.locator('.readerhint').count()) throw new Error('hint shown again')
+  })
+
+  await step('lib_01 "do not show again" hides only Getting started; About brings it back', async () => {
+    await page.evaluate(() => { window.__store.hints = [] })
+    await page.reload()
+    await page.waitForSelector('.welcome')
+    const own = await page.locator('ul.scores > li').count()
+    await page.check('.welcome label:has-text("Visa inte igen") input')
+    await page.click('.welcome button:has-text("Stäng")')
+    await page.waitForSelector('.welcome', { state: 'detached' })
+    if ((await page.locator('ul.scores > li').count()) !== own) throw new Error('scores disappeared with Getting started')
+    if (!(await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).count())) throw new Error('own Lacrymosa gone')
+    await page.reload()
+    await page.waitForSelector('ul.scores > li')
+    if (await page.locator('.welcome').count()) throw new Error('Getting started back after reload')
+    // About > Show Getting started.
+    await page.click('header button[aria-label="Om ChoirBird"]')
+    await page.click('.about button:has-text("Visa Kom igång")')
+    await page.click('.about button.primary')
+    await page.waitForSelector('.welcome .trycard')
+    if ((await page.evaluate(() => window.__store.hints)).includes('reader')) throw new Error('hint not cleared')
   })
 
   await step('lib_01 hint has no animation with reduced motion', async () => {

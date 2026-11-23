@@ -1009,6 +1009,16 @@ fn mark_hint_seen(id: String, paths: State<'_, Paths>) -> Result<(), String> {
     save_store(&st)
 }
 
+/// Settings > "Show Getting started": show these hints again.
+#[tauri::command]
+fn forget_hints(ids: Vec<String>, paths: State<'_, Paths>) -> Result<(), String> {
+    let mut st = store(&paths);
+    for id in ids {
+        st.forget_hint(&id);
+    }
+    save_store(&st)
+}
+
 /// Save the manual order of the library (score ids) or of the setlist tabs.
 #[tauri::command]
 fn set_order(kind: String, ids: Vec<String>, paths: State<'_, Paths>) -> Result<(), String> {
@@ -2500,6 +2510,7 @@ pub fn run() {
             set_order,
             set_home_view,
             mark_hint_seen,
+            forget_hints,
             score_instructions,
             set_instructions,
             set_member,

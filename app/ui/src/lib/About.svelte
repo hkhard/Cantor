@@ -67,7 +67,8 @@
     busy = false
   }
 
-  let { onclose, onrestored }: { onclose: () => void; onrestored?: () => void } = $props()
+  let { onclose, onrestored, onstarted }: { onclose: () => void; onrestored?: () => void; onstarted?: () => void | Promise<void> } = $props()
+  let startedMsg = $state('')
 
   // AGPL-3.0 section 6(d)/13: where the Corresponding Source is. Must point at
   // the public repository (or tag) of the exact version before any release
@@ -112,6 +113,16 @@
       <option value="2">200 %</option>
     </select>
   </label>
+  <h4>{t('start.title')}</h4>
+  <div class="row">
+    <button
+      onclick={async () => {
+        await onstarted?.()
+        startedMsg = t('start.shown')
+      }}>{t('start.show')}</button
+    >
+  </div>
+  {#if startedMsg}<p role="status">{startedMsg}</p>{/if}
   <h4>{t('sync.title')}</h4>
   <p class="hint">{t('sync.hint')}</p>
   {#if syncName}

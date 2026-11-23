@@ -477,7 +477,11 @@ fn lib_01_first_run_hint_is_remembered_in_the_store() {
     assert!(!s.hint_seen("reader"));
     s.mark_hint_seen("reader");
     s.save().unwrap();
-    let s = Store::open(&d);
+    let mut s = Store::open(&d);
     assert!(s.hint_seen("reader"));
     assert!(!s.hint_seen("other"));
+    // "Show Getting started" brings it back, and that is saved too.
+    s.forget_hint("reader");
+    s.save().unwrap();
+    assert!(!Store::open(&d).hint_seen("reader"));
 }

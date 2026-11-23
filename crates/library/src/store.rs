@@ -695,6 +695,10 @@ impl Store {
     pub fn hints_seen(&self) -> Vec<String> {
         self.data.hints_seen.iter().cloned().collect()
     }
+    /// Show a hint again ("Show Getting started" in settings).
+    pub fn forget_hint(&mut self, id: &str) {
+        self.data.hints_seen.remove(id);
+    }
 
     // --- start view ---
     pub fn home_view(&self) -> &HomeView {

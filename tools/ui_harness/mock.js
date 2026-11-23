@@ -39,8 +39,11 @@ exports.setup = async function setup(page, dir) {
       })
       window.__store = store
       const scores = [
-        { file: '0:Lacrymosa', title: 'Lacrymosa', playable: true, pdf: true, user: false },
-        { file: '0:Christmas', title: 'Christmas Day', playable: true, pdf: false, user: false },
+        // The user's own copies (as after an import); the bundled demo is
+        // '0:Demo' and only appears in Getting started.
+        { file: '1:Lacrymosa', title: 'Lacrymosa', playable: true, pdf: true, user: true },
+        { file: '1:Christmas', title: 'Christmas Day', playable: true, pdf: false, user: true },
+        { file: '0:Demo', title: 'Lacrymosa (demo)', playable: true, pdf: true, user: false },
         { file: '1:Mine', title: 'Min egen', playable: false, pdf: true, user: true },
         { file: '1:Scanned', title: 'Skannad', playable: true, pdf: false, user: true },
       ]
@@ -96,6 +99,9 @@ exports.setup = async function setup(page, dir) {
         },
         mark_hint_seen: ({ id }) => {
           if (!store.hints.includes(id)) store.hints.push(id)
+        },
+        forget_hints: ({ ids }) => {
+          store.hints = store.hints.filter((h) => !ids.includes(h))
         },
         // SET-03/04: instructions, part hints, member, received set, practice.
         score_instructions: ({ id }) => {
@@ -209,8 +215,8 @@ exports.setup = async function setup(page, dir) {
           choir: 'auto',
           voice_choir: 'male',
           sample_rate: 48000,
-          pdf_url: file === '0:Christmas' ? null : '0/score.pdf',
-          measure_boxes: file === '0:Lacrymosa' ? boxes : null,
+          pdf_url: file === '1:Christmas' ? null : '0/score.pdf',
+          measure_boxes: file === '1:Lacrymosa' || file === '0:Demo' ? boxes : null,
           track: store.track && file === '1:Mine' ? { offset_sec: store.track.offset_sec, markers: store.track.markers, duration_sec: 30 } : null,
           _transpose: transpose,
         }),

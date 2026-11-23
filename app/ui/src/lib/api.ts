@@ -137,6 +137,7 @@ export const api = {
   libraryData: () => invoke<{ metadata: Record<string, Metadata>; setlists: Setlist[]; home?: HomeView; hints?: string[] }>('library_data'),
   /** First run: remember that a one-time hint was dismissed. */
   markHintSeen: (id: string) => invoke<void>('mark_hint_seen', { id }),
+  forgetHints: (ids: string[]) => invoke<void>('forget_hints', { ids }),
   /** PLAY-09: instruments and voice sets. */
   instruments: () => invoke<[number, string][]>('instruments'),
   setInstrument: (file: string, index: number, program: number | null) => invoke<void>('set_instrument', { file, index, program }),

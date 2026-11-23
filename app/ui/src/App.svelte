@@ -30,12 +30,15 @@
   let readerHint = $state(false)
   let hintChecked = false
   async function maybeShowHint() {
-    // Once per app run: not again on every piece of a setlist.
-    if (hintChecked) return
-    hintChecked = true
+    // Once per app run (not again on every piece of a setlist), unless
+    // "Show Getting started" cleared it meanwhile.
     const d = await api.libraryData().catch(() => null)
+    const seen = !d || (d.hints ?? []).includes('reader')
+    if (seen) hintChecked = false
+    if (hintChecked || seen) return
+    hintChecked = true
     hintNever = false
-    readerHint = !!d && !(d.hints ?? []).includes('reader')
+    readerHint = true
   }
   /** The intro hint shows each time a score opens until the user ticks
    * "do not show again"; that choice is saved in the library store. */

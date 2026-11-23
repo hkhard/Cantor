@@ -23,10 +23,20 @@
   }
   let { scores, notice = $bindable(), error, loading, onopen, onrefresh }: Props = $props()
 
-  // First run (phase P): no scores of the user's own yet, only the bundled
-  // demo or nothing. Explain how to add scores and offer Lacrymosa.
-  let firstRun = $derived(!scores.some((s) => s.user))
+  // Getting started: how to add scores, and the bundled demo (Lacrymosa).
+  // Shown until "Do not show again" (here or in the reader's intro hint);
+  // About > "Show Getting started" brings it back. Bundled demo scores are
+  // never listed with the user's own scores: only this card opens them.
+  let hints: string[] = $state([])
+  let gettingStarted = $derived(!hints.includes('reader'))
   let demo = $derived(scores.find((s) => !s.user && /lacrymosa/i.test(s.title)))
+  let own = $derived(scores.filter((s) => s.user))
+  let welcomeNever = $state(false)
+  async function closeWelcome() {
+    if (!welcomeNever) return
+    hints = [...hints, 'reader']
+    await api.markHintSeen('reader').catch(() => {})
+  }
   let metadata: Record<string, Metadata> = $state({})
   let setlists: Setlist[] = $state([])
   // LIB-04: the start view is a grouping (setlists by default, or genre,
@@ -107,7 +117,7 @@
   async function sortBy(key: 'title' | 'composer') {
     const k = (s: ScoreEntry) =>
       key === 'title' ? s.title.toLowerCase() : `${(metadata[s.file]?.composer ?? '').toLowerCase() || '\uffff'} ${s.title.toLowerCase()}`
-    const ids = [...scores].sort((a, b) => k(a).localeCompare(k(b), 'sv')).map((s) => s.file)
+    const ids = [...own].sort((a, b) => k(a).localeCompare(k(b), 'sv')).map((s) => s.file)
     await api.setOrder('scores', ids)
     await onrefresh()
   }
@@ -198,6 +208,7 @@
     const d = await api.libraryData()
     metadata = d.metadata
     setlists = d.setlists
+    hints = d.hints ?? []
     if (!homeLoaded && d.home) {
       // The saved start view, once per launch.
       homeLoaded = true
@@ -256,7 +267,7 @@
   }
 
   let shown = $derived.by(() => {
-    let v = hits ? scores.filter((s) => hits!.has(s.file)) : scores
+    let v = hits ? own.filter((s) => hits!.has(s.file)) : own
     if (group !== 'setlists' && tab) {
       v = tab === NONE ? v.filter((s) => !valuesOf(s, group).length) : v.filter((s) => valuesOf(s, group).includes(tab))
     }
@@ -457,7 +468,7 @@
       />
       {#if notice}<span class="notice">{notice}</span>{/if}
     </div>
-    {#if firstRun}
+    {#if gettingStarted}
       <section class="welcome glass" aria-labelledby="welcome-title">
         <h2 id="welcome-title">{t('first.title')}</h2>
         <p>{t('first.body')}</p>
@@ -472,6 +483,10 @@
             <span>{t('first.tryBody')}</span>
           </button>
         {/if}
+        <div class="welcomefoot">
+          <label class="never"><input type="checkbox" bind:checked={welcomeNever} /> {t('hint.never')}</label>
+          <button class="chip" onclick={closeWelcome} disabled={!welcomeNever}>{t('common.close')}</button>
+        </div>
       </section>
     {/if}
     <ul
@@ -630,6 +645,10 @@
 {/if}
 {#if aboutOpen}<About
     onclose={() => (aboutOpen = false)}
+    onstarted={async () => {
+      await api.forgetHints(['reader'])
+      await reload()
+    }}
     onrestored={async () => {
       await onrefresh()
       await reload()
@@ -843,6 +862,24 @@
     margin: 0.75rem 0;
     padding: 1rem 1.25rem;
     border-radius: 1rem;
+  }
+  .welcomefoot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .welcomefoot .never {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+  }
+  .welcomefoot .never input {
+    width: 1.25rem;
+    height: 1.25rem;
+    accent-color: var(--accent);
   }
   .welcome h2 {
     margin: 0 0 0.25rem;
