@@ -520,7 +520,6 @@
         <li class="empty">{t('lib.noHits')}</li>
       {/each}
     </ul>
-    <p class="libnote">{t('lib.note')}</p>
   {:else}
     <div class="libbar">
       <h2 class="setname">{current.name}</h2>

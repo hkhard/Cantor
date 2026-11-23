@@ -28,6 +28,9 @@
     layer?: number
     stamp?: string
     onedit?: (c: AnnCommand) => void
+    /** PERF-06: when set, the side zones call this (bar by bar) instead of
+     * turning the page. */
+    onside?: ((d: number) => void) | null
   }
   let {
     url,
@@ -43,6 +46,7 @@
     layer = 0,
     stamp = 'Breath',
     onedit = () => {},
+    onside = null,
   }: Props = $props()
 
   let host: HTMLDivElement | undefined = $state()
@@ -95,6 +99,22 @@
   // Two pages side by side only when there is room (landscape).
   let twoUp = $derived(mode === 'two' && box.w > box.h * 1.1)
   let step = $derived(twoUp ? 2 : 1)
+  // VIEW-07: in landscape a single page is zoomed to the pane's width (a
+  // system as wide as the screen) and scrolls vertically. If the tallest
+  // system would not fit the pane at that zoom, zoom out just enough.
+  let fitWidth = $derived((mode === 'single' || mode === 'half') && box.w > box.h * 1.1)
+  let fitEl: HTMLDivElement | undefined = $state()
+  let fitH = $derived.by(() => {
+    if (!fitWidth || !boxes?.length) return 0
+    const tallest = Math.max(...boxes.map((b) => b.h))
+    // Page height allowed so the tallest system still fits, with a margin.
+    return tallest > 0 ? (box.h * 0.94) / tallest : 0
+  })
+  /** Top of the first system on page `p`, in host scroll pixels. */
+  function firstSystemTop(p: number): number {
+    const b = boxes?.find((x) => x.page === p)
+    return b && fitEl ? Math.max(0, fitEl.offsetTop + b.y * fitEl.clientHeight - 8) : 0
+  }
 
   function show(p: number) {
     p = Math.min(pages, Math.max(1, p))
@@ -104,6 +124,14 @@
     if (mode === 'scroll') {
       tick().then(() => pageEls[p - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     }
+    // Width-fitted page: start at its first system (the title is above).
+    if (fitWidth) tick().then(() => host?.scrollTo({ top: firstSystemTop(p) }))
+  }
+
+  /** PERF-05: a whole page, whatever the mode (swipe). */
+  export function turnPage(d: number) {
+    if (mode === 'scroll') return turn(d)
+    show(page + d * step)
   }
 
   /** PERF-04: show a page (turn marker on the backing track). */
@@ -112,6 +140,15 @@
   }
 
   export function turn(d: number) {
+    if (fitWidth && host) {
+      // Down the page first, then on to the next one.
+      const more = host.scrollTop + host.clientHeight < host.scrollHeight - 4
+      if (d > 0 && more) host.scrollBy({ top: host.clientHeight * 0.85, behavior: 'smooth' })
+      else if (d < 0 && host.scrollTop > firstSystemTop(page) + 4)
+        host.scrollBy({ top: -host.clientHeight * 0.85, behavior: 'smooth' })
+      else show(page + d)
+      return
+    }
     if (mode === 'half') {
       if (d > 0) {
         if (!half && page < pages) half = true
@@ -142,6 +179,20 @@
   function followTo(measure: number) {
     const b = boxes && measure >= 0 ? boxes[measure] : null
     if (!follow || !b || b.page > pages) return
+    if (fitWidth) {
+      const reveal = () => {
+        if (!host || !fitEl) return
+        const top = fitEl.offsetTop + b.y * fitEl.clientHeight
+        const bottom = fitEl.offsetTop + (b.y + b.h) * fitEl.clientHeight
+        if (top < host.scrollTop || bottom > host.scrollTop + host.clientHeight)
+          host.scrollTo({ top: Math.max(0, top - 8), behavior: 'smooth' })
+      }
+      if (b.page !== page) {
+        page = b.page
+        tick().then(reveal)
+      } else reveal()
+      return
+    }
     if (mode === 'scroll') {
       const el = pageEls[b.page - 1]
       if (el && host) {
@@ -166,10 +217,15 @@
   let common = $derived({ boxes, measure, loop, ann, tool, inkColor, layer, stamp, onedit, onseek })
 </script>
 
-<div class="pdfhost" class:scroll={mode === 'scroll'} bind:this={host}>
+<div class="pdfwrap">
+<div class="pdfhost" class:scroll={mode === 'scroll' || fitWidth} bind:this={host}>
   {#if error}<p class="error">{error}</p>{/if}
   {#if doc && box.w > 0}
-    {#if mode === 'scroll'}
+    {#if fitWidth}
+      <div class="column">
+        <PdfPage {doc} n={page} fitW={box.w - 8} {fitH} {...common} bind:el={fitEl} />
+      </div>
+    {:else if mode === 'scroll'}
       <div class="column">
         {#each Array.from({ length: pages }, (_, i) => i + 1) as n (n)}
           <PdfPage {doc} {n} fitW={Math.min(box.w - 16, 1400)} fitH={0} {...common} bind:el={pageEls[n - 1]} />
@@ -194,7 +250,11 @@
       </div>
     {/if}
   {/if}
-  {#if pages > 1 && !tool && mode !== 'scroll'}
+</div>
+  {#if !tool && onside}
+    <button class="pageturn left" onclick={() => onside?.(-1)} aria-label={t('read.prevBar')}></button>
+    <button class="pageturn right" onclick={() => onside?.(1)} aria-label={t('read.nextBar')}></button>
+  {:else if pages > 1 && !tool && mode !== 'scroll'}
     <button class="pageturn left" onclick={() => turn(-1)} aria-label={t('read.prev')}></button>
     <button class="pageturn right" onclick={() => turn(1)} aria-label={t('read.next')}></button>
   {/if}
@@ -207,6 +267,10 @@
 </div>
 
 <style>
+  .pdfwrap {
+    position: absolute;
+    inset: 0;
+  }
   .pdfhost {
     position: absolute;
     inset: 0;

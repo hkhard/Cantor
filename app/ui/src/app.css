@@ -185,11 +185,6 @@ select {
     inset 0 1px 0 var(--glass-highlight),
     var(--glass-shadow);
 }
-.libnote {
-  color: var(--ink-muted);
-  font-size: 0.8125rem;
-  margin-top: 24px;
-}
 
 /* ---------- Reader ---------- */
 

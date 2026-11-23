@@ -58,6 +58,12 @@ for (const f of all) {
     if (hasWord(m[1])) findings.push(`${rel}:${line(m.index)}: text "${m[1].trim().slice(0, 60)}"`)
 }
 
+// vox_00: singing is parked (plan section 8). No UI string may mention sung
+// lyrics or singing voices until it ships.
+const PARKED = /\b(sung|sjung(en|na)|singing voice|sångröst|sjungande)\b/i
+for (const [n, d] of [['sv', sv], ['en', en]])
+  for (const [k, v] of d) if (PARKED.test(v)) findings.push(`vox_00: '${k}' (${n}) mentions singing: "${v.slice(0, 60)}"`)
+
 if (findings.length) {
   console.error(`nfr_10_sv_en_localisation_complete: ${findings.length} finding(s)`)
   for (const x of findings) console.error('  ' + x)

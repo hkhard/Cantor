@@ -179,6 +179,14 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('ul.scores > li >> text=Gloria', { state: 'detached' })
   })
 
+  await step('vox_00 nothing in the UI mentions sung lyrics before singing ships', async () => {
+    // Singing is parked (plan section 8): no UI text may promise it.
+    const txt = (await page.locator('body').innerText()).toLowerCase()
+    for (const w of ['sung lyrics', 'sjungen text', 'singing voice', 'sångröst']) {
+      if (txt.includes(w)) throw new Error(`UI mentions "${w}"`)
+    }
+  })
+
   await step('lib_04 search by composer', async () => {
     await page.fill('input[type=search]', 'bellman')
     await page.waitForTimeout(400)
@@ -1061,6 +1069,111 @@ const H = Number(process.env.H || 1133)
     if (anim !== 'none') throw new Error('animation: ' + anim)
     await page.click('.readerhint button.primary')
     await page.emulateMedia({ reducedMotion: 'no-preference' })
+  })
+
+  await step('view_07 landscape: the PDF page fills the width, the system is whole', async () => {
+    await page.setViewportSize({ width: 1133, height: 744 })
+    await page.evaluate(() => localStorage.setItem('cantor.lang', 'en'))
+    await page.reload()
+    await page.waitForSelector('ul.scores > li')
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).first().locator('button.open').click()
+    await page.waitForSelector('.pdfhost canvas')
+    const h = page.locator('.readerhint button.primary')
+    if (await h.count()) await h.click()
+    await page.waitForTimeout(800)
+    const r = await page.evaluate(() => {
+      const host = document.querySelector('.pdfhost').getBoundingClientRect()
+      const c = document.querySelector('.pdfhost canvas').getBoundingClientRect()
+      return { host: host.width, canvas: c.width, ch: c.height, hh: host.height }
+    })
+    if (r.canvas < r.host - 40) throw new Error(`page ${Math.round(r.canvas)} px in a ${Math.round(r.host)} px pane`)
+    if (r.ch <= r.hh) throw new Error('page not taller than the pane: not zoomed to width')
+    // Bar 1's system is fully visible when the score opens.
+    const sys = await page.evaluate(() => {
+      const b = window.__boxes[0]
+      const host = document.querySelector('.pdfhost').getBoundingClientRect()
+      const c = document.querySelector('.pdfhost canvas').getBoundingClientRect()
+      return { top: c.top + b.y * c.height, bottom: c.top + (b.y + b.h) * c.height, vt: host.top, vb: host.bottom }
+    })
+    if (sys.top < sys.vt - 1 || sys.bottom > sys.vb + 1) throw new Error('system cut: ' + JSON.stringify(sys))
+    await shot('50-landscape-width')
+    // Following a bar lower on the page scrolls it into view.
+    const last = await page.evaluate(() => window.__boxes.reduce((m, b, i) => (b.page === 1 ? i : m), 0))
+    await page.evaluate((m) => window.__seekBar?.(m), last)
+    await page.waitForTimeout(900)
+    const seen = await page.evaluate((m) => {
+      const b = window.__boxes[m]
+      const host = document.querySelector('.pdfhost').getBoundingClientRect()
+      const c = document.querySelector('.pdfhost canvas').getBoundingClientRect()
+      const top = c.top + b.y * c.height, bottom = c.top + (b.y + b.h) * c.height
+      return top >= host.top - 1 && bottom <= host.bottom + 1
+    }, last)
+    if (!seen) throw new Error('playing system scrolled out of view')
+  })
+
+  await step('perf_06 bar by bar: tapping right and left moves one bar', async () => {
+    await page.click('.top button[aria-label="More"]')
+    await page.check('label:has-text("Tap moves one bar") input')
+    await page.click('.top button:has-text("•••")')
+    // Nothing over the page: close the instructions panel and the mixer.
+    const ins = page.locator('.top button[aria-label="Instructions"][aria-pressed="true"]')
+    if (await ins.count()) await ins.click()
+    const mix = page.locator('.top button[aria-label="Hide mixer"]')
+    if (await mix.count()) await mix.click()
+    await page.waitForTimeout(300)
+    const pane = page.locator('.pdfhost')
+    const b = await pane.boundingBox()
+    const bar = () => page.evaluate(() => window.__playingBar?.() ?? -1)
+    await page.evaluate(() => window.__seekBar?.(0))
+    await page.waitForTimeout(300)
+    for (let i = 0; i < 3; i++) {
+      await page.mouse.click(b.x + b.width - 20, b.y + b.height / 2)
+      await page.waitForTimeout(250)
+    }
+    if ((await bar()) !== 3) throw new Error('after 3 right taps bar ' + (await bar()))
+    await page.mouse.click(b.x + 20, b.y + b.height / 2)
+    await page.waitForTimeout(250)
+    if ((await bar()) !== 2) throw new Error('after a left tap bar ' + (await bar()))
+    await shot('51-bar-by-bar')
+    await page.click('.top button:has-text("•••")')
+    await page.uncheck('label:has-text("Tap moves one bar") input')
+    await page.click('.top button:has-text("•••")')
+  })
+
+  await step('perf_05 swipe turns a page with a fold; vertical drag does not', async () => {
+    await page.setViewportSize({ width: W, height: H })
+    await page.waitForTimeout(600)
+    const pane = page.locator('.pdfhost')
+    const b = await pane.boundingBox()
+    const pg = () => page.locator('.pageno').innerText()
+    const before = await pg()
+    // Watch for the fold: a rotateY transform on the pane during the swipe.
+    await page.evaluate(() => {
+      window.__folded = false
+      const el = document.querySelector('.score.pdf')
+      const t0 = performance.now()
+      const tick = () => {
+        if (/matrix3d|rotate/.test(getComputedStyle(el).transform)) window.__folded = true
+        if (performance.now() - t0 < 800) requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    const sw = async (x0, x1, y0, y1) => {
+      await page.mouse.move(x0, y0)
+      await page.mouse.down()
+      for (let i = 1; i <= 6; i++) await page.mouse.move(x0 + ((x1 - x0) * i) / 6, y0 + ((y1 - y0) * i) / 6)
+      await page.mouse.up()
+      await page.waitForTimeout(500)
+    }
+    const cy = b.y + b.height / 2
+    await sw(b.x + b.width * 0.7, b.x + b.width * 0.3, cy, cy)
+    const after = await pg()
+    if (after === before) throw new Error(`swipe left did not turn (${before})`)
+    if (!(await page.evaluate(() => window.__folded))) throw new Error('no fold animation')
+    await sw(b.x + b.width * 0.3, b.x + b.width * 0.7, cy, cy)
+    if ((await pg()) !== before) throw new Error('swipe right did not go back')
+    await sw(b.x + b.width / 2, b.x + b.width / 2 + 20, b.y + 100, b.y + 400)
+    if ((await pg()) !== before) throw new Error('vertical drag turned the page')
   })
 
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors')

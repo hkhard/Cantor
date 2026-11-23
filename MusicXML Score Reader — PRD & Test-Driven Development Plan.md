@@ -99,6 +99,7 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | VIEW-04 | P1 | Show / hide individual parts (e.g. only Alto + Piano) | Hidden parts disappear from layout but can still play |
 | VIEW-05 | P1 | Transpose display and playback by semitones; concert / transposed pitch toggle | Transposing +2 then −2 gives a model equal to the original |
 | VIEW-06 | P1 | Dark and sepia themes | Contrast ≥ 4.5:1 for notation and text |
+| VIEW-07 | P1 | Landscape on a tablet: the PDF page fills the screen width, so a whole system is shown at least as wide as the screen; scroll down for the rest of the page | In landscape the page is as wide as the reader pane and the playing system is fully visible; portrait unchanged |
 
 ### Playback and mixer (PLAY)
 
@@ -154,6 +155,8 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | PERF-02 | P0 | Page turners: Bluetooth HID pedals (AirTurn, PageFlip), keyboard arrows | Pedal press maps to configurable action |
 | PERF-03 | P1 | Metronome and pitch pipe | Metronome jitter < 1 ms against the audio clock |
 | PERF-04 | P1 | Backing tracks with time-stretch and page turns on the track timeline | Turn markers fire within 50 ms |
+| PERF-05 | P1 | Turn by swipe: a left/right swipe turns the page with a quick page-fold animation (an option, on by default) | A swipe turns one page; a vertical drag or a slow drag does not; no animation with reduced motion |
+| PERF-06 | P1 | Bar by bar: an option where tapping the right or left side moves the cursor one bar forward or back, so the whole score can be tapped through; the page follows the bar | Tapping right N times lands on bar N+1; tapping left goes back; works on the PDF and the notation |
 
 ### Sync and data (DATA)
 

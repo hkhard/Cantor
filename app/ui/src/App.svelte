@@ -15,6 +15,7 @@
   import { listen } from '@tauri-apps/api/event'
   import { openAnnotations, editAnnotations, STAMPS, type AnnDoc, type AnnCommand, type Tool, type Box } from './lib/annot'
   import AnnotLayer from './lib/AnnotLayer.svelte'
+  import { swipe } from './lib/swipe'
   import InstructionsPanel from './lib/InstructionsPanel.svelte'
   import type { InstructionsData } from './lib/api'
 
@@ -200,6 +201,38 @@
   function setPageMode(m: PageMode) {
     pageMode = m
     localStorage.setItem('cantor.pageMode', m)
+  }
+
+  // PERF-06: tapping the right/left side moves one bar instead of a page.
+  let barTaps = $state(localStorage.getItem('cantor.barTaps') === '1')
+  // PERF-05: swipe left/right turns the page (on by default).
+  let swipeTurns = $state(localStorage.getItem('cantor.swipe') !== '0')
+  function setBarTaps(v: boolean) {
+    barTaps = v
+    localStorage.setItem('cantor.barTaps', v ? '1' : '0')
+  }
+  function setSwipe(v: boolean) {
+    swipeTurns = v
+    localStorage.setItem('cantor.swipe', v ? '1' : '0')
+  }
+  /** One bar forward or back (written measures), the page follows. */
+  async function stepBar(d: number) {
+    if (!opened) return
+    const last = Math.max(0, ...opened.measures.map((m) => m[1]))
+    const from = playingMeasure < 0 ? (d > 0 ? -1 : 0) : playingMeasure
+    const to = Math.min(last, Math.max(0, from + d))
+    await seekMeasure(to)
+  }
+  /** Swipe: a whole page in the view that is showing. */
+  function swipePage(d: number) {
+    if (view === 'pdf' && pdfView) pdfView.turnPage(d)
+    else turn(d)
+  }
+  // Test hooks for the UI harness (no effect in the app).
+  if (typeof window !== 'undefined') {
+    const w = window as unknown as Record<string, unknown>
+    w.__seekBar = (m: number) => seekMeasure(m)
+    w.__playingBar = () => playingMeasure
   }
 
   async function savePreset() {
@@ -907,6 +940,12 @@
               </select>
             </label>
           {/if}
+          <label class="check"
+            ><input type="checkbox" checked={barTaps} onchange={(e) => setBarTaps((e.target as HTMLInputElement).checked)} /> {t('read.barTaps')}</label
+          >
+          <label class="check"
+            ><input type="checkbox" checked={swipeTurns} onchange={(e) => setSwipe((e.target as HTMLInputElement).checked)} /> {t('read.swipe')}</label
+          >
           {#if currentEntry}
             <TrackPanel
               file={currentEntry.file}
@@ -1021,7 +1060,7 @@
     <div class="body">
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       {#if view === 'pdf' && opened.pdf_url}
-        <div class="score pdf">
+        <div class="score pdf" use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage }}>
           <PdfView
             bind:this={pdfView}
             url={scoreFileUrl(opened.pdf_url)}
@@ -1037,10 +1076,11 @@
             layer={annLayer}
             {stamp}
             onedit={annEdit}
+            onside={barTaps ? stepBar : null}
           />
         </div>
       {:else}
-      <div class="score" bind:this={scoreEl} onclick={tapScore} role="region" aria-label={t('a11y.notation', { n: page, of: engraved?.pages ?? 1 })}>
+      <div class="score" bind:this={scoreEl} onclick={tapScore} use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage }} role="region" aria-label={t('a11y.notation', { n: page, of: engraved?.pages ?? 1 })}>
         {#if loading}<p class="loading">{loading}</p>{/if}
         {#if error}<p class="error">{error}</p>{/if}
         {@html svg}
@@ -1059,7 +1099,10 @@
             measureOnly
           />
         {/if}
-        {#if engraved && engraved.pages > 1 && !(annotating && !performance)}
+        {#if engraved && barTaps && !(annotating && !performance)}
+          <button class="pageturn left" onclick={(e) => { e.stopPropagation(); stepBar(-1) }} aria-label={t('read.prevBar')}></button>
+          <button class="pageturn right" onclick={(e) => { e.stopPropagation(); stepBar(1) }} aria-label={t('read.nextBar')}></button>
+        {:else if engraved && engraved.pages > 1 && !(annotating && !performance)}
           <button class="pageturn left" onclick={(e) => { e.stopPropagation(); turn(-1) }} aria-label={t('read.prev')}></button>
           <button class="pageturn right" onclick={(e) => { e.stopPropagation(); turn(1) }} aria-label={t('read.next')}></button>
         {/if}
@@ -1082,6 +1125,7 @@
             <button onclick={savePreset}>{t('mix.savePreset')}</button>
           </div>
           {#each opened.channels as c, i (i)}
+            {#if strips[i]}
             <div class="strip {roleClass(c)}" class:mine={mine === i} class:hinted={hintedPart === i}>
               <button class="name" aria-pressed={mine === i} onclick={() => { mine = mine === i ? null : i; persist() }} title={t('mix.hint')}>
                 <span class="label">{c.label}</span>
@@ -1100,6 +1144,7 @@
               <button class="s" class:on={strips[i].solo} aria-pressed={strips[i].solo} aria-label="{t('mix.solo')} {c.label}" onclick={() => setSolo(i)}>S</button>
               <button class="pipe" onclick={() => api.pitchPipe(i)} aria-label="{t('mix.pipe')} {c.label}">♪</button>
             </div>
+            {/if}
           {/each}
           <button class="chip vstoggle" aria-expanded={voicesOpen} onclick={() => (voicesOpen = !voicesOpen)}>{t('vs.edit')}</button>
           {#if voicesOpen && currentEntry}
