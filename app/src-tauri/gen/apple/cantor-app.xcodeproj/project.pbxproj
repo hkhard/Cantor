@@ -192,14 +192,14 @@
 			path = "cantor-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_139F8824-6084-4D0F-B401-5ED724488D5D" /* arm64 */ = {
+		"TEMP_C7A0E6EC-390F-4C36-8948-F6CEEE806797" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
 			sourceTree = "<group>";
 		};
-		"TEMP_382C7A98-45C7-4E5D-B1AF-435FF7959DD8" /* x86_64 */ = {
+		"TEMP_CA016439-8906-4F42-8E99-A479AF7B16CB" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -396,7 +396,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = se.nikielhard.choirbird;
 				PRODUCT_NAME = ChoirBird;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
 			};
 			name = debug;
@@ -428,7 +428,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = se.nikielhard.choirbird;
 				PRODUCT_NAME = ChoirBird;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = 2;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
 			};
 			name = release;
