@@ -1410,8 +1410,13 @@
           {#if mine !== null && opened.channels[mine]}<span class="chip mine">{opened.channels[mine].label}</span>{/if}
           <button class="icon" onclick={() => (sheetOpen = true)} aria-label={t('phone.sheet')} aria-expanded={sheetOpen}>⌃</button>
         {:else}
-          <span class="time">{t('read.pdfOnly')}</span>
-          <button class="chip" onclick={() => setPerformance(true)}>{t('mode.performance')}</button>
+          <!-- A PDF without notes: nothing to play, only the mode toggle. -->
+          <span class="spacer"></span>
+          <div class="seg modeswitch" role="group" aria-label={t('mode.label')}>
+            <button class:on={!performance} aria-pressed={!performance} onclick={() => setPerformance(false)}>{t('mode.practice')}</button>
+            <button class:on={performance} aria-pressed={performance} onclick={() => setPerformance(true)}>{t('mode.performance')}</button>
+          </div>
+          <span class="spacer"></span>
         {/if}
       </footer>
     {/if}

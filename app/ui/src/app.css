@@ -1008,7 +1008,22 @@ select {
   min-height: 2.75rem;
   gap: 2px;
   flex-wrap: nowrap;
-  overflow-x: auto;
+}
+/* ••• on a phone: a full-width panel under the header (a dropdown anchored
+   in the header would be clipped or run off the screen). */
+.reader.phone .popover.more {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 3rem);
+  left: 0.5rem;
+  right: 0.5rem;
+  max-height: calc(100vh - env(safe-area-inset-top) - 4rem);
+  overflow-y: auto;
+  z-index: 45;
+  /* Solid: glass over printed music is unreadable. */
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.25);
 }
 .reader.phone .top h2 {
   font-size: 1rem;
@@ -1051,6 +1066,9 @@ select {
   flex: none;
   background: var(--accent);
   color: var(--accent-ink);
+}
+.minibar .spacer {
+  flex: 1;
 }
 .minibar .prog {
   flex: 1;

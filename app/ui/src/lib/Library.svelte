@@ -475,7 +475,7 @@
         <ul class="how">
           <li><button class="linklike" onclick={() => fileInput?.click()}>{t('first.import')}</button></li>
           <li>{t('first.share')}</li>
-          <li>{t('first.files')}</li>
+          <li>{t('first.files', { device: Math.min(window.innerWidth, window.innerHeight) < 600 ? 'iPhone' : 'iPad' })}</li>
         </ul>
         {#if demo}
           <button class="trycard" onclick={() => demo && onopen(demo)}>

@@ -191,9 +191,11 @@ exports.setup = async function setup(page, dir) {
         },
         open_score: ({ file, transpose }) => ({
           title: file.split(':')[1],
-          musicxml: file === '1:Mine' ? '' : xml,
+          musicxml: file === '1:Mine' || file === '1:Imported' ? '' : xml,
           channels:
-            file === '1:Mine'
+            file === '1:Imported'
+              ? []
+              : file === '1:Mine'
               ? store.track
                 ? [{ label: 'Backing track', role: 'Track', program: 0, instrument: 'M4A', pan: 0 }]
                 : []

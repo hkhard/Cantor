@@ -283,7 +283,8 @@
   {#if mode !== 'scroll'}
     <span class="pageno">{twoUp && page + 1 <= pages ? `${page}–${page + 1}` : page}{half ? '½' : ''}/{pages}</span>
   {/if}
-  {#if !boxes}
+  {#if !boxes && Math.min(window.innerWidth, window.innerHeight) >= 600}
+    <!-- Not on a phone: it would sit on the music (VIEW-08). -->
     <p class="nomap">{t('pdf.noMap')}</p>
   {/if}
 </div>

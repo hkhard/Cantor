@@ -1368,8 +1368,17 @@ const H = Number(process.env.H || 1133)
     // The header fits the phone: nothing cut off or scrolled sideways.
     const hdr = await page.evaluate(() => { const t = document.querySelector('.top'); return { sw: t.scrollWidth, cw: t.clientWidth } })
     if (hdr.sw > hdr.cw + 1) throw new Error('header overflows: ' + JSON.stringify(hdr))
-    // The page view switch is in ••• on a phone.
+    // ••• opens a panel that is on top and fully on screen.
     await page.click('.top button[aria-label="More"]')
+    const more = await page.evaluate(() => {
+      const p = document.querySelector('.popover.more')
+      if (!p) return 'missing'
+      const r = p.getBoundingClientRect()
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + Math.min(30, r.height / 2))
+      return r.left >= 0 && r.right <= innerWidth && r.height > 100 && hit?.closest('.popover.more') ? 'ok' : JSON.stringify([r.x, r.y, r.width, r.height])
+    })
+    if (more !== 'ok') throw new Error('••• panel not usable: ' + more)
+    // The page view switch is in ••• on a phone.
     await page.click('.popover.more .seg button:has-text("Notation")')
     await page.waitForSelector('.score svg g.measure', { timeout: 20000 })
     await page.click('.popover.more .seg button:has-text("Original")').catch(async () => {
@@ -1398,6 +1407,28 @@ const H = Number(process.env.H || 1133)
     await page.click('.minibar button[aria-label="Pause"]')
     await page.waitForTimeout(300)
     if (!(await page.locator('.top').isVisible())) throw new Error('header not back after pause')
+    // A PDF without notes: only the Practice/Performance toggle, nothing over the page.
+    await page.click('.top button[aria-label="Library"]')
+    // An imported .4sc: a PDF without notes or a recording.
+    await page.evaluate(() => {
+      window.__addScores([{ file: '1:Imported', title: 'Imported 4sc', playable: false, pdf: true, user: true }])
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(500)
+    const mine = page.locator('ul.scores > li', { hasText: 'Imported 4sc' }).first().locator('button.open')
+    await mine.scrollIntoViewIfNeeded()
+    await mine.click()
+    await page.waitForSelector('.pdfhost canvas')
+    await page.waitForTimeout(600)
+    const mini = (await page.locator('.minibar').innerText()).trim().replace(/\s+/g, ' ')
+    if (mini !== 'Practice Performance') throw new Error('PDF-only bar: ' + mini)
+    if (await page.locator('.nomap').isVisible().catch(() => false)) throw new Error('no-map note over the music')
+    o = await overlap()
+    if (o.length) throw new Error('PDF-only: ' + o.join(', '))
+    await page.click('.top button[aria-label="Library"]')
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).first().locator('button.open').click()
+    await page.waitForSelector('.pdfhost canvas')
+    await page.waitForTimeout(600)
     // Landscape: music only; a tap shows one row below the music.
     await page.setViewportSize({ width: 852, height: 393 })
     await page.waitForTimeout(800)
