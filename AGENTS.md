@@ -119,8 +119,12 @@ page drawn by a script.
   Zlib, MPL-2.0, Unicode, CC0 or similar.
 - **Do not add GPL, AGPL or LGPL code to the client** without a reviewed
   entry in `REVIEWED` in `tools/licenses.py`.
-- **homr** (AGPL, no app store permission) must not be linked into the
-  client. See `docs/omr-engine-comparison.md`.
+- **homr** (AGPL-3.0): the product owner accepted AGPL for on-device note
+  recognition (2026-11-23). The Rust port lives only in `crates/homr`, which
+  is AGPL-3.0-only **without** the app store permission (homr's authors did
+  not grant it), keeps homr's copyright notice and says it is a port. Do not
+  copy homr code into other crates. See `crates/homr/README.md` and
+  `docs/omr-engine-comparison.md`.
 - Regenerate `THIRD_PARTY_NOTICES.md` after any dependency change. CI fails
   when it is stale.
 - Contributions are accepted under the CLA in `CONTRIBUTING.md`.

@@ -35,7 +35,7 @@ Each phase lists its exit check, so "done" means something you can observe.
 | Tag each build given to others; the About link points at that tag | Build script writes the tag into About |
 | UI harness without private scores, so outside contributors and forks can run it | `run.sh` uses `fixtures/scores/mozart-lacrymosa` (MusicXML, PDF, measure map) and never reads `scores/`; CI no longer links private scores; 35 scenarios and 0 a11y findings (done 2026-11-23) |
 | Clear or remove *The Anchor Song* (the song's copyright is Björk's; only the arrangement is ours) before the repository is public | Publisher permission on file, or `fixtures/scores/the-anchor-song` removed from history |
-| Keep homr code out of the client | Licence check (homr is AGPL; it would need an explicit review entry) |
+| homr in the client (decided 2026-11-23: AGPL accepted, on-device note recognition) | `crates/homr` is AGPL-3.0-only without the app store permission and credits homr; **open before a public App Store release:** homr's authors have not granted an app store permission, so a public store release of a build containing it needs their permission or phase L's advice; internal TestFlight builds are not affected |
 
 Who: you. Cost: nothing.
 
@@ -143,7 +143,7 @@ One review covering:
 | Conductor as an organisation subscription with member seats (web checkout; App Review consulted on 3.1.3(c) first) | First paying organisation |
 | Choir and Band as individual subscriptions (in-app purchase plus web at the same price) | IAP approved in App Review |
 | Prepared S/A/T/B voices as content | Recorded with consent under the firm's licence |
-| On-device note recognition (only if phase L clears homr's weights, or own models are trained) | The same accuracy gate as the server, on device |
+| On-device note recognition: being built now (homr port, `crates/homr`); public store release waits for the homr permission question above | The same accuracy gate as the server, on device |
 
 ## Phase 5: moved here from phase 1 (2026-11-23, after phase P)
 

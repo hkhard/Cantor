@@ -6,7 +6,8 @@ following additional permissions under section 7 of that licence. They apply
 only to code whose copyright is held by Hans Hård or by people who granted
 the same permission through the Contributor Licence Agreement in
 `CONTRIBUTING.md`. Third-party components keep their own licences (see
-`THIRD_PARTY_NOTICES.md`).
+`THIRD_PARTY_NOTICES.md`). They do **not** cover `crates/homr`, a port of
+homr (Copyright the homr contributors, AGPL-3.0, no added permissions).
 
 ## A. Application stores
 
