@@ -33,7 +33,7 @@ url = "2"
 tauri-plugin-log = "2"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-cantor-homr = { path = "../../crates/homr", optional = true }
+cantor-homr = { path = "../../crates/homr", optional = true, default-features = false }
 # LIB-10: render PDF pages for on-device note recognition.
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage", "CGDataProvider", "CGPDFDocument", "CGPDFPage"] }
 objc2-core-foundation = { version = "0.3", features = ["CFData", "CFCGTypes"] }

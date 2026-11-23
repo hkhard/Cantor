@@ -18,8 +18,10 @@ serde_json = "1"
 thiserror = { workspace = true }
 
 [features]
-# Download prebuilt ONNX Runtime for host tests (macOS/Linux). The iOS app
-# links Microsoft's static xcframework instead (see crates/homr/README.md).
-download = ["ort/download-binaries", "ort/copy-dylibs"]
+# Download prebuilt ONNX Runtime for host builds and tests (macOS/Linux), on
+# by default so `cargo test --workspace` links. The app turns default
+# features off: iOS links Microsoft's static xcframework (see README.md).
+default = ["download"]
+download = ["ort/download-binaries", "ort/copy-dylibs", "ort/tls-native"]
 
 [dev-dependencies]

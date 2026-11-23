@@ -31,7 +31,7 @@ Each stage is checked against homr's Python output on a public-domain page
 | 3. Filter masks, bounding boxes | `noise_filtering`, `bounding_boxes` | `boxes` | todo |
 | 4. Staff detection, notes on staffs, braces, system repair | `staff_detection`, `note_detection`, `brace_dot_detection`, `bar_line_detection`, `system_repair` | `staffs` | todo |
 | 5. Dewarp and cut staff images | `staff_dewarping`, `staff_parsing` | `staff_images` | todo |
-| 6. Transformer (encoder + decoder) | `transformer/*` | `transformer` | todo |
+| 6. Transformer (encoder + decoder) | `transformer/*` | `transformer` | done: all 10 Lacrymosa staffs give homr's exact symbols (`lib_06_homr_transformer_reads_lacrymosa_staffs_like_python`); vocabulary equals Python's (`lib_06_homr_vocabulary_equals_python_vocabulary`). Mac CPU, release: about 0.6 s per staff, 6.0 s for 10 staffs and 418 symbols, measured on a loaded machine |
 | 7. MusicXML | `music_xml_generator` | `musicxml` | todo |
 
 Models (129 MB) are not in git. `tools/omr/homr_port/fetch_models.sh` gets
@@ -41,8 +41,16 @@ them from homr's GitHub release and checks their SHA-256.
 
 ```sh
 bash tools/omr/homr_port/fetch_models.sh            # once, into models/homr/
-cargo test -p cantor-homr --features download       # host ONNX Runtime
+cargo test -p cantor-homr --release                 # host ONNX Runtime (feature `download`, on by default)
 ```
+
+The `download` feature is on by default so `cargo test --workspace` links
+on the host. The app depends on this crate with `default-features = false`.
+The model tests skip when `models/homr/` is missing.
+
+The decoder's vocabularies are built in code, like homr's `Vocabulary()`.
+The `tokenizer_*.json` files are an older tokenizer that the decoder does
+not use.
 
 Pitfall from the spike: `ort` 2.x silently uses CoreML in fp16 on Apple.
 Pin `AutoDevicePolicy::PreferCPU` for the decoder, or the tokens change.
