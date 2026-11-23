@@ -46,6 +46,9 @@ targets:
         buildPhase: resources
         type: folder
       - path: LaunchScreen.storyboard
+      # Privacy manifest: no tracking, no data collected (ROADMAP phase P).
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
     info:
       path: cantor-app_iOS/Info.plist
       properties:

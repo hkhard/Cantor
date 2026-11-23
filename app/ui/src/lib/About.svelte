@@ -73,6 +73,9 @@
   // the public repository (or tag) of the exact version before any release
   // outside the maintainer's own devices (docs/ROADMAP.md, phase 0).
   const SOURCE_URL = 'https://github.com/hkhard/Cantor'
+  // The exact source of this build: a tag (v0.2.0) or a commit.
+  const VERSION = __CANTOR_VERSION__
+  const SOURCE_REF_URL = `${SOURCE_URL}/tree/${__CANTOR_REF__}`
 
   const licences = [
     { name: 'Verovio', what: 'Notsättning / music engraving', licence: 'LGPL-3.0', url: 'https://www.verovio.org' },
@@ -132,8 +135,9 @@
   {#if backupMsg}<p role="status">{backupMsg}</p>{/if}
   <h4>{t('about.licence')}</h4>
   <p class="licence">{t('about.licenceBody')}</p>
+  <p class="licence">{t('about.version')} <span class="url">{VERSION}</span></p>
   <p class="licence">
-    {t('about.source')} <span class="url">{SOURCE_URL}</span>
+    {t('about.source')} <span class="url">{SOURCE_REF_URL}</span>
   </p>
   <h4>{t('about.licences')}</h4>
   <ul>
