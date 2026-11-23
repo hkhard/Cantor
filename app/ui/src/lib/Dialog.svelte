@@ -10,8 +10,12 @@
     if (d) {
       value = d.value
       queueMicrotask(() => {
-        input?.focus()
-        input?.select()
+        if (!input) return
+        input.focus({ preventScroll: true })
+        // Mouse/keyboard: select all to replace. Touch: caret at the end, so
+        // the keyboard opens for typing instead of the selection menu.
+        if (matchMedia('(pointer: coarse)').matches) input.setSelectionRange(input.value.length, input.value.length)
+        else input.select()
       })
     }
   })

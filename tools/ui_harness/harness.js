@@ -231,6 +231,11 @@ const H = Number(process.env.H || 1133)
     // A quick move straight to the middle of the next card, then a hold.
     await longDrag(cards.nth(0), cards.nth(1), { steps: 6, dwell: 800 })
     await page.waitForSelector('.dlg input')
+    // The keyboard (iOS) needs focus taken inside the drop gesture: the
+    // primer input is focused in pointerup, then the dialog's input.
+    await page.waitForTimeout(100)
+    const focused = await page.evaluate(() => document.activeElement?.closest('.dlg') !== null && !!document.getElementById('kbd-primer'))
+    if (!focused) throw new Error('name field not focused after the drop')
     await shot('29-make-list')
     await page.fill('.dlg input', 'Duo')
     await page.click('.dlg button.primary')

@@ -8,7 +8,7 @@
   import MetaEditor from './MetaEditor.svelte'
   import About from './About.svelte'
   import { t } from './i18n.svelte'
-  import { ask, confirmBox } from './prompts.svelte'
+  import { ask, confirmBox, primeKeyboard } from './prompts.svelte'
   import { sortable } from './reorder'
 
   interface Props {
@@ -308,6 +308,7 @@
       use:sortable={{
         onreorder: reorderScores,
         onmerge: makeList,
+        onmergegesture: primeKeyboard,
         ondrop: dropOnTab,
         dropRoot: () => tabsEl,
         onlift: () => (editMode = true),

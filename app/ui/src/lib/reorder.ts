@@ -17,6 +17,9 @@
 export interface SortOptions {
   /** Merge onto another item by holding over its centre (library only). */
   onmerge?: (dragged: string, target: string) => void
+  /** Runs synchronously in the pointerup of a merge (a user gesture), e.g.
+   *  to bring up the iOS keyboard for the name prompt that follows. */
+  onmergegesture?: () => void
   /** Drop onto an external target (`[data-drop]` element inside `dropRoot`). */
   ondrop?: (dragged: string, target: string) => void
   /** Root to search for `[data-drop]` targets. */
@@ -265,7 +268,8 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     const d = drag
     cancelAnimationFrame(d.raf)
     const draggedId = d.ids[d.from]
-    const merged = d.merge?.on ? d.ids[d.merge.id] : null
+    const merged = d.merge?.on && e.type === 'pointerup' ? d.ids[d.merge.id] : null
+    if (merged) opts.onmergegesture?.()
     const dropped = e.type === 'pointerup' ? d.dropOn?.dataset.drop ?? null : null
     d.dropOn?.classList.remove('drop-over')
     clearMerge()
