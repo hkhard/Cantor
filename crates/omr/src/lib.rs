@@ -7,6 +7,7 @@
 //! The engine is a trait so tests run without Audiveris and so a server-side
 //! engine can be used on iPad/phone where a Java sidecar is not possible.
 
+pub mod cli;
 pub mod measure_map;
 
 use cantor_library::forscore::{parse_4sc, parse_4ss, SetlistEntry};
@@ -355,7 +356,7 @@ pub struct Converted {
 }
 
 /// File-system-safe version of a title.
-fn safe_name(title: &str) -> String {
+pub(crate) fn safe_name(title: &str) -> String {
     let s: String = title
         .chars()
         .map(|c| {

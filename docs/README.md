@@ -10,6 +10,12 @@
 | [../AGENTS.md](../AGENTS.md) | Rules for contributors and AI agents (never commit, naming, licences, iOS pitfalls) |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | How to contribute; the CLA |
 
+## Guides
+
+| Document | What it covers |
+|---|---|
+| [guides/pdf-to-cantor.md](guides/pdf-to-cantor.md) | For choir directors: a PDF to a playable Cantor score and a `.cantorset` with one command |
+
 ## Product and plan
 
 | Document | What it covers |

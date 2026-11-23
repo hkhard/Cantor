@@ -197,11 +197,14 @@ stem=$(basename "$last"); stem="${{stem%.*}}"; cp "{}" "$out/$stem.mxl""#,
         .arg(d.join("missing.pdf"))
         .env("CANTOR_AUDIVERIS", &fake)
         .env("CANTOR_CLEAN_SCAN", "/nonexistent-cleaner")
+        .env("LANG", "en_US.UTF-8")
+        .env_remove("LC_ALL")
+        .env_remove("LC_MESSAGES")
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&run.stdout);
     assert!(
-        stdout.contains("ok   Test piece"),
+        stdout.contains("✓ Test piece"),
         "{stdout}\n{}",
         String::from_utf8_lossy(&run.stderr)
     );

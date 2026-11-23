@@ -64,7 +64,7 @@ later. Sharing-with-instructions and Band groundwork were moved to phase 5
 
 | Work | Exit check |
 |---|---|
-| Note recognition on a desktop (Audiveris, as today), cleanup of the `cantor-omr` CLI so a choir director can run it | A non-developer turns a PDF into a playable score with one command, documented |
+| Note recognition on a desktop (Audiveris, as today), cleanup of the `cantor-omr` CLI so a choir director can run it | A non-developer turns a PDF into a playable score with one command, documented. **Done 2026-11-23 except the user test:** `cantor-omr convert … --set NAME` and `cantor-omr doctor`, guide `docs/guides/pdf-to-cantor.md`; Lacrymosa PDF gives 30/30 measures and a set that imports. Not yet tried by a director or on an iPad. |
 
 Who: you. Cost: nothing.
 

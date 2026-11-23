@@ -81,7 +81,8 @@ with optical music recognition on a desktop:
 ```sh
 # once: Audiveris (https://github.com/Audiveris/audiveris/releases) and the
 # scan-cleanup helper (tools/omr/README.md)
-cargo run --release -p cantor-omr -- scores/out scores/*.4sc scores/*.4ss scores/*.pdf
+cargo run --release -p cantor-omr -- convert scores/*.4sc scores/*.4ss scores/*.pdf --out scores/out --set "My set"
+# guide for choir directors: docs/guides/pdf-to-cantor.md
 ```
 
 ## Licence
