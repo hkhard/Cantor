@@ -113,6 +113,21 @@
       <option value="2">200 %</option>
     </select>
   </label>
+  {#if Math.min(window.innerWidth, window.innerHeight) < 600}
+    <label class="lang"
+      >{t('phone.autohide')}
+      <select
+        value={localStorage.getItem('choirbird.autohide') ?? '0'}
+        onchange={(e) => localStorage.setItem('choirbird.autohide', (e.target as HTMLSelectElement).value)}
+        aria-label={t('phone.autohide')}
+      >
+        <option value="0">{t('phone.autohideNever')}</option>
+        <option value="3">{t('phone.autohideAfter', { n: 3 })}</option>
+        <option value="4">{t('phone.autohideAfter', { n: 4 })}</option>
+        <option value="8">{t('phone.autohideAfter', { n: 8 })}</option>
+      </select>
+    </label>
+  {/if}
   <h4>{t('start.title')}</h4>
   <div class="row">
     <button

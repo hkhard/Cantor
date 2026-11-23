@@ -134,7 +134,17 @@ select {
 .library {
   height: 100%;
   overflow-y: auto;
+  /* Vertical only: on iPhone a few points of shadow or glass rim past the
+     edge let the list wobble sideways on a diagonal swipe. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
   padding: calc(env(safe-area-inset-top) + 24px) 32px 32px;
+}
+@media (max-width: 600px) {
+  .library {
+    padding: calc(env(safe-area-inset-top) + 16px) 16px 24px;
+  }
 }
 .library header {
   display: flex;
@@ -984,4 +994,170 @@ select {
 }
 .pagefold[data-dir='prev'] .pf-shade {
   background: linear-gradient(to left, transparent, rgba(0, 0, 0, 0.28));
+}
+
+/* ---------- VIEW-08 iPhone: the music owns the screen ---------- */
+/* Header, music, one-row player stacked; nothing floats over the notes. */
+.reader.phone {
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  gap: 0;
+}
+.reader.phone .top {
+  border-radius: 0;
+  padding: 2px 6px;
+  min-height: 2.75rem;
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.reader.phone .top h2 {
+  font-size: 1rem;
+  min-width: 4rem;
+}
+.reader.phone .top .seg button {
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+}
+.reader.phone .body {
+  gap: 0;
+}
+.reader.phone .score {
+  border-radius: 0;
+  box-shadow: none;
+}
+/* The iPad transport lives in the practice sheet on a phone. */
+.reader.phone .transport {
+  display: none;
+}
+.reader.hidehead .top {
+  display: none;
+}
+.reader.hidemini .minibar {
+  display: none;
+}
+.minibar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 3.5rem;
+  margin: 4px 8px 2px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+}
+.minibar .play {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  flex: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.minibar .prog {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.minibar .prog i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
+}
+.minibar .chip.mine {
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reader.phone.landscape .minibar {
+  margin: 2px 8px;
+  min-height: 3rem;
+}
+/* Practice sheet: the mixer as a bottom sheet with the rehearsal controls. */
+.sheetbg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  z-index: 40;
+}
+.mixer.practicesheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  max-height: 72vh;
+  z-index: 41;
+  border-radius: 1.25rem 1.25rem 0 0;
+  padding: 0.25rem 1rem calc(env(safe-area-inset-bottom) + 1rem);
+  background: var(--surface);
+  overflow-y: auto;
+  animation: sheetup 0.22s var(--ease);
+}
+.reader.phone.landscape .mixer.practicesheet {
+  left: 10%;
+  right: 10%;
+  max-height: 88vh;
+}
+@keyframes sheetup {
+  from {
+    transform: translateY(100%);
+  }
+}
+.sheethead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 2.25rem;
+}
+.sheethead .grab {
+  width: 2.25rem;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.sheethead .icon {
+  position: absolute;
+  right: 0;
+}
+.mixer.practicesheet > * {
+  flex-shrink: 0;
+}
+.mixer.practicesheet .modeswitch {
+  align-self: flex-start;
+  margin: 0.25rem 0;
+}
+.sheetrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0.4rem 0;
+}
+.sheetrow.wrap {
+  flex-wrap: wrap;
+}
+.sheetrow .play {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  flex: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.sheetrow .scrub {
+  flex: 1;
+}
+.sheetlbl {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mixer.practicesheet {
+    animation: none;
+  }
 }

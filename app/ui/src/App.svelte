@@ -62,6 +62,39 @@
   // On narrow screens (iPad mini portrait) the mixer starts closed so the
   // music gets the full width.
   let mixerOpen = $state(window.innerWidth >= 1000)
+  // VIEW-08 iPhone: compact layout (phone width or phone-height landscape).
+  // The music owns the screen; controls never sit on the notes.
+  let vw = $state(window.innerWidth)
+  let vh = $state(window.innerHeight)
+  let phone = $derived(Math.min(vw, vh) < 600)
+  let landscape = $derived(vw > vh)
+  /** Practice sheet (rehearsal controls + mixer) on a phone. */
+  let sheetOpen = $state(false)
+  /** Phone landscape: controls shown after a tap on the music. */
+  let rowShown = $state(false)
+  let rowTimer: number | undefined
+  /** Settings: hide the landscape row after N seconds ('0' = stay). */
+  function autoHide(): number {
+    return Number(localStorage.getItem('choirbird.autohide') ?? '0')
+  }
+  function showRow() {
+    rowShown = true
+    clearTimeout(rowTimer)
+    const s = autoHide()
+    if (s > 0) rowTimer = setTimeout(() => (rowShown = false), s * 1000) as unknown as number
+  }
+  /** Phone: a tap on the music in landscape toggles the control row. */
+  function phoneTap(e: MouseEvent) {
+    if (!phone || !landscape || performance) return
+    if ((e.target as Element).closest('button, a, input, select')) return
+    if (rowShown) {
+      rowShown = false
+      clearTimeout(rowTimer)
+    } else showRow()
+  }
+  /** What the phone shows besides the music. */
+  let phoneHeader = $derived(!phone || (!landscape ? !playing : rowShown))
+  let phoneMini = $derived(!phone || !landscape || rowShown)
   /** PLAY-09: the instrument / voice-set panel inside the mixer. */
   let voicesOpen = $state(false)
   let appearanceOpen = $state(false)
@@ -381,7 +414,9 @@
       // Show the director's words when there are any for this piece, its
       // set item or the set (the first piece of a set).
       const it = set?.list.items[set.index]
+      // Not on a phone: it would cover the music (the ℹ︎ dot shows there is text).
       insOpen =
+        !phone &&
         !!ins &&
         (!!ins.text.trim() || (it?.kind === 'score' && !!it.note?.trim()) || (!!set?.list.instructions?.trim() && set.index === set.list.items.findIndex((x) => x.kind === 'score')))
       strips = opened.channels.map(() => ({ volume_db: 0, mute: false, solo: false }))
@@ -863,7 +898,13 @@
   }
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window
+  onkeydown={onKey}
+  onresize={() => {
+    vw = window.innerWidth
+    vh = window.innerHeight
+  }}
+/>
 
 {#if !opened}
   <Library
@@ -877,7 +918,7 @@
     }}
   />
 {:else}
-  <main class="reader" class:performance>
+  <main class="reader" class:performance class:phone class:landscape class:hidehead={!phoneHeader} class:hidemini={!phoneMini}>
     {#if performance}
       <!-- PERF-01: big turn zones, no editing. PERF-07: a small bar with
            the mode switch, pages and (from a setlist) pieces. -->
@@ -920,7 +961,7 @@
       {#if setCtx}
         <button class="icon" onclick={() => stepSet(1)} disabled={setCtx.index >= setCtx.list.items.length - 1} aria-label={t('read.nextScore')}>▶</button>
       {/if}
-      {#if opened.pdf_url && opened.musicxml}
+      {#if opened.pdf_url && opened.musicxml && !phone}
         <div class="seg" role="group" aria-label={t('read.pageMode')}>
           <button class:on={view === 'pdf'} aria-pressed={view === 'pdf'} onclick={() => switchView('pdf')}>{t('read.original')}</button>
           <button class:on={view === 'notation'} aria-pressed={view === 'notation'} onclick={() => switchView('notation')}>{t('read.notation')}</button>
@@ -931,7 +972,7 @@
           >{correcting ? t('common.done') : t('read.correct')}</button
         >
       {/if}
-      {#if ann && (view === 'pdf' ? !!opened.pdf_url : !!engraved)}
+      {#if ann && (view === 'pdf' ? !!opened.pdf_url : !!engraved) && (!phone || annotating)}
         <button class="icon annotate" class:active={annotating} aria-pressed={annotating} onclick={() => (annotating = !annotating)}
           >{annotating ? t('common.done') : t('read.annotate')}</button
         >
@@ -943,12 +984,29 @@
       {/if}
       <button class="icon" class:active={moreOpen} onclick={() => { moreOpen = !moreOpen; pedalsOpen = false; appearanceOpen = false }} aria-haspopup="dialog" aria-expanded={moreOpen} aria-label={t('read.more')}>•••</button>
       {#if opened.channels.length}
-        <button class="icon" class:active={mixerOpen} onclick={() => (mixerOpen = !mixerOpen)} aria-label={mixerOpen ? t('read.hideMixer') : t('read.mixer')} aria-pressed={mixerOpen}
+        <button
+          class="icon"
+          class:active={phone ? sheetOpen : mixerOpen}
+          onclick={() => (phone ? (sheetOpen = !sheetOpen) : (mixerOpen = !mixerOpen))}
+          aria-label={mixerOpen && !phone ? t('read.hideMixer') : t('read.mixer')}
+          aria-pressed={phone ? sheetOpen : mixerOpen}
           ><Icon name="sliders" /> <span class="wide">{mixerOpen ? t('read.hideMixer') : t('read.mixer')}</span></button
         >
       {/if}
       {#if moreOpen}
         <div class="popover glass more">
+          {#if phone}
+            <!-- On a phone the header has no room: view and annotate live here. -->
+            {#if opened.pdf_url && opened.musicxml}
+              <div class="seg" role="group" aria-label={t('read.pageMode')}>
+                <button class:on={view === 'pdf'} aria-pressed={view === 'pdf'} onclick={() => switchView('pdf')}>{t('read.original')}</button>
+                <button class:on={view === 'notation'} aria-pressed={view === 'notation'} onclick={() => switchView('notation')}>{t('read.notation')}</button>
+              </div>
+            {/if}
+            {#if ann && (view === 'pdf' ? !!opened.pdf_url : !!engraved) && !annotating}
+              <button onclick={() => { annotating = true; moreOpen = false }}>{t('read.annotate')}</button>
+            {/if}
+          {/if}
           {#if opened.channels.length}
             <label class="row"
               >{t('read.choir')}
@@ -1123,7 +1181,8 @@
       />
     {/if}
 
-    <div class="body">
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div class="body" onclickcapture={phoneTap}>
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       {#if view === 'pdf' && opened.pdf_url}
         <div class="score pdf" use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage }}>
@@ -1176,8 +1235,44 @@
       </div>
       {/if}
 
-      {#if mixerOpen && opened.channels.length}
-        <aside class="mixer glass">
+      {#if (phone ? sheetOpen : mixerOpen) && opened.channels.length}
+        {#if phone}<div class="sheetbg" role="presentation" onclick={() => (sheetOpen = false)}></div>{/if}
+        <aside class="mixer glass" class:practicesheet={phone} role={phone ? 'dialog' : undefined} aria-label={phone ? t('phone.sheet') : undefined}>
+          {#if phone}
+            <div class="sheethead">
+              <span class="grab" aria-hidden="true"></span>
+              <button class="icon" onclick={() => (sheetOpen = false)} aria-label={t('common.close')}>×</button>
+            </div>
+            <div class="sheetrow">
+              <button class="play" onclick={toggle} aria-label={playing ? t('tr.pause') : t('tr.play')}><Icon name={playing ? 'pause' : 'play'} size={22} /></button>
+              <span class="time">{fmt(position)}</span>
+              <input class="scrub" type="range" min="0" max={opened.duration} step="0.1" value={position} onchange={scrub} aria-label={t('tr.position')} />
+              <span class="time">{fmt(opened.duration)}</span>
+            </div>
+            <div class="sheetrow wrap">
+              <label class="tempo"
+                >{t('tr.tempo')} {tempo}%
+                <input type="range" min="25" max="200" step="5" value={tempo} oninput={setTempo} />
+              </label>
+              <button
+                class="chip"
+                class:on={loopPick !== 'off' || loopB !== null}
+                aria-pressed={loopPick !== 'off' || loopB !== null}
+                onclick={toggleLoop}
+                ><Icon name="loop" size={18} />
+                {#if loopPick === 'a'}{t('tr.loopA')}{:else if loopPick === 'b'}{t('tr.loopB')}{:else if loopA !== null && loopB !== null}{t('tr.bars', { a: loopA + 1, b: loopB + 1 })}{:else}{t('tr.loop')}{/if}</button
+              >
+              <button class="chip" class:on={metronome} aria-pressed={metronome} onclick={toggleMetronome}><Icon name="metronome" size={18} /> {t('tr.click')}</button>
+              <button class="chip" class:on={countIn} aria-pressed={countIn} onclick={toggleCountIn}>{t('tr.countIn')}</button>
+              <button class="chip" onclick={() => api.pitchPipe()}>♪ {t('tr.pipe')}</button>
+              <label class="follow"><input type="checkbox" bind:checked={follow} /> {t('tr.follow')}</label>
+            </div>
+            <div class="seg modeswitch" role="group" aria-label={t('mode.label')}>
+              <button class:on={!performance} aria-pressed={!performance} onclick={() => setPerformance(false)}>{t('mode.practice')}</button>
+              <button class:on={performance} aria-pressed={performance} onclick={() => { sheetOpen = false; setPerformance(true) }}>{t('mode.performance')}</button>
+            </div>
+            <h4 class="sheetlbl">{t('phone.voices')}</h4>
+          {/if}
           <div class="presets">
             <button onclick={() => preset('my_part')} disabled={mine === null}>{t('mix.myPart')}</button>
             <button onclick={() => preset('without_me')} disabled={mine === null}>{t('mix.withoutMe')}</button>
@@ -1303,6 +1398,22 @@
       <label class="follow"><input type="checkbox" bind:checked={follow} /> {t('tr.follow')}</label>
       {#if engraved && view === 'notation'}<span class="page">{page}/{engraved.pages}</span>{/if}
     </footer>
+    {/if}
+    {#if phone && !performance}
+      <!-- VIEW-08: one row on a phone; everything else is in the sheet. -->
+      <footer class="minibar glass">
+        {#if landscape}<button class="icon" onclick={close} aria-label={t('read.library')}><Icon name="back" size={18} /></button>{/if}
+        {#if opened.channels.length}
+          <button class="play" onclick={toggle} aria-label={playing ? t('tr.pause') : t('tr.play')}><Icon name={playing ? 'pause' : 'play'} size={20} /></button>
+          <span class="time">{fmt(position)}</span>
+          <span class="prog" aria-hidden="true"><i style="transform:scaleX({opened.duration ? position / opened.duration : 0})"></i></span>
+          {#if mine !== null && opened.channels[mine]}<span class="chip mine">{opened.channels[mine].label}</span>{/if}
+          <button class="icon" onclick={() => (sheetOpen = true)} aria-label={t('phone.sheet')} aria-expanded={sheetOpen}>⌃</button>
+        {:else}
+          <span class="time">{t('read.pdfOnly')}</span>
+          <button class="chip" onclick={() => setPerformance(true)}>{t('mode.performance')}</button>
+        {/if}
+      </footer>
     {/if}
     {#if readerHint && !performance}
       <div class="hintbg" role="presentation" onclick={dismissHint}></div>

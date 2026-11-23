@@ -1303,6 +1303,118 @@ const H = Number(process.env.H || 1133)
     if ((await pg()) !== before) throw new Error('vertical drag turned the page')
   })
 
+  await step('view_08 iPhone library scrolls only vertically (no sideways wobble)', async () => {
+    await page.setViewportSize({ width: 393, height: 852 })
+    await page.waitForTimeout(400)
+    if (await page.locator('.top button[aria-label="Library"]').count()) await page.click('.top button[aria-label="Library"]')
+    await page.waitForSelector('ul.scores > li')
+    const r = await page.evaluate(() => {
+      const l = document.querySelector('.library')
+      const cs = getComputedStyle(l)
+      l.scrollLeft = 40
+      return { ox: cs.overflowX, ta: cs.touchAction, left: l.scrollLeft, sw: l.scrollWidth, cw: l.clientWidth }
+    })
+    if (r.ox !== 'hidden' || !/pan-y/.test(r.ta) || r.left !== 0) throw new Error('library can move sideways: ' + JSON.stringify(r))
+    await page.setViewportSize({ width: W, height: H })
+  })
+
+  await step('view_08 iPhone: no control covers the music; practice sheet; header hides while playing; landscape row and auto-hide setting', async () => {
+    const overlap = () => page.evaluate(() => {
+      // Every visible control vs. the music area (PDF host or notation).
+      const m = (document.querySelector('.pdfhost') || document.querySelector('.score'))?.getBoundingClientRect()
+      if (!m) return ['no music area']
+      const hits = []
+      for (const el of document.querySelectorAll('.top, .transport, .minibar, .mixer, .perfbar')) {
+        const r = el.getBoundingClientRect()
+        const vis = getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none' && r.width > 0 && r.height > 0
+        if (!vis) continue
+        const ix = Math.min(r.right, m.right) - Math.max(r.left, m.left)
+        const iy = Math.min(r.bottom, m.bottom) - Math.max(r.top, m.top)
+        if (ix > 1 && iy > 1) hits.push(el.className.split(' ')[0] + ' ' + Math.round(iy) + 'px')
+      }
+      return hits
+    })
+    // Portrait iPhone 16.
+    await page.setViewportSize({ width: 393, height: 852 })
+    await page.evaluate(() => localStorage.setItem('cantor.lang', 'en'))
+    await page.reload()
+    await page.waitForSelector('ul.scores > li')
+    await page.locator('ul.scores > li', { hasText: 'Lacrymosa' }).first().locator('button.open').click()
+    await page.waitForSelector('.pdfhost canvas')
+    await page.waitForTimeout(800)
+    const hint = page.locator('.readerhint button.primary')
+    if (await hint.count()) await hint.click()
+    if (await page.locator('.inspanel').count()) throw new Error('instructions opened over the music on a phone')
+    let o = await overlap()
+    if (o.length) throw new Error('portrait: controls over the music: ' + o.join(', '))
+    const music = await page.locator('.pdfhost').boundingBox()
+    if (music.height < 852 * 0.7) throw new Error('portrait: music only ' + Math.round(music.height) + ' px high')
+    const canvas = await page.locator('.pdfhost canvas').boundingBox()
+    if (canvas.width < music.width - 12) throw new Error('portrait: page not full width')
+    if (!(await page.locator('.minibar').isVisible())) throw new Error('no mini player')
+    // The header fits the phone: nothing cut off or scrolled sideways.
+    const hdr = await page.evaluate(() => { const t = document.querySelector('.top'); return { sw: t.scrollWidth, cw: t.clientWidth } })
+    if (hdr.sw > hdr.cw + 1) throw new Error('header overflows: ' + JSON.stringify(hdr))
+    // The page view switch is in ••• on a phone.
+    await page.click('.top button[aria-label="More"]')
+    await page.click('.popover.more .seg button:has-text("Notation")')
+    await page.waitForSelector('.score svg g.measure', { timeout: 20000 })
+    await page.click('.popover.more .seg button:has-text("Original")').catch(async () => {
+      await page.click('.top button[aria-label="More"]')
+      await page.click('.popover.more .seg button:has-text("Original")')
+    })
+    await page.waitForSelector('.pdfhost canvas')
+    if (await page.locator('.popover.more').count()) await page.click('.top button[aria-label="More"]')
+    await page.waitForTimeout(600)
+    await shot('60-iphone-portrait')
+    // The practice sheet has the rehearsal controls and the mixer.
+    await page.click('.minibar button[aria-label="Practice controls"]')
+    await page.waitForSelector('.practicesheet')
+    await page.waitForTimeout(400)
+    for (const w of ['Tempo', 'Loop', 'Click', 'Tenor 1', 'Practice', 'Performance'])
+      if (!(await page.locator('.practicesheet').innerText()).includes(w)) throw new Error('sheet lacks ' + w)
+    await shot('61-iphone-sheet')
+    await page.click('.practicesheet button[aria-label="Close"]')
+    await page.waitForSelector('.practicesheet', { state: 'detached' })
+    // Playing hides the header; pausing shows it again.
+    await page.click('.minibar button[aria-label="Play"]')
+    await page.waitForTimeout(500)
+    if (await page.locator('.top').isVisible()) throw new Error('header visible while playing')
+    o = await overlap()
+    if (o.length) throw new Error('playing: ' + o.join(', '))
+    await page.click('.minibar button[aria-label="Pause"]')
+    await page.waitForTimeout(300)
+    if (!(await page.locator('.top').isVisible())) throw new Error('header not back after pause')
+    // Landscape: music only; a tap shows one row below the music.
+    await page.setViewportSize({ width: 852, height: 393 })
+    await page.waitForTimeout(800)
+    if (await page.locator('.minibar').isVisible()) throw new Error('landscape: controls shown before a tap')
+    if (await page.locator('.top').isVisible()) throw new Error('landscape: header shown before a tap')
+    await shot('62-iphone-landscape')
+    const lm = await page.locator('.pdfhost').boundingBox()
+    await page.mouse.click(lm.x + lm.width / 2, lm.y + lm.height / 2)
+    await page.waitForSelector('.minibar', { state: 'visible' })
+    o = await overlap()
+    if (o.length) throw new Error('landscape row over the music: ' + o.join(', '))
+    await shot('63-iphone-landscape-row')
+    // Auto-hide is a setting: "After 4 s" hides the row by itself.
+    await page.evaluate(() => localStorage.setItem('choirbird.autohide', '4'))
+    await page.mouse.click(lm.x + lm.width / 2, lm.y + lm.height / 2)
+    await page.waitForTimeout(200)
+    await page.mouse.click(lm.x + lm.width / 2, lm.y + lm.height / 2)
+    await page.waitForSelector('.minibar', { state: 'visible' })
+    await page.waitForSelector('.minibar', { state: 'hidden', timeout: 6000 })
+    await page.evaluate(() => localStorage.removeItem('choirbird.autohide'))
+    // The setting is in About on a phone.
+    await page.setViewportSize({ width: 393, height: 852 })
+    await page.waitForTimeout(400)
+    await page.click('.top button[aria-label="Library"]')
+    await page.click('header button[aria-label="About ChoirBird"]')
+    if (!(await page.locator('.about select[aria-label="Hide controls in landscape"]').count())) throw new Error('auto-hide setting missing')
+    await page.click('.about button.primary')
+    await page.setViewportSize({ width: W, height: H })
+  })
+
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors')
   await browser.close()
   process.exit(failed || errors.length ? 1 : 0)

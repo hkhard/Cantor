@@ -109,7 +109,8 @@
   // VIEW-07: in landscape a single page is zoomed to the pane's width (a
   // system as wide as the screen) and scrolls vertically. If the tallest
   // system would not fit the pane at that zoom, zoom out just enough.
-  let fitWidth = $derived((mode === 'single' || mode === 'half') && box.w > box.h * 1.1)
+  // VIEW-08: on a phone in portrait too (a whole page is unreadably small).
+  let fitWidth = $derived((mode === 'single' || mode === 'half') && (box.w > box.h * 1.1 || Math.min(window.innerWidth, window.innerHeight) < 600))
   let fitEl: HTMLDivElement | undefined = $state()
   let fitH = $derived.by(() => {
     if (!fitWidth || !boxes?.length) return 0
@@ -122,6 +123,20 @@
     const b = boxes?.find((x) => x.page === p)
     return b && fitEl ? Math.max(0, fitEl.offsetTop + b.y * fitEl.clientHeight - 8) : 0
   }
+  // A width-fitted page opens at its first system (the title block is
+  // above it), also on the first page and after a rotation.
+  let fittedFor = ''
+  $effect(() => {
+    if (!fitWidth || !fitEl || !host) return
+    const key = `${url}|${page}|${Math.round(box.w)}`
+    if (key === fittedFor) return
+    fittedFor = key
+    const el = fitEl
+    const h = host
+    // Wait for the canvas to get its size.
+    const go = () => (el.clientHeight > 40 ? h.scrollTo({ top: firstSystemTop(page) }) : requestAnimationFrame(go))
+    requestAnimationFrame(go)
+  })
 
   function show(p: number) {
     p = Math.min(pages, Math.max(1, p))

@@ -100,6 +100,7 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | VIEW-05 | P1 | Transpose display and playback by semitones; concert / transposed pitch toggle | Transposing +2 then −2 gives a model equal to the original |
 | VIEW-06 | P1 | Dark and sepia themes | Contrast ≥ 4.5:1 for notation and text |
 | VIEW-07 | P1 | Landscape on a tablet: the PDF page fills the screen width, so a whole system is shown at least as wide as the screen; scroll down for the rest of the page | In landscape the page is as wide as the reader pane and the playing system is fully visible; portrait unchanged |
+| VIEW-08 | P1 | Phone layout: the music is never covered by controls; a one-row player with a pull-up practice sheet (transport, tempo, loop, click, voices, mode); the header hides while playing; in landscape the controls appear on a tap, below the music, and hide after a time set in settings; the library scrolls only vertically | No control overlaps the music area at 393×852 and 852×393; header hidden while playing; landscape row only after a tap; auto-hide works; the library cannot move sideways |
 
 ### Playback and mixer (PLAY)
 
