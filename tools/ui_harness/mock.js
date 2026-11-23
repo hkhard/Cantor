@@ -247,7 +247,7 @@ exports.setup = async function setup(page, dir) {
         },
         backup_library: () => {
           store.backups = (store.backups ?? 0) + 1
-          return 'Cantor 2026-11-22.cantorbackup'
+          return 'ChoirBird 2026-11-22.cantorbackup'
         },
         pending_backups: () => store.pending ?? [],
         restore_pending: ({ name, discard }) => {
@@ -264,7 +264,7 @@ exports.setup = async function setup(page, dir) {
         },
         sync_folder_name: () => store.syncFolder ?? null,
         choose_sync_folder: () => {
-          store.syncFolder = 'Cantor (iCloud)'
+          store.syncFolder = 'ChoirBird (iCloud)'
           return store.syncFolder
         },
         forget_sync_folder: () => {

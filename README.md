@@ -1,7 +1,11 @@
-# Cantor
+# ChoirBird
 
-**Sheet music that plays every part.** Cantor is a score reader for choir
-singers. It shows the original PDF, plays every voice with its own
+> Formerly Cantor. The code still uses `cantor` as its internal name
+> (crates `cantor-*`, the repository, the Xcode project); users see
+> ChoirBird. BandBird and ConductorBird are planned sister apps.
+
+**Sheet music that plays every part.** ChoirBird is a choir practice app
+and score reader for choir singers. It shows the original PDF, plays every voice with its own
 instrument and follows along with a cursor, so you can rehearse your own
 line. It works offline on the iPad.
 

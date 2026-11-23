@@ -1,0 +1,112 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.11765,0.22745,0.48235,1.00000",
+          "srgb:0.05098,0.10588,0.24314,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1
+          }
+        }
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.05490,0.07843,0.14118,1.00000",
+          "srgb:0.01961,0.03137,0.05882,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1
+          }
+        }
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "wave-inner.svg",
+          "name": "wave-inner"
+        },
+        {
+          "image-name": "wave-outer-50pct.svg",
+          "name": "wave-outer-50pct",
+          "opacity": 0.5
+        }
+      ],
+      "name": "Waves",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "beak.svg",
+          "name": "beak"
+        }
+      ],
+      "name": "Beak",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "eye.svg",
+          "name": "eye"
+        },
+        {
+          "image-name": "wing.svg",
+          "name": "wing"
+        },
+        {
+          "image-name": "body.svg",
+          "name": "body"
+        }
+      ],
+      "name": "Bird",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "iOS"
+    ]
+  }
+}

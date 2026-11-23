@@ -6,7 +6,10 @@ to get wrong. Architecture: `docs/ARCHITECTURE.md`. What to build next:
 
 ## Project in one paragraph
 
-Cantor is an offline score reader for choir singers.
+ChoirBird (formerly Cantor) is an offline choir practice app and score reader
+for choir singers. Bundle id `se.nikielhard.choirbird`. The internal code
+name stays `cantor` (crates, repo, Xcode project); every user-visible
+string says ChoirBird. BandBird and ConductorBird are later sister apps.
 
 - It shows the original PDF, or a re-engraved MusicXML score.
 - It plays every part with its own instrument, with a cursor on the PDF.
@@ -103,7 +106,7 @@ page drawn by a script.
   and English.
 - **Accessibility:** WCAG 2.2 AA.
   - Every control needs a name.
-  - Use the accent colour `#A9620A`, or `--accent-ink` for text on accent.
+  - Use the skin tokens (`--accent`, the ChoirBird coral: `#B83E26` light, `#A8381F` sepia, `#FF7A5C` dark), and `--accent-ink` for text on accent.
   - Sizes are in rem.
   - Honour `prefers-reduced-motion`.
   - The `a11y` harness must report 0 findings.

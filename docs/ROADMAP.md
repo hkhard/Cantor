@@ -1,4 +1,8 @@
-# Cantor roadmap in phases
+# ChoirBird roadmap in phases
+
+ChoirBird was called Cantor until 2026-11-23. The paid editions are planned
+as sister apps: BandBird (band) and ConductorBird (conductor), next to
+ChoirBird (choir).
 
 Decided 2026-11-23:
 

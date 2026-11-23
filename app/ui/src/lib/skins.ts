@@ -14,13 +14,18 @@ export interface Skin {
   tokens: Record<string, string>
 }
 
-// Brand palette (from the app icon, design/cantor-icon-layers).
+// Brand palette from the ChoirBird "Songbird" icon (design/choirbird,
+// 1-Songbird): navy sky, coral bird, peach wing, amber beak, cream song.
 export const brand = {
   navy: '#1E3A7B',
   navyDeep: '#0D1B3E',
   night: '#0E1424',
   cream: '#F4EBDD',
   amber: '#F2A541',
+  coral: '#FF7A5C',
+  peach: '#FFB4A2',
+  // Coral deep enough for text and white labels on light paper (AA).
+  coralInk: '#B83E26',
 }
 
 /** Tokens shared by every skin (shape, type, motion). */
@@ -41,19 +46,20 @@ const light: Skin = {
   name: 'Ljus',
   scheme: 'light',
   tokens: {
-    bg: '#F3F0EA',
-    'bg-gradient': 'radial-gradient(120% 80% at 0% 0%, #FFFFFF 0%, #F3F0EA 55%, #E9E3D8 100%)',
+    // Warm cream with a hint of the bird's peach, navy text (the icon's sky).
+    bg: '#F7F2EA',
+    'bg-gradient': 'radial-gradient(120% 80% at 0% 0%, #FFFFFF 0%, #F7F2EA 55%, #F1E6DA 100%)',
     surface: '#FFFFFF',
     ink: '#14213D',
     // WCAG 2.2 AA (NFR-08): muted text >= 4.5:1 on the background, white on
     // the accent >= 4.5:1 (was #6B6F7B / #C77A12 at 4.4 / 3.4).
     'ink-muted': '#5D616C',
     line: 'rgba(20, 33, 61, 0.12)',
-    // VIEW-06: accent as text on the background >= 4.5:1 (5.5), white on
-    // it 6.2 (was #A9620A at 4.2 / 4.7).
-    accent: '#8F5208',
+    // Accent: the bird's coral, deepened for AA: 5.0:1 as text on the
+    // background, white on it 5.6:1.
+    accent: brand.coralInk,
     'accent-ink': '#FFFFFF',
-    'accent-soft': 'rgba(143, 82, 8, 0.12)',
+    'accent-soft': 'rgba(255, 122, 92, 0.14)',
     brand: brand.navy,
     danger: '#B91C1C',
     'glass-bg': 'rgba(255, 255, 255, 0.62)',
@@ -96,10 +102,11 @@ const dark: Skin = {
     ink: brand.cream,
     'ink-muted': '#9AA3B8',
     line: 'rgba(244, 235, 221, 0.12)',
-    accent: brand.amber,
-    'accent-ink': '#1A1205',
-    'accent-soft': 'rgba(242, 165, 65, 0.18)',
-    brand: brand.amber,
+    // The icon's coral on the night sky, 7.2:1; dark ink on it 7.2:1.
+    accent: brand.coral,
+    'accent-ink': '#1A0B06',
+    'accent-soft': 'rgba(255, 122, 92, 0.18)',
+    brand: brand.coral,
     danger: '#F87171',
     'glass-bg': 'rgba(24, 33, 58, 0.55)',
     'glass-bg-strong': 'rgba(24, 33, 58, 0.82)',
@@ -144,9 +151,9 @@ const sepia: Skin = {
     line: 'rgba(59, 47, 34, 0.14)',
     'glass-bg': 'rgba(250, 244, 232, 0.66)',
     'glass-bg-strong': 'rgba(250, 244, 232, 0.86)',
-    // Accent as text on sepia >= 4.5:1 (5.3), white on it 6.6.
-    accent: '#8A4F07',
-    'accent-soft': 'rgba(138, 79, 7, 0.12)',
+    // Coral accent, deeper still on sepia: 5.4:1 as text, white on it 6.5.
+    accent: '#A8381F',
+    'accent-soft': 'rgba(255, 122, 92, 0.14)',
     // VIEW-06: music is black on sepia paper (17.9:1), not brown on cream.
     paper: '#F5ECD7',
     'paper-ink': '#000000',

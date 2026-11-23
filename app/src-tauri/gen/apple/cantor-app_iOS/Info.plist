@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Cantor</string>
+	<string>ChoirBird</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -47,26 +47,26 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Cantor Setlist</string>
+			<string>ChoirBird Setlist</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>se.nikielhard.cantor.setlist</string>
+				<string>se.nikielhard.choirbird.setlist</string>
 			</array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Cantor Backup</string>
+			<string>ChoirBird Backup</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>se.nikielhard.cantor.backup</string>
+				<string>se.nikielhard.choirbird.backup</string>
 			</array>
 		</dict>
 		<dict>
@@ -153,9 +153,9 @@
 				<string>public.zip-archive</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Cantor Setlist</string>
+			<string>ChoirBird Setlist</string>
 			<key>UTTypeIdentifier</key>
-			<string>se.nikielhard.cantor.setlist</string>
+			<string>se.nikielhard.choirbird.setlist</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
@@ -171,9 +171,9 @@
 				<string>public.zip-archive</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Cantor Backup</string>
+			<string>ChoirBird Backup</string>
 			<key>UTTypeIdentifier</key>
-			<string>se.nikielhard.cantor.backup</string>
+			<string>se.nikielhard.choirbird.backup</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

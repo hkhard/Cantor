@@ -32,7 +32,7 @@
     overflow-wrap: anywhere;
   }
   .ins a {
-    color: var(--accent-text, #8a4f08);
+    color: var(--accent);
     text-decoration: underline;
   }
   .barref {
@@ -43,7 +43,7 @@
     font: inherit;
     font-weight: 600;
     color: var(--accent-ink, #fff);
-    background: var(--accent, #a9620a);
+    background: var(--accent, #b83e26);
     border: 0;
     border-radius: 0.4rem;
     cursor: pointer;

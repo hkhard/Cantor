@@ -92,8 +92,8 @@
 
 <div class="sheetbg" role="presentation" onclick={onclose}></div>
 <div class="about glass" role="dialog" aria-label={t('about.title')}>
-  <img src="/cantor-mark.svg" alt="" width="56" height="56" />
-  <h3>Cantor</h3>
+  <img src="/choirbird-mark.svg" alt="" width="56" height="56" />
+  <h3>ChoirBird</h3>
   <p>{t('about.body')}</p>
   <label class="lang"
     >{t('about.language')}

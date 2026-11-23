@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and install the Cantor demo on an iPad.
+# Build and install ChoirBird on an iPad.
 #
 #   tools/ipad.sh sim            build + run on the iPad Pro 13" simulator
 #   tools/ipad.sh device [UDID]  signed build + install on a connected iPad
@@ -21,16 +21,16 @@ cd "$APP"
 case "${1:-sim}" in
   sim)
     cargo tauri ios build --target aarch64-sim --debug
-    BUNDLE="$(find ~/Library/Developer/Xcode/DerivedData/cantor-app-*/Build/Products/debug-iphonesimulator -maxdepth 1 -name Cantor.app | head -1)"
+    BUNDLE="$(find ~/Library/Developer/Xcode/DerivedData/cantor-app-*/Build/Products/debug-iphonesimulator -maxdepth 1 -name ChoirBird.app | head -1)"
     SIM="$(xcrun simctl list devices available | grep -m1 'iPad Pro 13' | grep -oE '[0-9A-F-]{36}')"
     xcrun simctl boot "$SIM" 2>/dev/null || true
     open -a Simulator
     xcrun simctl install "$SIM" "$BUNDLE"
-    xcrun simctl launch "$SIM" se.nikielhard.cantor
+    xcrun simctl launch "$SIM" se.nikielhard.choirbird
     ;;
   device)
     cargo tauri ios build --target aarch64 --export-method debugging
-    IPA="$APP/gen/apple/build/arm64/Cantor.ipa"
+    IPA="$APP/gen/apple/build/arm64/ChoirBird.ipa"
     DEV="${2:-$(xcrun devicectl list devices | grep -i 'ipad' | grep -v simulated | grep -E 'available|connected' | grep -v unavailable | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1)}"
     if [ -z "$DEV" ]; then
       echo "No connected iPad found. Connect it (USB or same Wi-Fi, unlocked), then rerun." >&2
@@ -38,7 +38,7 @@ case "${1:-sim}" in
       exit 1
     fi
     xcrun devicectl device install app --device "$DEV" "$IPA"
-    xcrun devicectl device process launch --device "$DEV" se.nikielhard.cantor
+    xcrun devicectl device process launch --device "$DEV" se.nikielhard.choirbird
     ;;
   release)
     # Release build of an exact tag (ROADMAP phase P, AGPL 6(d)): the tree
@@ -57,7 +57,7 @@ case "${1:-sim}" in
     CANTOR_VERSION="$TAG" cargo tauri ios build --target aarch64 \
       --export-method "${2:-release-testing}" --build-number "$BUILD" \
       --config "{\"version\":\"$VERSION\"}"
-    echo "Cantor $TAG (build $BUILD): $APP/gen/apple/build/arm64/Cantor.ipa"
+    echo "ChoirBird $TAG (build $BUILD): $APP/gen/apple/build/arm64/ChoirBird.ipa"
     ;;
   *)
     echo "usage: $0 sim|device [UDID]|release [app-store-connect|release-testing]" >&2

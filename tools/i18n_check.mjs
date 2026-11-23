@@ -30,7 +30,7 @@ function files(dir) {
 }
 const all = files(root)
 // Words allowed as literal text: names, symbols and units, not language.
-const ALLOW = new Set(['Cantor', 'Lacrymosa', 'MusicXML', 'PDF', 'MIDI', 'MXL', 'forScore', 'AGPL-3.0', 'GitHub', 'BPM', 'bpm', 'A4', 'Hz'])
+const ALLOW = new Set(['ChoirBird', 'Cantor', 'Lacrymosa', 'MusicXML', 'PDF', 'MIDI', 'MXL', 'forScore', 'AGPL-3.0', 'GitHub', 'BPM', 'bpm', 'A4', 'Hz'])
 const hasWord = (s) => s.split(/[^\p{L}][^\p{L}]*/u).some((w) => w.length > 1 && !ALLOW.has(w) && !/^[A-Z]$/.test(w))
 
 for (const f of all) {

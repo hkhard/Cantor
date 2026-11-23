@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Cantor",
+  "productName": "ChoirBird",
   "version": "0.1.0",
-  "identifier": "se.nikielhard.cantor",
+  "identifier": "se.nikielhard.choirbird",
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Cantor",
+        "title": "ChoirBird",
         "width": 1366,
         "height": 1024,
         "resizable": true,

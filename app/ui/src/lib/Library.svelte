@@ -361,9 +361,9 @@
 
 <main class="library" bind:this={scrollerEl} class:editing={editMode}>
   <header>
-    <img class="mark" src="/cantor-mark.svg" alt="" width="64" height="64" />
+    <img class="mark" src="/choirbird-mark.svg" alt="" width="64" height="64" />
     <div class="titles">
-      <h1>Cantor</h1>
+      <h1>ChoirBird</h1>
       <p class="sub">{t('lib.subtitle')}</p>
     </div>
     <button class="icon" onclick={() => (aboutOpen = true)} aria-label={t('lib.about')}>ⓘ</button>
@@ -527,7 +527,7 @@
       {#if current.items.length}
         <button class="chip on" onclick={() => openItem(current!, current!.items.findIndex((i) => i.kind === 'score'))}>{t('set.playlist')}</button>
       {/if}
-      <button class="chip" onclick={() => share('setlist', current!.id)}>{t('share.title')}: Cantor</button>
+      <button class="chip" onclick={() => share('setlist', current!.id)}>{t('share.title')}: ChoirBird</button>
       <button class="chip" onclick={() => share('4ss', current!.id)}>forScore</button>
       <button class="chip" onclick={() => deleteList(current!)}>{t('common.delete')}</button>
     </div>

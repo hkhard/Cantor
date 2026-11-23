@@ -1218,7 +1218,7 @@ async fn backup_library(app: tauri::AppHandle) -> Result<String, String> {
                 .map(|d| d.as_secs() as i64)
                 .unwrap_or(0);
             let name = format!(
-                "Cantor {}.{}",
+                "ChoirBird {}.{}",
                 ymd(secs),
                 cantor_library::backup::BACKUP_EXT
             );
@@ -1429,7 +1429,7 @@ fn attach_track(request: tauri::ipc::Request<'_>, paths: State<'_, Paths>) -> Re
         .unwrap_or_default();
     if !cantor_library::import::TRACK_EXT.contains(&ext.as_str()) {
         return Err(format!(
-            "{name}: Cantor plays M4A, MP3, WAV, FLAC and AIFF recordings"
+            "{name}: ChoirBird plays M4A, MP3, WAV, FLAC and AIFF recordings"
         ));
     }
     // Check it decodes before keeping it.
@@ -2516,7 +2516,7 @@ pub fn run() {
             read_title_page
         ]))
         .build(tauri::generate_context!())
-        .expect("error while building Cantor")
+        .expect("error while building ChoirBird")
         .run(|app, event| {
             // Files shared to Cantor ("Open in…", AirDrop, Files): iOS copies
             // them to Documents/Inbox and hands us their URLs.
