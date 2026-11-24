@@ -880,6 +880,8 @@ const H = Number(process.env.H || 1133)
     if (!/Source code for this version:\s*https:\/\/github\.com\/\S+\/tree\/\S+/.test(txt)) throw new Error('no source link to the exact version')
     if (!/Version:\s*\S+/.test(txt)) throw new Error('no version shown')
     if (!txt.includes('THIRD_PARTY_NOTICES.md')) throw new Error('no third-party notices')
+    // The mock build has on-device note reading: homr and its data are credited.
+    if (!txt.includes('homr') || !txt.includes('AGPL-3.0') || !txt.includes('DeepScoresV2')) throw new Error('homr not credited')
     await page.click('.about button.primary')
   })
 

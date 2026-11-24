@@ -10,11 +10,27 @@ network.
 - homr is **AGPL-3.0**: code and model weights. This crate is a port, so it
   is a derivative work and is **AGPL-3.0-only**.
 - The app store permission in `LICENSE-EXCEPTIONS.md` does **not** apply to
-  this crate: homr's authors did not grant it.
+  this crate: it is not ours to give, and homr's authors grant none.
 - Decision (product owner, 2026-11-23): accept AGPL for on-device note
-  recognition. Before a **public** App Store release of a build that
-  contains this crate, the app store question for homr's code must be
-  settled (homr's authors, or legal advice). See `docs/ROADMAP.md`.
+  recognition.
+- Decision (product owner, 2026-11-24): ship builds with this crate through
+  the App Store, free of charge, once the repository is public and the exact
+  source of each build is linked from About (AGPL 6 and 13). This follows
+  homr's `LICENSE_FAQ.md`: the AGPL allows commercial use as long as its
+  terms are met, including publishing the source. Money comes from the
+  backend services, not from the app.
+- Known residual risk, accepted: the FAQ does not mention app stores.
+  Apple's terms of use add restrictions that AGPL section 10 forbids, and
+  only homr's copyright holders could waive that. Any one of them could ask
+  Apple to remove the app (as happened to VLC in 2011). If that happens,
+  ship the app without this crate (the `homr` feature) and convert on the
+  server instead. Not legal advice; phase L can review it.
+- Model weights: AGPL as published. The segmentation model is trained on
+  DeepScoresV2 (CC BY 4.0, which needs attribution: About and
+  `THIRD_PARTY_NOTICES.md` credit it). The transformer is trained on
+  OpenScore Lieder and StringQuartets (CC0), GrandStaff (MIT on Hugging Face,
+  not stated at its source) and the public-domain PDMX subset (CC BY 4.0
+  dataset).
 - The tokenizer files in `src/tokenizer_*.json` are copied unchanged from
   homr 0.7.1.
 

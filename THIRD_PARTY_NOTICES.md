@@ -8,6 +8,15 @@ Bundled assets: GeneralUser GS soundfont (S. Christian Collins, free for
 commercial use, `assets/sf2/GeneralUser-GS.LICENSE.txt`); pdf.js (Apache-2.0);
 Verovio (LGPL-3.0, https://github.com/rism-digital/verovio).
 
+Builds with on-device note recognition (`homr` feature) also contain
+`crates/homr`, a Rust port of homr 0.7.1 (Christian Liebhardt and the homr
+contributors, AGPL-3.0, https://github.com/liebharc/homr), and homr's model
+weights (AGPL-3.0). The segmentation model is trained on DeepScoresV2
+(Tuggener et al., CC BY 4.0, https://zenodo.org/records/4012193); the
+transformer on OpenScore Lieder and StringQuartets (CC0), GrandStaff (MIT)
+and the public-domain subset of PDMX (CC BY 4.0,
+https://zenodo.org/records/15571083). ONNX Runtime (Microsoft, MIT) runs them.
+
 | Package | Version | Licence | Source |
 |---|---|---|---|
 | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | crates.io |

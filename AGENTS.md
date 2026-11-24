@@ -121,10 +121,11 @@ page drawn by a script.
   entry in `REVIEWED` in `tools/licenses.py`.
 - **homr** (AGPL-3.0): the product owner accepted AGPL for on-device note
   recognition (2026-11-23). The Rust port lives only in `crates/homr`, which
-  is AGPL-3.0-only **without** the app store permission (homr's authors did
-  not grant it), keeps homr's copyright notice and says it is a port. Do not
-  copy homr code into other crates. See `crates/homr/README.md` and
-  `docs/omr-engine-comparison.md`.
+  is AGPL-3.0-only, keeps homr's copyright notice and says it is a port. Our
+  section 7 app store permission does not cover it (it is not ours to give).
+  Decision 2026-11-24: App Store builds may contain it once the source of
+  that exact build is public (homr's `LICENSE_FAQ.md`). Do not copy homr code
+  into other crates. See `crates/homr/README.md`.
 - Regenerate `THIRD_PARTY_NOTICES.md` after any dependency change. CI fails
   when it is stale.
 - Contributions are accepted under the CLA in `CONTRIBUTING.md`.

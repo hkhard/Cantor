@@ -316,6 +316,8 @@ const sv = {
   'about.gsLicence': 'GeneralUser GS License v2.0 (fri användning)',
   'about.synth': 'SoundFont-syntes',
   'about.audioOut': 'Ljud ut',
+  'about.recognition': 'Läser noter ur PDF på enheten',
+  'about.trainingData': 'Träningsdata för notläsningens modeller',
 } as const
 
 export type Key = keyof typeof sv
@@ -634,6 +636,8 @@ const en: Record<Key, string> = {
   'about.gsLicence': 'GeneralUser GS License v2.0 (free use)',
   'about.synth': 'SoundFont synthesis',
   'about.audioOut': 'Audio output',
+  'about.recognition': 'Reads notes from PDFs on the device',
+  'about.trainingData': 'Training data of the note-reading models',
 }
 
 export type Lang = 'sv' | 'en'

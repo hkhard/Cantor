@@ -22,10 +22,10 @@ the team, so these must be true first):
    (Björk's song; only the arrangement is ours).
 3. **External testing needs Beta App Review** by Apple for the first build:
    allow about a day.
-4. **Builds with on-device note recognition (homr)** are a separate
-   question: homr's authors have not granted an app store permission. Do not
-   put such a build on the public link until that is settled (see
-   `crates/homr/README.md`). Build 0.2.0 does not contain homr.
+4. **Builds with on-device note recognition (homr)** may go on the public
+   link once the repository is public and About links the exact source of
+   that build (decision 2026-11-24, see `crates/homr/README.md` for the
+   accepted residual risk). Build 0.2.0 does not contain homr.
 
 ## Beta App Description (svenska)
 

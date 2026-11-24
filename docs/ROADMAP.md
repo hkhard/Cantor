@@ -35,7 +35,7 @@ Each phase lists its exit check, so "done" means something you can observe.
 | Tag each build given to others; the About link points at that tag | Build script writes the tag into About |
 | UI harness without private scores, so outside contributors and forks can run it | `run.sh` uses `fixtures/scores/mozart-lacrymosa` (MusicXML, PDF, measure map) and never reads `scores/`; CI no longer links private scores; 35 scenarios and 0 a11y findings (done 2026-11-23) |
 | Clear or remove *The Anchor Song* (the song's copyright is Björk's; only the arrangement is ours) before the repository is public | Publisher permission on file, or `fixtures/scores/the-anchor-song` removed from history |
-| homr in the client (decided 2026-11-23: AGPL accepted, on-device note recognition) | `crates/homr` is AGPL-3.0-only without the app store permission and credits homr; **open before a public App Store release:** homr's authors have not granted an app store permission, so a public store release of a build containing it needs their permission or phase L's advice; internal TestFlight builds are not affected |
+| homr in the client (decided 2026-11-23: AGPL accepted, on-device note recognition) | `crates/homr` is AGPL-3.0-only without our app store permission and credits homr and its training data. Decided 2026-11-24: App Store builds may contain it once the repository is public and About links the exact source (homr's `LICENSE_FAQ.md`); the app stays free, the backend earns. Residual risk accepted and written down in `crates/homr/README.md` (the FAQ does not mention app stores; fallback: ship without the `homr` feature) |
 
 Who: you. Cost: nothing.
 
@@ -121,8 +121,10 @@ One review covering:
 
 - The section 7 app store wording and the CLA.
 - Verovio (LGPL-3.0) in a statically linked app.
-- Whether homr's model weights carry the AGPL. This decides on-device note
-  recognition.
+- homr in App Store builds (decided 2026-11-24 to ship once the source is
+  public; review the residual app store risk written in
+  `crates/homr/README.md`) and whether the weights' training data licences
+  need more than the attribution in About.
 - Apple guideline 3.1.3(c) for choir seats.
 - Terms of service, privacy policy and a DPA template for organisations
   (GDPR).

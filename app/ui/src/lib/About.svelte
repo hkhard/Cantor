@@ -7,6 +7,10 @@
   let syncName: string | null = $state(null)
   let syncMsg = $state('')
   api.syncFolderName().then((n) => (syncName = n)).catch(() => {})
+  // LIB-10: builds with on-device note recognition credit homr and the data
+  // its models were trained on (CC BY 4.0 needs attribution).
+  let recognition = $state(false)
+  api.convertStatus().then((s) => (recognition = !!s?.[0])).catch(() => {})
 
   async function chooseFolder() {
     try {
@@ -87,6 +91,13 @@
     { name: 'Tauri', what: 'App', licence: 'MIT / Apache-2.0', url: 'https://tauri.app' },
     { name: 'Svelte', what: 'UI', licence: 'MIT', url: 'https://svelte.dev' },
     { name: 'quick-xml, zip, serde, objc2', what: 'MusicXML, MXL, data, iOS', licence: 'MIT / Apache-2.0', url: 'https://crates.io' },
+    ...(recognition
+      ? [
+          { name: 'homr', what: t('about.recognition'), licence: 'AGPL-3.0', url: 'https://github.com/liebharc/homr' },
+          { name: 'DeepScoresV2, OpenScore, GrandStaff, PDMX', what: t('about.trainingData'), licence: 'CC BY 4.0, CC0, MIT', url: 'https://github.com/liebharc/homr/blob/main/LICENSE_FAQ.md' },
+          { name: 'ONNX Runtime', what: t('about.recognition'), licence: 'MIT', url: 'https://onnxruntime.ai' },
+        ]
+      : []),
     { name: t('about.allOthers'), what: 'THIRD_PARTY_NOTICES.md', licence: 'MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0, Unicode', url: SOURCE_URL },
   ])
 </script>
