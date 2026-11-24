@@ -54,14 +54,18 @@
 		9C1A6E3A767B7BE0917F1092 /* cantor-app_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "cantor-app_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A11BBE77188038AD7D143C34 /* remote.rs */ = {isa = PBXFileReference; path = remote.rs; sourceTree = "<group>"; };
 		A557194360FFE4C9DBCEA63E /* cantor-app_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "cantor-app_iOS.entitlements"; sourceTree = "<group>"; };
+		B0E9C6C570AAA2F8090B4ED9 /* app.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = app.xcconfig; sourceTree = "<group>"; };
 		B18371A1F37EC83A768BB531 /* share.rs */ = {isa = PBXFileReference; path = share.rs; sourceTree = "<group>"; };
 		CF6331A9FD49E328B65A700E /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		DDB93FD6486BED063207C584 /* homr_recognizer.rs */ = {isa = PBXFileReference; path = homr_recognizer.rs; sourceTree = "<group>"; };
 		E0CB91FD271B2D5CD497AA88 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		E560804DB7EBD4ED9A86B190 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		E899C3B3D3173D3F4547B82B /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
 		EA39971724FBF6A09C7944B6 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		F3C4EF3728A452357C243852 /* convert.rs */ = {isa = PBXFileReference; path = convert.rs; sourceTree = "<group>"; };
 		F46510020A038D4147B8A1C2 /* Vision.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Vision.framework; path = System/Library/Frameworks/Vision.framework; sourceTree = SDKROOT; };
 		F52348C07A9677F29F8F7AC2 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		F6F639B2B4E7FBCFD18BEDBB /* apple_convert.rs */ = {isa = PBXFileReference; path = apple_convert.rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,12 +101,24 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		38BE4EE22AA7D2029F434D90 /* apple */ = {
+			isa = PBXGroup;
+			children = (
+				B0E9C6C570AAA2F8090B4ED9 /* app.xcconfig */,
+			);
+			name = apple;
+			path = .;
+			sourceTree = "<group>";
+		};
 		410854B6721254B9B7151E9C /* src */ = {
 			isa = PBXGroup;
 			children = (
+				F6F639B2B4E7FBCFD18BEDBB /* apple_convert.rs */,
 				4D68CACA82D717EBA3EA0A69 /* audio.rs */,
+				F3C4EF3728A452357C243852 /* convert.rs */,
 				58D6D51E1A9156AFF6C8BDE2 /* folder.rs */,
 				44B79F7BCFAE8E49B003D688 /* guard.rs */,
+				DDB93FD6486BED063207C584 /* homr_recognizer.rs */,
 				F52348C07A9677F29F8F7AC2 /* lib.rs */,
 				32708CEDD4B35779051957B2 /* m4a.rs */,
 				CF6331A9FD49E328B65A700E /* main.rs */,
@@ -174,6 +190,7 @@
 				7C4A9A8F07BDF3F814FFAEF4 /* ChoirBird.icon */,
 				3E8673E7F53042CD0C5E0DDC /* LaunchScreen.storyboard */,
 				70D0B66F917AF2DC5506425F /* PrivacyInfo.xcprivacy */,
+				38BE4EE22AA7D2029F434D90 /* apple */,
 				F3E40A6D37F2C4D25BFD63A8 /* cantor-app_iOS */,
 				81D3AB78FFFB9C0167EB3288 /* Externals */,
 				793423B2E1A266F46AB7A4A7 /* Sources */,
@@ -192,18 +209,18 @@
 			path = "cantor-app_iOS";
 			sourceTree = "<group>";
 		};
-		"TEMP_C7A0E6EC-390F-4C36-8948-F6CEEE806797" /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
-		"TEMP_CA016439-8906-4F42-8E99-A479AF7B16CB" /* x86_64 */ = {
+		"TEMP_7DCD0B1E-5F4C-4BF6-86A2-01A6A252CF6E" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_E2808728-D61D-4C8B-85A2-CA8C98DF220F" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -371,6 +388,7 @@
 		};
 		CD494AECC196727A19DDCF1F /* debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B0E9C6C570AAA2F8090B4ED9 /* app.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ARCHS = (
@@ -403,6 +421,7 @@
 		};
 		E73CE6815773EE71BFC82ED0 /* release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B0E9C6C570AAA2F8090B4ED9 /* app.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				ARCHS = (

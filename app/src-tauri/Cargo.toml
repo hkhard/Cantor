@@ -34,6 +34,7 @@ tauri-plugin-log = "2"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 cantor-homr = { path = "../../crates/homr", optional = true, default-features = false }
+libc = { version = "0.2", optional = true }
 # LIB-10: render PDF pages for on-device note recognition.
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGBitmapContext", "CGColorSpace", "CGContext", "CGImage", "CGDataProvider", "CGPDFDocument", "CGPDFPage"] }
 objc2-core-foundation = { version = "0.3", features = ["CFData", "CFCGTypes"] }
@@ -51,7 +52,7 @@ objc2-uniform-type-identifiers = { version = "0.3", features = ["UTType", "UTCor
 [features]
 # LIB-10: on-device note recognition (homr port, AGPL-only crate, 129 MB of
 # models in resources/homr). Off by default until the port is complete.
-homr = ["dep:cantor-homr"]
+homr = ["dep:cantor-homr", "dep:libc"]
 # Mac builds and tests: download a host ONNX Runtime (iOS links the
 # xcframework from ORT_IOS_XCFWK_PATH instead, see tools/ipad.sh).
 homr-host = ["homr", "cantor-homr/download"]

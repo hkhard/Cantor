@@ -1,0 +1,5 @@
+# LIB-10: ONNX Runtime for iOS (tools/omr/homr_port/fetch_ort_ios.sh). Set
+# here because Xcode's build phase does not pass the shell's environment on
+# to cargo. Only read by ort-sys, which only builds with the `homr` feature.
+[env]
+ORT_IOS_XCFWK_PATH = { value = "../../vendor/onnxruntime.xcframework", relative = true }

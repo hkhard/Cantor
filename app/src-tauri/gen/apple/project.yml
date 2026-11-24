@@ -28,6 +28,11 @@ targets:
   cantor-app_iOS:
     type: application
     platform: iOS
+    # LIB-10: builds with on-device note recognition link ONNX Runtime here
+    # (tools/ipad.sh with HOMR=1 writes homr.xcconfig; otherwise it is empty).
+    configFiles:
+      debug: app.xcconfig
+      release: app.xcconfig
     sources:
       - path: Sources
       - path: Assets.xcassets

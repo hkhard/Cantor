@@ -1020,7 +1020,14 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
     #[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
     {
         use tauri::{Emitter, Manager};
-        let models = app.path().resource_dir().ok()?.join("resources/homr");
+        // The iOS bundle puts resources under ChoirBird.app/assets.
+        let res = app.path().resource_dir().ok()?;
+        let models = [
+            res.join("resources/homr"),
+            res.join("assets/resources/homr"),
+        ]
+        .into_iter()
+        .find(|d| d.exists())?;
         let cache = app.path().app_cache_dir().ok()?.join("coreml");
         let h = app.clone();
         return Some(convert::Converter::start(
@@ -1045,6 +1052,7 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
                     };
                     apple_convert::notify(&t, &b);
                 }
+                selftest_log(&h, &ev);
                 let _ = h.emit("convert", ev);
             },
         ));
@@ -1054,6 +1062,45 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
         let _ = app;
         None
     }
+}
+
+/// LIB-10 device check: launched with CHOIRBIRD_CONVERT_SELFTEST=<score id>
+/// (only `xcrun devicectl ... launch --environment-variables` can set it),
+/// the app converts that score at start and logs every event with its time
+/// and the process's peak memory to Documents/convert-selftest.log.
+#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+fn selftest_log(app: &tauri::AppHandle, ev: &convert::JobEvent) {
+    use std::io::Write;
+    use std::sync::OnceLock;
+    static START: OnceLock<std::time::Instant> = OnceLock::new();
+    if std::env::var_os("CHOIRBIRD_CONVERT_SELFTEST").is_none() {
+        return;
+    }
+    let t = START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_secs_f32();
+    let peak = peak_memory_mb();
+    let user = app.state::<Paths>().user.clone();
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(user.join("convert-selftest.log"))
+    {
+        let _ = writeln!(f, "{t:.1}s peak {peak} MB {ev:?}");
+    }
+}
+
+/// Peak resident memory of this process in MB (ru_maxrss is bytes on Apple).
+#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+fn peak_memory_mb() -> u64 {
+    let mut u = std::mem::MaybeUninit::<libc::rusage>::zeroed();
+    // SAFETY: getrusage fills the struct; RUSAGE_SELF is always valid.
+    let u = unsafe {
+        libc::getrusage(libc::RUSAGE_SELF, u.as_mut_ptr());
+        u.assume_init()
+    };
+    u.ru_maxrss as u64 / (1024 * 1024)
 }
 
 /// LIB-10: read the notes of a PDF-only score on the device, in the
@@ -2502,6 +2549,23 @@ pub fn run() {
             app.manage(slot);
             app.manage(UiLang::default());
             app.manage(start_converter(app.handle().clone()));
+            #[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+            if let Ok(id) = std::env::var("CHOIRBIRD_CONVERT_SELFTEST") {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    let r = convert_score(
+                        id,
+                        h.state::<Paths>(),
+                        h.state::<Option<convert::Converter>>(),
+                    );
+                    let ev = convert::JobEvent::Failed {
+                        id: "selftest".into(),
+                        title: "start".into(),
+                        error: format!("{r:?}"),
+                    };
+                    selftest_log(&h, &ev);
+                });
+            }
             Ok(())
         })
         .register_uri_scheme_protocol("cantor", |ctx, req| {
