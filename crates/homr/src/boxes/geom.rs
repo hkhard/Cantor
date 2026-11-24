@@ -1244,7 +1244,7 @@ pub fn solve(mut a: Vec<f64>, mut b: Vec<f64>, n: usize) -> Option<Vec<f64>> {
                 piv = i;
             }
         }
-        if a[piv * n + k].abs() < f64::EPSILON {
+        if a[piv * n + k].abs() < f64::EPSILON * 100.0 {
             return None;
         }
         if piv != k {
