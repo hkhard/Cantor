@@ -153,6 +153,7 @@ dependencies = [
 name = "cantor-homr"
 version = "0.1.0"
 dependencies = [
+ "cantor-score",
  "half",
  "image",
  "ndarray 0.16.1",
