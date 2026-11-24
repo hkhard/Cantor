@@ -1,0 +1,9 @@
+# Every change needs the owner's review. CI, the runner guard and licence
+# files are listed on their own so the rule stays explicit if others are
+# added as owners later.
+*                        @hkhard
+/.github/                @hkhard
+/tools/ci/               @hkhard
+/tools/licenses.py       @hkhard
+/LICENSE*                @hkhard
+/CONTRIBUTING.md         @hkhard
