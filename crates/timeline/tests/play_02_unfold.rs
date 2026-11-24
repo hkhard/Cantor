@@ -249,21 +249,18 @@ fn play_02_second_repeat_without_forward_sign_returns_to_the_last_forward_sign()
 }
 
 #[test]
-fn play_02_dal_segno_whose_to_coda_is_in_a_skipped_volta_is_not_taken() {
-    // Only You: D.S. al Coda at bar 24 (here), segno at 8, "To Coda" only in
-    // the 1,3,5 volta (bar 11), coda at 25. After a jump only the final
-    // volta plays, so the To Coda can't be reached: taking the D.S. would
-    // replay the verse without ever reaching the coda. MuseScore doesn't
-    // take it either and plays on (the arranger wrote the return out).
-    let mut tail = vec![""; 1]; // bar 23
+fn play_02_to_coda_before_a_volta_group_jumps_after_the_dal_segno() {
+    // Only You, as MuseScore plays it (scores/only-you-vince-clarke.mid):
+    // D.S. al Coda at bar 24 (here), segno at 8, "To Coda" printed before the
+    // 1,3,5 volta (its <sound tocoda> sits in the volta's first bar, 11), and
+    // the coda sign written at bar 27 although the coda starts right after
+    // the D.S. (bar 25, "no more!"). After the D.S.: 8 9 10, then the coda.
     let ds = sound(r#"dalsegno="segno""#);
     let coda = sound(r#"coda="codab""#);
-    tail.push(&ds); // bar 24
-    tail.push(&coda); // bar 25
-    tail.push(""); // bar 26
+    let tail = ["", &ds, "", "", &coda, ""]; // bars 23..28
     let order = only_you(&tail);
     let after_volta4: Vec<usize> = order.iter().copied().skip_while(|&b| b != 21).collect();
-    assert_eq!(after_volta4, [21, 22, 23, 24, 25, 26]);
+    assert_eq!(after_volta4, [21, 22, 23, 24, 8, 9, 10, 25, 26, 27, 28]);
 }
 
 #[test]

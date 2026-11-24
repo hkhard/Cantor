@@ -287,7 +287,12 @@ tests (NFR-11: 100% of P0 criteria automated).
 - [x] S6 OMR: `cantor-omr` turns PDF/.4sc/.4ss into MusicXML + MIDI (Audiveris + scan cleanup); 10 of 12 sample scores converted
 - [x] MXL container, ties, tempo, measure lengths, MIDI programs in `cantor-score`; timemap and SMF writer in `cantor-timeline`
 - [x] Repeat/volta/D.C./D.S./Coda/Fine unfolding (WP-1.5, 18 PLAY-02 tests), MusicXML writer, page-by-page OMR fallback, Swedish OCR for lyrics: 11 of 12 sample scores produce MIDI (Supa klockan still fails)
-  - Fixed 2026-11-24 (*Only You*, arr. HKH): a second backward repeat in the same section (`|: 8-10 |1,3,5. 11 :| |2,4,6. 12-19 |1,2,3. 20 :| |4. 21`) went back to bar 13 and looped there; it now returns to the forward sign at bar 8. A D.S. al Coda whose only To Coda sits in a non-final volta is not taken (it could never reach the coda). The order 1-6 3-5 7-11 8-10 12-20 8-11 8-10 12-19 21-59 (80 bars) matches MuseScore 4.6.5's MIDI export bar for bar, and the iPad simulator app gives the same order (`CHOIRBIRD_PLAYORDER_SELFTEST`). Not checked: hearing it on a device, and whether the arranger's printed volta labels ("3,5", "7") mean a different count than the file's numbers ("1, 2, 3", "4"): ChoirBird, like MuseScore, plays the file's numbers.
+  - Fixed 2026-11-24 (*Only You*, arr. HKH), checked against MuseScore's own MIDI export (`scores/only-you-vince-clarke.mid`):
+    - A second backward repeat in the same section (`|: 8-10 |1,3,5. 11 :| |2,4,6. 12-19 |1,2,3. 20 :| |4. 21`) went back to bar 13 and looped there. It now returns to the forward sign at bar 8.
+    - "To Coda" in the first bar of a volta group (where MuseScore writes it when printed above the volta) is taken after the D.S., before the voltas.
+    - A To Coda jumps to the bar after the D.S. when the coda sign is written later than that.
+    - Result: 1-6 3-5 7-11 8-10 12-20 8-11 8-10 12-19 21-37 8-10 38-59, 83 bars. Every bar has the same notes as MuseScore's MIDI except notes tied over from the bar before, which MIDI doesn't sound again. Before the fix: 116 bars, 85 of them differed.
+    - Not checked: listening on a device.
 - [x] Lyrics (VOX-01): `<lyric>` verse/syllabic/extend in the model and writer; `cantor-lyrics::extract` gives timed phrases per part/voice/verse (melismas, ties, repeats sing the next verse); runs on the OCR'd sample scores
 - [x] SoulX-Singer spike (`docs/spikes/soulx-singer.md`): fits English score mode; no Swedish; CUDA server. `cantor-vocal::soulx` serialises phrases to its target metadata (contract tests)
 - [x] Engine choice (`docs/spikes/singing-engines.md`): SoulX-Singer by ear; measured RTF 1.1 on M2 at 8 steps without CFG (13 cents); DiffSinger kept as fallback; NNSVS dropped

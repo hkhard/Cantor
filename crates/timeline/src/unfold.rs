@@ -57,39 +57,24 @@ fn find_target(
     }
 }
 
-/// D.S. al Coda from `ds` back to `segno`: true when the score has a coda
-/// but every "To Coda" between the segno and the D.S. sits in a volta that
-/// isn't the final one, so it can't be reached after the jump (only the final
-/// volta plays then). Taking such a D.S. would replay the section and never
-/// reach the coda; MuseScore doesn't take it.
-fn coda_unreachable(navs: &[Navigation], segno: usize, ds: usize) -> bool {
-    if !navs.iter().any(|n| n.coda.is_some()) {
-        return false;
-    }
-    let to_codas: Vec<usize> = (segno..=ds.min(navs.len() - 1))
-        .filter(|&k| navs[k].tocoda.is_some())
-        .collect();
-    !to_codas.is_empty()
-        && to_codas.iter().all(|&k| {
-            let nums = &navs[k].ending;
-            if nums.is_empty() {
-                return false;
-            }
-            // The final volta of the group k belongs to.
-            let start = (0..=k)
-                .rev()
-                .take_while(|&j| !navs[j].ending.is_empty())
-                .last()
-                .unwrap_or(k);
-            let end = (k..navs.len())
-                .take_while(|&j| !navs[j].ending.is_empty())
-                .last()
-                .unwrap_or(k);
-            let max = (start..=end)
-                .flat_map(|j| navs[j].ending.iter().copied())
-                .max();
-            nums.iter().max().copied() != max
-        })
+/// The coda to jump to from a "To Coda" in the volta group starting at `at`.
+fn volta_group_to_coda(navs: &[Navigation], at: usize) -> Option<usize> {
+    let end = (at..navs.len())
+        .take_while(|&k| !navs[k].ending.is_empty())
+        .last()?;
+    let label = (at..=end).find_map(|k| navs[k].tocoda.clone())?;
+    coda_target(navs, &label, at)
+}
+
+/// Where a "To Coda" jumps: the coda sign, or, when a D.S. or D.C. sits
+/// between the jump and the coda sign, the bar after that D.S./D.C. (the
+/// coda music follows the D.S. bar; MuseScore plays it from there).
+fn coda_target(navs: &[Navigation], label: &str, from: usize) -> Option<usize> {
+    let sign = find_target(navs, label, |n| &n.coda).filter(|&t| t > from)?;
+    let jump = (from..sign)
+        .rev()
+        .find(|&k| navs[k].dalsegno.is_some() || navs[k].dacapo);
+    Some(jump.map_or(sign, |k| k + 1))
 }
 
 /// Whether a backward repeat after measure `from` (and before any forward
@@ -140,6 +125,15 @@ pub fn unfold(score: &Score) -> Vec<usize> {
             i += 1;
             continue;
         }
+        // After a jump, "To Coda" written in the first bar of a volta group
+        // (MuseScore puts it there when it is printed above the volta's
+        // start) means: jump before the voltas.
+        if after_jump && !nav.ending.is_empty() && (i == 0 || navs[i - 1].ending.is_empty()) {
+            if let Some(t) = volta_group_to_coda(&navs, i) {
+                i = t;
+                continue;
+            }
+        }
         // After a jump, play only the last volta (the "final ending").
         if after_jump && !nav.ending.is_empty() {
             let last_group_end = (i..n)
@@ -162,7 +156,7 @@ pub fn unfold(score: &Score) -> Vec<usize> {
         }
         if after_jump {
             if let Some(label) = &nav.tocoda {
-                if let Some(t) = find_target(&navs, label, |n| &n.coda).filter(|&t| t > i) {
+                if let Some(t) = coda_target(&navs, label, i) {
                     i = t;
                     continue;
                 }
@@ -200,9 +194,7 @@ pub fn unfold(score: &Score) -> Vec<usize> {
                 continue;
             }
             if let Some(label) = &nav.dalsegno {
-                if let Some(t) = find_target(&navs, label, |n| &n.segno)
-                    .filter(|&t| !coda_unreachable(&navs, t, i))
-                {
+                if let Some(t) = find_target(&navs, label, |n| &n.segno) {
                     jumped_from.push(i);
                     after_jump = true;
                     i = t;
