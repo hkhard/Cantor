@@ -47,6 +47,17 @@ exports.setup = async function setup(page, dir) {
         { file: '1:Mine', title: 'Min egen', playable: false, pdf: true, user: true },
         { file: '1:Scanned', title: 'Skannad', playable: true, pdf: false, user: true },
       ]
+      // Marketing screenshots: a library of public-domain choir pieces only.
+      if (window.__marketing) {
+        scores.splice(0, scores.length,
+          { file: '1:Lacrymosa', title: 'Lacrymosa', playable: true, pdf: true, user: true },
+          { file: '1:Ave', title: 'Ave verum corpus', playable: true, pdf: true, user: true },
+          { file: '1:Hallelujah', title: 'Hallelujah Chorus', playable: true, pdf: true, user: true },
+          { file: '1:Sicut', title: 'Sicut cervus', playable: true, pdf: true, user: true },
+          { file: '1:Locus', title: 'Locus iste', playable: true, pdf: true, user: true },
+          { file: '1:Cantique', title: 'Cantique de Jean Racine', playable: false, pdf: true, user: true },
+        )
+      }
       // Test hook: add scores (e.g. a MusicXML and a PDF that arrived apart).
       window.__addScores = (list) => scores.push(...list.filter((n) => !scores.some((x) => x.file === n.file)))
       window.__listeners = {}
@@ -218,6 +229,15 @@ exports.setup = async function setup(page, dir) {
               ? store.track
                 ? [{ label: 'Backing track', role: 'Track', program: 0, instrument: 'M4A', pan: 0 }]
                 : []
+              : window.__marketing
+              ? // Marketing screenshots (shots.js): Lacrymosa as it really is.
+                [
+                  { label: 'Soprano', role: 'Soprano', program: 52, instrument: 'Choir Aahs', pan: -0.3 },
+                  { label: 'Alto', role: 'Alto', program: 52, instrument: 'Choir Aahs', pan: -0.1 },
+                  { label: 'Tenor', role: 'Tenor', program: 52, instrument: 'Choir Aahs', pan: 0.1 },
+                  { label: 'Bass', role: 'Bass', program: 52, instrument: 'Choir Aahs', pan: 0.3 },
+                  { label: 'Piano', role: 'Piano', program: 0, instrument: 'Acoustic Grand Piano', pan: 0 },
+                ]
               : [
                   { label: 'Tenor 1', role: 'Tenor', program: 56, instrument: 'Trumpet', pan: -0.4 },
                   { label: 'Tenor 2', role: 'Tenor', program: 60, instrument: 'French Horn', pan: -0.1 },

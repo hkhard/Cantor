@@ -6,7 +6,8 @@
 #               both languages, control names, keyboard, 200% text, reduced motion
 # Uses the public fixture fixtures/scores/mozart-lacrymosa (no private scores).
 #   skins.js    VIEW-06: each skin on library, PDF, notation, mixer; page contrast >= 7:1
-#   tools/ui_harness/run.sh [harness|a11y|skins|all]   screenshots in $OUT/shots
+#   shots.js    marketing screenshots for nikielhard.se/en/choirbird (public-domain titles only)
+#   tools/ui_harness/run.sh [harness|a11y|skins|all|shots]   screenshots in $OUT/shots
 set -euo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -14,7 +15,7 @@ OUT="${OUT:-${TMPDIR:-/tmp}/cantor-ui}"
 FIX="$ROOT/fixtures/scores/mozart-lacrymosa"
 WHAT="${1:-all}"
 mkdir -p "$OUT/shots"
-cp "$ROOT"/tools/ui_harness/{harness,mock,a11y,skins}.js "$OUT/"
+cp "$ROOT"/tools/ui_harness/{harness,mock,a11y,skins,shots}.js "$OUT/"
 unzip -p "$FIX/mozart-lacrymosa-from-requiem-satb-with-piano.mxl" score.xml >"$OUT/score.musicxml"
 cp "$FIX/mozart-lacrymosa-from-requiem-satb-with-piano.pdf" "$OUT/score.pdf"
 # Measure map: `cargo run -q -p cantor-score --example layout_boxes -- <mxl>`.
@@ -39,4 +40,6 @@ status=0
 if [ "$WHAT" = all ] || [ "$WHAT" = harness ]; then node "$OUT/harness.js" || status=1; fi
 if [ "$WHAT" = all ] || [ "$WHAT" = a11y ]; then node "$OUT/a11y.js" || status=1; fi
 if [ "$WHAT" = all ] || [ "$WHAT" = skins ]; then node "$OUT/skins.js" || status=1; fi
+# Marketing screenshots for the web page (not part of "all").
+if [ "$WHAT" = shots ]; then node "$OUT/shots.js" || status=1; fi
 exit $status
