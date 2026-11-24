@@ -6,11 +6,17 @@ Run with homr's Python (0.7.1):
 
 Writes into outdir:
   preprocessed.png         the autocropped, resized, CLAHE image fed to segnet
+  pred_raw_classes.png     segnet's merged class map (0..5) before any filter,
+                           ONNX Runtime CPU provider with the fp16 model (what
+                           the Rust port runs); segnet_raw.json: agreement of
+                           the CoreML provider's map (homr's default on a Mac)
   pred_<name>.png          the five segmentation masks (0/255), after filtering
   staffs.json              staffs: grid points (x, 5 line ys, angle), grandstaff flags
   staff_<i>.png            the dewarped staff image given to the transformer
   tokens_<i>.json          decoded symbols per staff (rhythm, pitch, lift, articulation)
   page.musicxml            homr's final MusicXML
+
+  python capture_stages.py page.png outdir --raw-only   only the first two
 """
 
 import json
@@ -27,12 +33,14 @@ from homr.main import ProcessingConfig, detect_staffs_in_image, get_predictions
 from homr.music_xml_generator import XmlGeneratorArguments, generate_xml
 from homr.noise_filtering import filter_predictions
 from homr.resize import resize_image
+from homr.segmentation import inference_segnet
 from homr.staff_detection import make_lines_stronger
 from homr.system_repair import repair_systems
 from homr.transformer.configs import Config
 from homr import staff_parsing
 
 page, out = sys.argv[1], sys.argv[2]
+raw_only = "--raw-only" in sys.argv
 os.makedirs(out, exist_ok=True)
 
 # Stage 1: preprocessing and segmentation masks.
@@ -41,6 +49,45 @@ image, _ = autocrop_with_offset(image)
 image = resize_image(image)
 pre = color_adjust.apply_clahe(image)
 cv2.imwrite(os.path.join(out, "preprocessed.png"), pre)
+
+
+def merged_classes() -> np.ndarray:
+    """inference_segnet.inference, but return the merged class map itself."""
+    staff, symbols, stems_rests, notehead, clefs_keys = inference_segnet.inference(
+        pre, use_gpu_inference=True, batch_size=8, step_size=320, win_size=320
+    )
+    classes = np.zeros(pre.shape, np.uint8)
+    for value, mask in [(1, stems_rests), (2, notehead), (3, clefs_keys), (4, staff), (5, symbols)]:
+        classes[mask > 0] = value
+    return classes
+
+
+# Raw class map on the CPU provider (fp16 model, as the Rust port).
+import onnxruntime as ort  # noqa: E402
+
+cpu = inference_segnet.Segnet.__new__(inference_segnet.Segnet)
+cpu.model = ort.InferenceSession(inference_segnet.segnet_path_onnx_fp16, providers=["CPUExecutionProvider"])
+cpu.fp16 = True
+cpu.use_gpu = False
+cpu.io_binding = cpu.model.io_binding()
+cpu.device_id = 0
+inference_segnet._segnet_inference = cpu
+raw_cpu = merged_classes()
+cv2.imwrite(os.path.join(out, "pred_raw_classes.png"), raw_cpu)
+# homr's default on a Mac: CoreML (the masks below come from this one).
+inference_segnet._segnet_inference = None
+raw_coreml = merged_classes()
+json.dump(
+    {
+        "provider": "CPUExecutionProvider, fp16 model, batch 8, step 320",
+        "coreml_pixels_differing": int((raw_cpu != raw_coreml).sum()),
+        "pixels": int(raw_cpu.size),
+    },
+    open(os.path.join(out, "segnet_raw.json"), "w"),
+    indent=1,
+)
+if raw_only:
+    sys.exit(0)
 pred = get_predictions(image, pre, page, False, True)
 pred = filter_predictions(pred, Debug(pred.original, page, False))
 pred.staff = make_lines_stronger(pred.staff, (1, 2))

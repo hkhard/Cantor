@@ -1,0 +1,5 @@
+{
+ "provider": "CPUExecutionProvider, fp16 model, batch 8, step 320",
+ "coreml_pixels_differing": 98,
+ "pixels": 5205120
+}
