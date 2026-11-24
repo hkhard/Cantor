@@ -1,5 +1,7 @@
 //! Dev aid: sounding pitches of each written measure (all parts), one line
-//! per measure, to match against another program's MIDI.
+//! per measure, to match against another program's MIDI export. Notes that
+//! only continue a tie are left out (MIDI doesn't strike them again).
+//!   cargo run -q -p cantor-timeline --example bar_pitches -- score.mxl
 fn main() {
     let path = std::env::args().nth(1).expect("score file");
     let score = cantor_score::parse_score_file(&std::fs::read(path).unwrap()).unwrap();
@@ -16,6 +18,7 @@ fn main() {
                 v.extend(
                     m.events
                         .iter()
+                        .filter(|e| !e.tie_stop)
                         .filter_map(|e| e.kind.midi())
                         .map(|x| x + m.transpose),
                 );

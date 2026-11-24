@@ -110,32 +110,38 @@ pub fn unfold(score: &Score) -> Vec<usize> {
     let mut after_jump = false;
     let mut jumped_from: Vec<usize> = Vec::new();
     let mut arrived_by_repeat = false;
+    // The furthest bar reached before the last D.C./D.S. Repeats and voltas
+    // up to it are not taken again after the jump; music past it (a coda with
+    // its own repeat) plays its repeats as written.
+    let mut jump_horizon = 0usize;
 
     while i < n && order.len() < limit {
         let nav = &navs[i];
+        // After a jump, repeats count again once past the jump point.
+        let replay = after_jump && i <= jump_horizon;
 
-        if nav.repeat_start && !arrived_by_repeat && !after_jump {
+        if nav.repeat_start && !arrived_by_repeat && !replay {
             section_start = i;
             pass = 1;
         }
         arrived_by_repeat = false;
 
         // Volta not for this pass: skip without playing.
-        if !nav.ending.is_empty() && !nav.ending.contains(&pass) && !after_jump {
+        if !nav.ending.is_empty() && !nav.ending.contains(&pass) && !replay {
             i += 1;
             continue;
         }
         // After a jump, "To Coda" written in the first bar of a volta group
         // (MuseScore puts it there when it is printed above the volta's
         // start) means: jump before the voltas.
-        if after_jump && !nav.ending.is_empty() && (i == 0 || navs[i - 1].ending.is_empty()) {
+        if replay && !nav.ending.is_empty() && (i == 0 || navs[i - 1].ending.is_empty()) {
             if let Some(t) = volta_group_to_coda(&navs, i) {
                 i = t;
                 continue;
             }
         }
         // After a jump, play only the last volta (the "final ending").
-        if after_jump && !nav.ending.is_empty() {
+        if replay && !nav.ending.is_empty() {
             let last_group_end = (i..n)
                 .take_while(|&k| !navs[k].ending.is_empty())
                 .last()
@@ -163,7 +169,7 @@ pub fn unfold(score: &Score) -> Vec<usize> {
             }
         }
 
-        if let Some(times) = nav.repeat_end.filter(|_| !after_jump) {
+        if let Some(times) = nav.repeat_end.filter(|_| !replay) {
             let implied = nav.ending.iter().max().map_or(0, |m| m + 1);
             let times = times.max(implied).min(64);
             if pass < times {
@@ -190,6 +196,8 @@ pub fn unfold(score: &Score) -> Vec<usize> {
             if nav.dacapo {
                 jumped_from.push(i);
                 after_jump = true;
+                jump_horizon = jump_horizon.max(i);
+                pass = 1;
                 i = 0;
                 continue;
             }
@@ -197,6 +205,8 @@ pub fn unfold(score: &Score) -> Vec<usize> {
                 if let Some(t) = find_target(&navs, label, |n| &n.segno) {
                     jumped_from.push(i);
                     after_jump = true;
+                    jump_horizon = jump_horizon.max(i);
+                    pass = 1;
                     i = t;
                     continue;
                 }

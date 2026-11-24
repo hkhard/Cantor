@@ -277,3 +277,26 @@ fn play_02_dal_segno_al_coda_with_reachable_to_coda_is_still_taken() {
         [1, 2, 3, 4, 2, 3, 5]
     );
 }
+
+#[test]
+fn play_02_repeat_inside_the_coda_is_played() {
+    // The Anchor Song (MuseScore 4 export): segno 2, To Coda 3, D.S. 4, coda 5,
+    // then |: 6 |1. 7 :| |2. 8 (Fine). Repeats before the D.S. are not taken
+    // again after it, but a repeat inside the coda is new music: MuseScore
+    // plays it. Was: 6 7 8 straight through.
+    let e1 = format!("{}{}", ending_start("1"), ending_stop("1"));
+    let e2 = format!("{}{}", ending_start("2"), ending_discontinue("2"));
+    assert_eq!(
+        score(&[
+            "",
+            &sound(r#"segno="s""#),
+            &sound(r#"tocoda="c""#),
+            &sound(r#"dalsegno="s""#),
+            &sound(r#"coda="c""#),
+            FWD,
+            &e1,
+            &e2,
+        ]),
+        [1, 2, 3, 4, 2, 3, 5, 6, 7, 6, 8]
+    );
+}

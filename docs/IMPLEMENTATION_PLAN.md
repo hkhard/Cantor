@@ -292,6 +292,8 @@ tests (NFR-11: 100% of P0 criteria automated).
     - "To Coda" in the first bar of a volta group (where MuseScore writes it when printed above the volta) is taken after the D.S., before the voltas.
     - A To Coda jumps to the bar after the D.S. when the coda sign is written later than that.
     - Result: 1-6 3-5 7-11 8-10 12-20 8-11 8-10 12-19 21-37 8-10 38-59, 83 bars. Every bar has the same notes as MuseScore's MIDI except notes tied over from the bar before, which MIDI doesn't sound again. Before the fix: 116 bars, 85 of them differed.
+    - Same check on the other scores with repeats (MuseScore 4.6.5 MIDI exports): *Que* matches every bar (MuseScore leaves out the final empty bar). *The Anchor Song* showed a third fault: after the D.S., the repeat inside the coda (`|: 43-48 |1. 49-50 :| |2. 51`) wasn't played. Repeats are now only skipped for bars already played before the jump. It matches the `.mscz` export bar for bar (MuseScore leaves out the last two empty bars). Lacrymosa, Christmas Day, Do You Hear, Island: unchanged.
+    - Tool: `tools/compare_midi_order.py` with the `bar_pitches` and `unfold` examples of `cantor-timeline`.
     - Not checked: listening on a device.
 - [x] Lyrics (VOX-01): `<lyric>` verse/syllabic/extend in the model and writer; `cantor-lyrics::extract` gives timed phrases per part/voice/verse (melismas, ties, repeats sing the next verse); runs on the OCR'd sample scores
 - [x] SoulX-Singer spike (`docs/spikes/soulx-singer.md`): fits English score mode; no Swedish; CUDA server. `cantor-vocal::soulx` serialises phrases to its target metadata (contract tests)
