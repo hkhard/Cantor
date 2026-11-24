@@ -509,7 +509,10 @@ tests (NFR-11: 100% of P0 criteria automated).
         - Done, app side: `app/src-tauri/src/convert.rs` is a one-thread background queue. It writes `<stem>.musicxml` atomically beside the PDF and emits `convert` events (Progress/Done/Failed). `apple_convert.rs` renders PDF pages to 300 DPI grey PNGs with CoreGraphics and posts a local notification on iOS. Tests: `lib_10_*` (5) pass on the Mac.
         - Done, UI: "Read the notes" on a PDF-only score, progress "page n of m", a notice with Open when done, and failures in plain words. Harness step `lib_10 …` passes against mocked events.
         - Behind the `homr` cargo feature, which is off by default. Without it the button is hidden and `convert_status` reports no recognition.
-        - Not done: the homr stages in `crates/homr` (swarm workers), bundling the 129 MB of models and the ONNX Runtime xcframework, and a device run. The notification text and the reload of an open piece are not verified on a device.
+        - Done, recognition: all 7 homr stages are ported to Rust in `crates/homr` and match homr 0.7.1 stage by stage on Lacrymosa p1. `lib_10_homr_page_to_musicxml_matches_python` takes the page image to the same MusicXML as homr (apart from homr's `imgpos` comments) in 9.3 s on the Mac CPU.
+        - Done, on the Mac with the real pieces: `lib_10_real_lacrymosa_pdf_converts_on_the_mac` (ignored, needs the models). CoreGraphics renders the 5-page public PDF, homr reads it through the queue, and the result is 30 measures and 5 parts (4 voices and piano) in 97 s.
+        - Done, packaging: `HOMR=1 tools/ipad.sh device` bundles the models (123 MB), links ONNX Runtime 1.31.1 for iOS (SHA-512 pinned) and writes `gen/apple/homr.xcconfig`. The IPA is 166 MB against 45 MB without recognition. Default builds strip both.
+        - Not verified: a conversion on the iPad or iPhone (the IPA is installed on both, but the devices were locked), speed and peak memory there, the notification text, the reload of an open piece, any page other than Lacrymosa, and photos or scans.
 
   - **Licence and monetisation (decision 2026-11-23):**
     - The Cantor client app becomes AGPL-3.0.
