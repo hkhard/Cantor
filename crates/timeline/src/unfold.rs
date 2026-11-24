@@ -57,6 +57,56 @@ fn find_target(
     }
 }
 
+/// D.S. al Coda from `ds` back to `segno`: true when the score has a coda
+/// but every "To Coda" between the segno and the D.S. sits in a volta that
+/// isn't the final one, so it can't be reached after the jump (only the final
+/// volta plays then). Taking such a D.S. would replay the section and never
+/// reach the coda; MuseScore doesn't take it.
+fn coda_unreachable(navs: &[Navigation], segno: usize, ds: usize) -> bool {
+    if !navs.iter().any(|n| n.coda.is_some()) {
+        return false;
+    }
+    let to_codas: Vec<usize> = (segno..=ds.min(navs.len() - 1))
+        .filter(|&k| navs[k].tocoda.is_some())
+        .collect();
+    !to_codas.is_empty()
+        && to_codas.iter().all(|&k| {
+            let nums = &navs[k].ending;
+            if nums.is_empty() {
+                return false;
+            }
+            // The final volta of the group k belongs to.
+            let start = (0..=k)
+                .rev()
+                .take_while(|&j| !navs[j].ending.is_empty())
+                .last()
+                .unwrap_or(k);
+            let end = (k..navs.len())
+                .take_while(|&j| !navs[j].ending.is_empty())
+                .last()
+                .unwrap_or(k);
+            let max = (start..=end)
+                .flat_map(|j| navs[j].ending.iter().copied())
+                .max();
+            nums.iter().max().copied() != max
+        })
+}
+
+/// Whether a backward repeat after measure `from` (and before any forward
+/// repeat sign or jump) closes a section that has no start of its own, so it
+/// goes back to the same forward sign as the voltas just left.
+fn returns_to_same_start(navs: &[Navigation], from: usize) -> bool {
+    for n in &navs[from.min(navs.len())..] {
+        if n.repeat_start || n.dacapo || n.dalsegno.is_some() {
+            return false;
+        }
+        if n.repeat_end.is_some() {
+            return true;
+        }
+    }
+    false
+}
+
 /// Written measure indices in playback order.
 pub fn unfold(score: &Score) -> Vec<usize> {
     let n = score
@@ -131,9 +181,15 @@ pub fn unfold(score: &Score) -> Vec<usize> {
             pass = 1;
             section_start = i + 1;
         } else if !nav.ending.is_empty() && navs.get(i + 1).is_none_or(|nx| nx.ending.is_empty()) {
-            // Leaving the last volta of a group.
-            pass = 1;
-            section_start = i + 1;
+            // Leaving the last volta of a group. The section only ends here if
+            // no later backward repeat (before the next forward sign) still
+            // belongs to it: |: A |1. B :| |2. C D |1,2. E :| |3. F plays
+            // A B A C D E A ... and E goes back to A (MuseScore, common
+            // practice). The pass count carries on for that later repeat.
+            if !returns_to_same_start(&navs, i + 1) {
+                pass = 1;
+                section_start = i + 1;
+            }
         }
 
         if !jumped_from.contains(&i) {
@@ -144,7 +200,9 @@ pub fn unfold(score: &Score) -> Vec<usize> {
                 continue;
             }
             if let Some(label) = &nav.dalsegno {
-                if let Some(t) = find_target(&navs, label, |n| &n.segno) {
+                if let Some(t) = find_target(&navs, label, |n| &n.segno)
+                    .filter(|&t| !coda_unreachable(&navs, t, i))
+                {
                     jumped_from.push(i);
                     after_jump = true;
                     i = t;

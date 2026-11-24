@@ -189,3 +189,94 @@ fn play_02_unfolded_duration_equals_sum_of_visited_measures() {
     assert_eq!(measures, [0, 1, 0, 1, 2]);
     assert_eq!(tm.measure_order, [0, 1, 0, 1, 2]);
 }
+
+/// "Only You" (Vince Clarke, arr. HKH), bars 8-22, as exported by MuseScore:
+/// two backward repeats share one forward repeat at bar 8. Voltas 1,3,5 /
+/// 2,4,6 end the first; 1,2,3 (printed "3,5") / 4 (printed "7") the second.
+/// Bars 1-7 are a plain |: 3 4 5 |1. 6 :|2. 7 intro.
+fn only_you(tail: &[&str]) -> Vec<usize> {
+    let mut bars: Vec<String> = vec![String::new(), String::new()];
+    let e1 = format!("{}{}", ending_start("1"), ending_stop("1"));
+    let e2 = format!("{}{}", ending_start("2"), ending_discontinue("2"));
+    bars.extend([FWD.to_string(), String::new(), String::new(), e1, e2]);
+    // bar 8: |: segno
+    bars.push(format!("{FWD}{}", sound(r#"segno="segno""#)));
+    bars.extend([String::new(), String::new()]);
+    // bar 11: 1,3,5 To Coda :| x6
+    bars.push(format!(
+        r#"{}{}<barline location="right"><ending number="1, 3, 5" type="stop"/><repeat direction="backward" times="6"/></barline>"#,
+        ending_start("1, 3, 5"),
+        sound(r#"tocoda="codab""#)
+    ));
+    // bar 12: 2,4,6 (no repeat sign of its own), bars 13-19 plain
+    bars.push(format!(
+        "{}{}",
+        ending_start("2, 4, 6"),
+        ending_discontinue("2, 4, 6")
+    ));
+    bars.extend((13..=19).map(|_| String::new()));
+    // bar 20: 1,2,3 :| x3
+    bars.push(format!(
+        r#"{}<barline location="right"><ending number="1, 2, 3" type="stop"/><repeat direction="backward" times="3"/></barline>"#,
+        ending_start("1, 2, 3")
+    ));
+    // bars 21-22: volta 4
+    bars.push(ending_start("4"));
+    bars.push(ending_discontinue("4"));
+    bars.extend(tail.iter().map(|s| s.to_string()));
+    let refs: Vec<&str> = bars.iter().map(String::as_str).collect();
+    score(&refs)
+}
+
+#[test]
+fn play_02_second_repeat_without_forward_sign_returns_to_the_last_forward_sign() {
+    // A backward repeat goes back to the last forward repeat sign, even when
+    // another backward repeat came after it (MuseScore and common practice).
+    // Was: bar 20 jumped back to bar 13 (after bar 12) and looped there.
+    let order = only_you(&[""]);
+    let s = |v: std::ops::RangeInclusive<usize>| v.collect::<Vec<_>>();
+    let mut want = vec![];
+    want.extend(s(1..=6));
+    want.extend(s(3..=5));
+    want.extend(s(7..=11)); // pass 1: verse, volta 1,3,5
+    want.extend(s(8..=10));
+    want.extend(s(12..=20)); // pass 2: volta 2,4,6, on to the 1,2,3 volta
+    want.extend(s(8..=11)); // pass 3 (back to bar 8)
+    want.extend(s(8..=10));
+    want.extend(s(12..=19)); // pass 4: volta 2,4,6, skip volta 1,2,3
+    want.extend(s(21..=23)); // volta 4, then on
+    assert_eq!(order, want);
+}
+
+#[test]
+fn play_02_dal_segno_whose_to_coda_is_in_a_skipped_volta_is_not_taken() {
+    // Only You: D.S. al Coda at bar 24 (here), segno at 8, "To Coda" only in
+    // the 1,3,5 volta (bar 11), coda at 25. After a jump only the final
+    // volta plays, so the To Coda can't be reached: taking the D.S. would
+    // replay the verse without ever reaching the coda. MuseScore doesn't
+    // take it either and plays on (the arranger wrote the return out).
+    let mut tail = vec![""; 1]; // bar 23
+    let ds = sound(r#"dalsegno="segno""#);
+    let coda = sound(r#"coda="codab""#);
+    tail.push(&ds); // bar 24
+    tail.push(&coda); // bar 25
+    tail.push(""); // bar 26
+    let order = only_you(&tail);
+    let after_volta4: Vec<usize> = order.iter().copied().skip_while(|&b| b != 21).collect();
+    assert_eq!(after_volta4, [21, 22, 23, 24, 25, 26]);
+}
+
+#[test]
+fn play_02_dal_segno_al_coda_with_reachable_to_coda_is_still_taken() {
+    // The usual case is unchanged: To Coda outside any volta.
+    assert_eq!(
+        score(&[
+            "",
+            &sound(r#"segno="s1""#),
+            &sound(r#"tocoda="c1""#),
+            &sound(r#"dalsegno="s1""#),
+            &sound(r#"coda="c1""#),
+        ]),
+        [1, 2, 3, 4, 2, 3, 5]
+    );
+}

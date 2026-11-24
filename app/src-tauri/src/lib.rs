@@ -1076,6 +1076,27 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
     }
 }
 
+/// Written bars in playback order as 1-based runs, e.g. "1-6 3-5 7-11".
+fn bar_runs(order: &[usize]) -> String {
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for &i in order {
+        match runs.last_mut() {
+            Some((_, e)) if *e + 1 == i => *e = i,
+            _ => runs.push((i, i)),
+        }
+    }
+    runs.iter()
+        .map(|&(a, b)| {
+            if a == b {
+                format!("{}", a + 1)
+            } else {
+                format!("{}-{}", a + 1, b + 1)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// LIB-10 device check: launched with CHOIRBIRD_CONVERT_SELFTEST=<score id>
 /// (only `xcrun devicectl ... launch --environment-variables` can set it),
 /// the app converts that score at start and logs every event with its time
@@ -2574,6 +2595,23 @@ pub fn run() {
             app.manage(slot);
             app.manage(UiLang::default());
             app.manage(start_converter(app.handle().clone()));
+            // PLAY-02 check on a simulator or device: launched with
+            // CHOIRBIRD_PLAYORDER_SELFTEST=<score id>, the app writes the
+            // playback order of that score's bars (1-based, runs) to
+            // Documents/playorder.txt. Only `simctl launch`/`devicectl` set it.
+            if let Ok(id) = std::env::var("CHOIRBIRD_PLAYORDER_SELFTEST") {
+                let paths = app.state::<Paths>();
+                let line = paths
+                    .entry(&id)
+                    .and_then(|e| {
+                        let f = e.score_file.ok_or("no score file")?;
+                        let bytes = std::fs::read(e.dir.join(f)).map_err(|e| e.to_string())?;
+                        cantor_score::parse_score_file(&bytes).map_err(|e| e.to_string())
+                    })
+                    .map(|score| bar_runs(&cantor_timeline::build_timemap(&score).measure_order))
+                    .unwrap_or_else(|e| format!("error: {e}"));
+                let _ = std::fs::write(paths.user.join("playorder.txt"), format!("{id}: {line}\n"));
+            }
             #[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
             if let Ok(want) = std::env::var("CHOIRBIRD_CONVERT_SELFTEST") {
                 let h = app.handle().clone();
