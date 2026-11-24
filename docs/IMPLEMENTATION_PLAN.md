@@ -512,7 +512,11 @@ tests (NFR-11: 100% of P0 criteria automated).
         - Done, recognition: all 7 homr stages are ported to Rust in `crates/homr` and match homr 0.7.1 stage by stage on Lacrymosa p1. `lib_10_homr_page_to_musicxml_matches_python` takes the page image to the same MusicXML as homr (apart from homr's `imgpos` comments) in 9.3 s on the Mac CPU.
         - Done, on the Mac with the real pieces: `lib_10_real_lacrymosa_pdf_converts_on_the_mac` (ignored, needs the models). CoreGraphics renders the 5-page public PDF, homr reads it through the queue, and the result is 30 measures and 5 parts (4 voices and piano) in 97 s.
         - Done, packaging: `HOMR=1 tools/ipad.sh device` bundles the models (123 MB), links ONNX Runtime 1.31.1 for iOS (SHA-512 pinned) and writes `gen/apple/homr.xcconfig`. The IPA is 166 MB against 45 MB without recognition. Default builds strip both.
-        - Not verified: a conversion on the iPad or iPhone (the IPA is installed on both, but the devices were locked), speed and peak memory there, the notification text, the reload of an open piece, any page other than Lacrymosa, and photos or scans.
+        - Done, on devices (2026-11-24, `CHOIRBIRD_CONVERT_SELFTEST` hook, first run after install, CoreML for segmentation and encoder):
+          - iPad mini (A17 Pro): 5 pages, 30 measures in 110 s. The first 55 s is loading the models and CoreML compiling them; after that about 10 s a page. Peak memory 1.6 GB.
+          - iPhone 16: 30 measures in 59 s. About 19 s to load, then about 8 s a page. Peak memory 1.6 GB.
+          - The iPad and the iPhone wrote the same MusicXML byte for byte. It differs a little from the Mac run: 1580 notes in both, 98.7% of notes equal, 9 small differences (a slur, a rest, a voice). The likely cause is CoreML's numbers, since homr's CoreML segmentation is known to differ from the CPU on 98 pixels of this page. Not proven.
+        - Not verified: whether the CoreML differences make the result worse than the CPU result, a second run after the CoreML cache is warm, the notification text, the reload of an open piece, any page other than Lacrymosa, photos or scans, and memory on older devices with less RAM (1.6 GB peak).
 
   - **Licence and monetisation (decision 2026-11-23):**
     - The Cantor client app becomes AGPL-3.0.
