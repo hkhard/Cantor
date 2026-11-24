@@ -516,7 +516,13 @@ tests (NFR-11: 100% of P0 criteria automated).
           - iPad mini (A17 Pro): 5 pages, 30 measures in 110 s. The first 55 s is loading the models and CoreML compiling them; after that about 10 s a page. Peak memory 1.6 GB.
           - iPhone 16: 30 measures in 59 s. About 19 s to load, then about 8 s a page. Peak memory 1.6 GB.
           - The iPad and the iPhone wrote the same MusicXML byte for byte. It differs a little from the Mac run: 1580 notes in both, 98.7% of notes equal, 9 small differences (a slur, a rest, a voice). The likely cause is CoreML's numbers, since homr's CoreML segmentation is known to differ from the CPU on 98 pixels of this page. Not proven.
-        - Not verified: whether the CoreML differences make the result worse than the CPU result, a second run after the CoreML cache is warm, the notification text, the reload of an open piece, any page other than Lacrymosa, photos or scans, and memory on older devices with less RAM (1.6 GB peak).
+        - Done, a private forScore score (`Christmas Day - F dur.4sc`, 6 pages, not in git):
+          - Mac, release, CPU: 53 measures (voice and piano) in 65 s, name unchanged (`lib_10_private_4sc_converts_and_keeps_its_name`, ignored, needs `CHOIRBIRD_4SC`).
+          - This found a LIB-07 bug: a `.4sc` dropped into Documents was imported as "… (2)". Fixed, test `lib_07_4sc_dropped_into_the_library_keeps_its_own_name`.
+          - iPad mini simulator (debug build, CPU): imported under its own name, 53 measures in 262 s (about 20 s a page; debug, and the simulator is slower), peak 0.7 GB. The library shows "Christmas Day - F dur" with "plays", and the in-app notice offers Open. 99.9% of notes are equal to the Mac run (1 difference in 1419 notes).
+          - The simulator's CoreML found no staves on any page, so the simulator now runs on the CPU (`homr_recognizer.rs`). Real devices keep CoreML.
+          - The notification permission is asked only when the first conversion finishes. Better to ask when "Read the notes" is tapped (not done).
+        - Not verified: whether the CoreML differences make the result worse than the CPU result, a second run after the CoreML cache is warm, the notification text, the reload of an open piece, photos or scans, the `.4sc` on the real iPad, and memory on older devices with less RAM (1.6 GB peak).
 
   - **Licence and monetisation (decision 2026-11-23):**
     - The Cantor client app becomes AGPL-3.0.
