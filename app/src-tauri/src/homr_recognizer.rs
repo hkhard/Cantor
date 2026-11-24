@@ -12,13 +12,16 @@ impl HomrRecognizer {
     /// first CoreML compile after an install up to a minute).
     pub fn load(dir: &Path, cache: &Path) -> Result<Self, String> {
         let _ = std::fs::create_dir_all(cache);
-        cantor_homr::Models::load(
-            dir,
-            cfg!(any(target_os = "ios", target_os = "macos")),
-            cache,
-        )
-        .map(|models| HomrRecognizer { models })
-        .map_err(|e| e.to_string())
+        // CoreML on real Apple hardware. The iOS simulator has no Neural
+        // Engine and its CoreML gives wrong segmentation masks (every page
+        // came back "no staffs"), so it runs on the CPU, like the Mac tests.
+        // CHOIRBIRD_HOMR_CPU=1 forces the CPU anywhere (to compare).
+        let simulator = cfg!(target_abi = "sim");
+        let forced_cpu = std::env::var_os("CHOIRBIRD_HOMR_CPU").is_some();
+        let coreml = cfg!(any(target_os = "ios", target_os = "macos")) && !simulator && !forced_cpu;
+        cantor_homr::Models::load(dir, coreml, cache)
+            .map(|models| HomrRecognizer { models })
+            .map_err(|e| e.to_string())
     }
 }
 
