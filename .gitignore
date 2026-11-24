@@ -20,3 +20,7 @@ target-wt/
 
 # homr ONNX models (AGPL, 129 MB): tools/omr/homr_port/fetch_models.sh
 /models/
+# LIB-10: ONNX Runtime for iOS (tools/omr/homr_port/fetch_ort_ios.sh) and
+# the models copied into the app (tools/bundle_homr_models.sh).
+/vendor/
+app/src-tauri/resources/homr/

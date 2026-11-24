@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "resources": {
+      "resources/scores/": "resources/scores/",
+      "../../assets/sf2/GeneralUser-GS.sf2": "resources/GeneralUser-GS.sf2",
+      "resources/homr/": "resources/homr/"
+    }
+  }
+}

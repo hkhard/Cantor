@@ -2,6 +2,7 @@
 # Build and install ChoirBird on an iPad.
 #
 #   tools/ipad.sh sim            build + run on the iPad Pro 13" simulator
+#   HOMR=1 tools/ipad.sh device  ... with on-device note recognition (LIB-10)
 #   tools/ipad.sh device [UDID]  signed build + install on a connected iPad
 #   tools/ipad.sh release [app-store-connect|release-testing]
 #                                release IPA of the tagged commit (not uploaded)
@@ -17,10 +18,22 @@ APP="$ROOT/app/src-tauri"
 # otherwise). The folder is emptied first, so nothing else slips in.
 bash "$ROOT/tools/bundle_demo_scores.sh"
 
+# LIB-10: on-device note recognition (homr, AGPL-only) only with HOMR=1:
+# bundles the 123 MB of models and links ONNX Runtime for iOS.
+HOMR_ARGS=()
+if [ "${HOMR:-0}" = 1 ]; then
+  bash "$ROOT/tools/bundle_homr_models.sh"
+  bash "$ROOT/tools/omr/homr_port/fetch_ort_ios.sh"
+  export ORT_IOS_XCFWK_PATH="$ROOT/vendor/onnxruntime.xcframework"
+  HOMR_ARGS=(--features homr --config "$ROOT/app/src-tauri/tauri.homr.conf.json")
+else
+  bash "$ROOT/tools/bundle_homr_models.sh" --clear >/dev/null
+fi
+
 cd "$APP"
 case "${1:-sim}" in
   sim)
-    cargo tauri ios build --target aarch64-sim --debug
+    cargo tauri ios build --target aarch64-sim --debug ${HOMR_ARGS[@]+"${HOMR_ARGS[@]}"}
     BUNDLE="$(find ~/Library/Developer/Xcode/DerivedData/cantor-app-*/Build/Products/debug-iphonesimulator -maxdepth 1 -name ChoirBird.app | head -1)"
     SIM="$(xcrun simctl list devices available | grep -m1 'iPad Pro 13' | grep -oE '[0-9A-F-]{36}')"
     xcrun simctl boot "$SIM" 2>/dev/null || true
@@ -29,7 +42,7 @@ case "${1:-sim}" in
     xcrun simctl launch "$SIM" se.nikielhard.choirbird
     ;;
   device)
-    cargo tauri ios build --target aarch64 --export-method debugging
+    cargo tauri ios build --target aarch64 --export-method debugging ${HOMR_ARGS[@]+"${HOMR_ARGS[@]}"}
     IPA="$APP/gen/apple/build/arm64/ChoirBird.ipa"
     DEV="${2:-$(xcrun devicectl list devices | grep -i 'ipad' | grep -v simulated | grep -E 'available|connected' | grep -v unavailable | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}' | head -1)}"
     if [ -z "$DEV" ]; then
