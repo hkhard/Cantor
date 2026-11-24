@@ -6,6 +6,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Public repo, self-hosted runner on the owner's Mac: least privilege, and
+# jobs only for the owner's own pushes and same-repo pull requests. The
+# runner also refuses anything else before step 1 (tools/ci/runner_guard.sh,
+# installed outside the repo). Fork PRs never reach this runner.
+permissions:
+  contents: read
+
 concurrency:
   group: core-${{ github.ref }}
   cancel-in-progress: true
@@ -14,13 +21,18 @@ jobs:
   core:
     name: core (self-hosted macOS arm64)
     runs-on: [self-hosted, macOS, ARM64, cantor]
+    if: >-
+      github.repository == 'hkhard/Cantor' && github.actor == 'hkhard' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: "0"
       # Private forScore samples on the runner machine (git-ignored, never committed).
       CANTOR_SAMPLES: /Users/hkh/dev/musicMaker/scores
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Toolchain on PATH
         run: |
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
@@ -55,8 +67,13 @@ jobs:
   ui:
     name: UI acceptance + accessibility (WebKit, iPad mini size)
     runs-on: [self-hosted, macOS, ARM64, cantor]
+    if: >-
+      github.repository == 'hkhard/Cantor' && github.actor == 'hkhard' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
       - name: Toolchain on PATH
         run: echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
       - run: npm ci
