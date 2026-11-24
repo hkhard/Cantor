@@ -249,3 +249,35 @@ fn play_09_smf_note_offs_balance_note_ons() {
         assert_eq!(on, off);
     }
 }
+
+#[test]
+fn play_01_same_pitch_tied_in_two_voices_sounds_once_per_voice() {
+    // The Anchor Song bar 1-2: voices 1 and 2 of one part both hold E4 tied
+    // over the bar line. Each voice's tie continues its own note; nothing is
+    // struck again in bar 2. Was: the second voice's E4 was struck again.
+    let note = |voice: u32, tie: &str| {
+        format!(
+            r#"<note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration>{tie}<voice>{voice}</voice></note>"#
+        )
+    };
+    let xml = format!(
+        r#"<?xml version="1.0"?><score-partwise version="4.0">
+        <part-list><score-part id="P1"><part-name>T</part-name></score-part></part-list>
+        <part id="P1">
+          <measure number="1"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+            {}<backup><duration>4</duration></backup>{}</measure>
+          <measure number="2">{}<backup><duration>4</duration></backup>{}</measure>
+        </part></score-partwise>"#,
+        note(1, r#"<tie type="start"/>"#),
+        note(2, r#"<tie type="start"/>"#),
+        note(1, r#"<tie type="stop"/>"#),
+        note(2, r#"<tie type="stop"/>"#),
+    );
+    let tm = build_timemap(&parse_musicxml(xml.as_bytes()).unwrap());
+    let es: Vec<_> = tm
+        .notes
+        .iter()
+        .map(|n| (n.voice, n.tick_on, n.tick_off))
+        .collect();
+    assert_eq!(es, vec![(1, 0, 8 * PPQ), (2, 0, 8 * PPQ)]);
+}

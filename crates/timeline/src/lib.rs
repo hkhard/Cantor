@@ -172,7 +172,9 @@ pub fn build_timemap(score: &Score) -> Timemap {
     let mut notes: Vec<TimedNote> = Vec::new();
     for (pi, p) in score.parts.iter().enumerate() {
         // Open ties: pitch -> index of the sounding note.
-        let mut open: HashMap<u8, usize> = HashMap::new();
+        // Open ties by (staff, voice, pitch): two voices can hold the same
+        // pitch tied at once (each continues its own note).
+        let mut open: HashMap<(u32, u32, u8), usize> = HashMap::new();
         for (visit, &mi) in measure_order.iter().enumerate() {
             let Some(m) = p.measures.get(mi) else {
                 continue;
@@ -203,12 +205,23 @@ pub fn build_timemap(score: &Score) -> Timemap {
                     .saturating_add(e.articulation.accent)
                     .min(127);
                 if e.tie_stop {
-                    if let Some(&idx) = open.get(&midi) {
+                    // This voice's own tie first; else one of the same pitch
+                    // from another voice (a tie that moves between voices).
+                    let key = (e.staff, e.voice, midi);
+                    let found = Some(key).filter(|k| open.contains_key(k)).or_else(|| {
+                        open.keys()
+                            .filter(|k| k.2 == midi && notes[open[k]].tick_off == on)
+                            .min()
+                            .copied()
+                    });
+                    if let Some(k) = found {
+                        let idx = open[&k];
                         // Only continue a tie that ends where this note starts.
                         if notes[idx].tick_off == on {
                             notes[idx].tick_off = off;
-                            if !e.tie_start {
-                                open.remove(&midi);
+                            open.remove(&k);
+                            if e.tie_start {
+                                open.insert(key, idx);
                             }
                             continue;
                         }
@@ -228,10 +241,11 @@ pub fn build_timemap(score: &Score) -> Timemap {
                     chord_index: 0,
                     chord_size: 1,
                 });
+                let key = (e.staff, e.voice, midi);
                 if e.tie_start {
-                    open.insert(midi, notes.len() - 1);
+                    open.insert(key, notes.len() - 1);
                 } else {
-                    open.remove(&midi);
+                    open.remove(&key);
                 }
             }
         }
