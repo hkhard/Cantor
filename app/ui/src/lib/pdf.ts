@@ -40,6 +40,12 @@ export async function openPdf(url: string): Promise<pdfjs.PDFDocumentProxy> {
   }).promise
 }
 
+/** Free a document and its worker. pdf.js 6 dropped
+ *  `PDFDocumentProxy.destroy()`; the loading task owns the document now. */
+export function closePdf(doc: pdfjs.PDFDocumentProxy | null | undefined): void {
+  if (doc) void doc.loadingTask.destroy()
+}
+
 /** Render a page to fit `width` x `height` CSS pixels; returns the canvas
  *  size in CSS pixels so overlays can be placed. */
 export async function renderPage(

@@ -353,8 +353,8 @@ https://zenodo.org/records/15571083). ONNX Runtime (Microsoft, MIT) runs them.
 | zlib-rs | 0.6.8 | Zlib | crates.io |
 | zmij | 1.0.23 | MIT | crates.io |
 | zopfli | 0.8.4 | Apache-2.0 | crates.io |
-| @napi-rs/canvas | 0.1.100 | MIT | npm |
-| @napi-rs/canvas-darwin-arm64 | 0.1.100 | MIT | npm |
+| @napi-rs/canvas | 1.2.0 | MIT | npm |
+| @napi-rs/canvas-darwin-arm64 | 1.2.0 | MIT | npm |
 | @tauri-apps/api | 2.12.5 | Apache-2.0 OR MIT | npm |
-| pdfjs-dist | 5.7.284 | Apache-2.0 | npm |
+| pdfjs-dist | 6.5.438 | Apache-2.0 | npm |
 | verovio | 6.4.1 | LGPL-3.0-only | npm |

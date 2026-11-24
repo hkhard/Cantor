@@ -2,7 +2,7 @@
   // LIB-03: edit a score's metadata (title, composer, arranger, key, tempo,
   // genre, tags, rating, difficulty). Saved to the library store.
   import { api, emptyMetadata, type Metadata } from './api'
-  import { openPdf, pagePng, scoreFileUrl } from './pdf'
+  import { closePdf, openPdf, pagePng, scoreFileUrl } from './pdf'
   import { t } from './i18n.svelte'
 
   interface Props {
@@ -71,7 +71,7 @@
       if (!url) throw new Error('no pdf')
       const doc = await openPdf(scoreFileUrl(url))
       const png = await pagePng(doc, 1)
-      void doc.destroy()
+      closePdf(doc)
       const p = await api.readTitlePage(png)
       const filled: string[] = []
       const put = (k: 'title' | 'composer' | 'arranger', v: string, force = false) => {

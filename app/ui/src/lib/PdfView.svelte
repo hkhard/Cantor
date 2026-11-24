@@ -6,7 +6,7 @@
   // the next one appears, as on a music stand), and continuous scroll.
   import { onDestroy, tick, untrack } from 'svelte'
   import type { PDFDocumentProxy } from 'pdfjs-dist'
-  import { openPdf, type MeasureBox, type PageMode } from './pdf'
+  import { closePdf, openPdf, type MeasureBox, type PageMode } from './pdf'
   import PdfPage from './PdfPage.svelte'
   import type { AnnDoc, AnnCommand, Tool } from './annot'
   import { t } from './i18n.svelte'
@@ -74,7 +74,7 @@
     error = ''
     try {
       const d = await openPdf(u)
-      doc?.destroy()
+      closePdf(doc)
       doc = d
       pages = d.numPages
       page = 1
@@ -96,7 +96,7 @@
     ro.observe(host)
     return () => ro.disconnect()
   })
-  onDestroy(() => doc?.destroy())
+  onDestroy(() => closePdf(doc))
 
   // A half-turned page only exists in half-page mode.
   $effect(() => {
