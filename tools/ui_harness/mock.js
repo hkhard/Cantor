@@ -231,13 +231,16 @@ exports.setup = async function setup(page, dir) {
                 : []
               : window.__marketing
               ? // Marketing screenshots (shots.js): Lacrymosa as it really is.
-                [
-                  { label: 'Soprano', role: 'Soprano', program: 52, instrument: 'Choir Aahs', pan: -0.3 },
-                  { label: 'Alto', role: 'Alto', program: 52, instrument: 'Choir Aahs', pan: -0.1 },
-                  { label: 'Tenor', role: 'Tenor', program: 52, instrument: 'Choir Aahs', pan: 0.1 },
-                  { label: 'Bass', role: 'Bass', program: 52, instrument: 'Choir Aahs', pan: 0.3 },
-                  { label: 'Piano', role: 'Piano', program: 0, instrument: 'Acoustic Grand Piano', pan: 0 },
-                ]
+                (localStorage.getItem('cantor.lang') === 'sv'
+                  ? ['Sopran', 'Alt', 'Tenor', 'Bas', 'Piano']
+                  : ['Soprano', 'Alto', 'Tenor', 'Bass', 'Piano']
+                ).map((label, i) => ({
+                  label,
+                  role: ['Soprano', 'Alto', 'Tenor', 'Bass', 'Piano'][i],
+                  program: i < 4 ? 52 : 0,
+                  instrument: i < 4 ? 'Choir Aahs' : 'Acoustic Grand Piano',
+                  pan: [-0.3, -0.1, 0.1, 0.3, 0][i],
+                }))
               : [
                   { label: 'Tenor 1', role: 'Tenor', program: 56, instrument: 'Trumpet', pan: -0.4 },
                   { label: 'Tenor 2', role: 'Tenor', program: 60, instrument: 'French Horn', pan: -0.1 },

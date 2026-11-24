@@ -6,16 +6,18 @@
 const { webkit } = require('playwright')
 const path = require('path')
 const DIR = __dirname
-const out = (n) => path.join(DIR, 'shots', `marketing-${n}.png`)
+// LANG=sv: the same shots with the app in Swedish (marketing-sv-*.png).
+const LANG = process.env.LANG_UI === 'sv' ? 'sv' : 'en'
+const out = (n) => path.join(DIR, 'shots', `marketing-${LANG === 'sv' ? 'sv-' : ''}${n}.png`)
 
 async function open(browser, { w, h, skin = 'light' }) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, hasTouch: true })
   const page = await ctx.newPage()
-  await page.addInitScript((s) => {
+  await page.addInitScript(([s, l]) => {
     window.__marketing = true
     localStorage.setItem('cantor.skin', s)
-    localStorage.setItem('cantor.lang', 'en')
-  }, skin)
+    localStorage.setItem('cantor.lang', l)
+  }, [skin, LANG])
   await require('./mock.js').setup(page, DIR)
   // Getting started is for new users; the marketing library is a lived-in one.
   await page.addInitScript(() => {
@@ -47,17 +49,17 @@ async function reader(page) {
     await page.screenshot({ path: out(`ipad-pdf-${skin}`) })
     if (skin === 'light' || skin === 'dark') {
       // The mixer: every voice its own line, "My part" on the alto.
-      await page.click('button[aria-label="Mixer"]')
+      await page.click('button[aria-label="Mixer"]') // same word in Swedish
       await page.waitForTimeout(800)
-      const alto = page.locator('aside button', { hasText: 'Alto' }).first()
+      const alto = page.locator('aside button', { hasText: /^Alt/ }).first()
       if (await alto.count()) await alto.click().catch(() => {})
       await page.waitForTimeout(600)
       await page.screenshot({ path: out(skin === 'dark' ? 'ipad-mixer-dark' : 'ipad-mixer') })
-      await page.click('button[aria-label="Hide mixer"]').catch(() => {})
+      await page.click(LANG === 'sv' ? 'button[aria-label="Dölj mixer"]' : 'button[aria-label="Hide mixer"]').catch(() => {})
       await page.waitForTimeout(400)
     }
     if (skin === 'light') {
-      await page.click('button:has-text("Notation")')
+      await page.click(LANG === 'sv' ? 'button:has-text("Notbild")' : 'button:has-text("Notation")')
       await page.waitForSelector('.score svg', { timeout: 20000 })
       await page.waitForTimeout(1200)
       await page.screenshot({ path: out('ipad-notation') })
