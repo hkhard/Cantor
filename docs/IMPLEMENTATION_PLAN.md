@@ -523,6 +523,7 @@ tests (NFR-11: 100% of P0 criteria automated).
           - The simulator's CoreML found no staves on any page, so the simulator now runs on the CPU (`homr_recognizer.rs`). Real devices keep CoreML.
           - The notification permission is asked only when the first conversion finishes. Better to ask when "Read the notes" is tapped (not done).
           - iPad mini, release build, CoreML (2026-11-24): the `.4sc` imported under its own name, 6 pages became 53 measures in 46 s (20 s model load with a warm CoreML cache, then about 4.5 s a page), peak 1.6 GB, name unchanged after conversion. 99.9% of notes equal to the Mac CPU run (1 difference in 1419 notes).
+          - iPhone 16, same build: 53 measures in 47 s (20 s load, about 4.5 s a page), peak 1.6 GB, name unchanged; its MusicXML is byte for byte the iPad's.
         - Not verified: whether the CoreML differences make the result worse than the CPU result, the notification text, the reload of an open piece, photos or scans, and memory on older devices with less RAM (1.6 GB peak).
 
   - **Licence and monetisation (decision 2026-11-23):**
