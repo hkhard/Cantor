@@ -1018,9 +1018,14 @@ pub fn blur_bgr(src: &Bgr, kw: usize, kh: usize) -> Bgr {
 pub fn clahe(src: &Gray, clip_limit: f64, tiles_x: usize, tiles_y: usize) -> Gray {
     const HIST: usize = 256;
     let (w, h) = (src.width, src.height);
-    // Pad right and bottom with BORDER_REFLECT_101 when the size does not divide.
-    let bottom = (tiles_y - h % tiles_y) % tiles_y;
-    let right = (tiles_x - w % tiles_x) % tiles_x;
+    // Pad right and bottom with BORDER_REFLECT_101 unless both sizes divide.
+    // OpenCV 4.14 pads by `tiles - size % tiles` on both axes, so a side
+    // that already divides still gets a full tile row or column of padding.
+    let (right, bottom) = if w.is_multiple_of(tiles_x) && h.is_multiple_of(tiles_y) {
+        (0, 0)
+    } else {
+        (tiles_x - w % tiles_x, tiles_y - h % tiles_y)
+    };
     let (ew, eh) = (w + right, h + bottom);
     let ext = |x: usize, y: usize| -> u8 {
         if x < w && y < h {
@@ -1372,6 +1377,11 @@ mod tests {
             "clahe 40 4x3",
             &clahe(&gray("smooth_133x101"), 40.0, 4, 3),
             &gray("clahe40_smooth_133x101"),
+        );
+        same(
+            "clahe 160x101 (width divides)",
+            &clahe(&gray("smooth_160x101"), 1.0, 8, 8),
+            &gray("clahe_smooth_160x101"),
         );
     }
 

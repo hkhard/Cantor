@@ -120,5 +120,45 @@ big = smooth(400, 304, 8)
 save("smooth_400x304", big)
 save("clahe_smooth_400x304", clahe.apply(big))
 save("clahe40_smooth_133x101", cv2.createCLAHE(clipLimit=40.0, tileGridSize=(4, 3)).apply(s))
+# Width divides by 8, height does not (like a 1920 px wide page).
+wide = smooth(160, 101, 14)
+save("smooth_160x101", wide)
+save("clahe_smooth_160x101", clahe.apply(wide))
+
+# homr autocrop_with_offset on synthetic "photos": a sheet on a desk.
+from homr.autocrop import autocrop_with_offset  # noqa: E402
+
+
+def photo(w: int, h: int, seed: int, corners: list, desk: tuple, grad: int = 30) -> np.ndarray:
+    n = noise(w, h, seed).astype(np.int16) // 16 - 8
+    img = np.empty((h, w, 3), np.int16)
+    img[:] = desk
+    img += n[:, :, None]
+    sheet = np.zeros((h, w), np.uint8)
+    cv2.fillConvexPoly(sheet, np.array(corners, np.int32), 1)
+    yy, xx = np.mgrid[0:h, 0:w]
+    shade = (225 - xx * grad // w - yy * (grad * 2 // 3) // h).astype(np.int16)
+    for c, k in enumerate((0, 3, 6)):
+        img[:, :, c] = np.where(sheet > 0, shade - k + n // 2, img[:, :, c])
+    for i in range(5):
+        y = h // 3 + i * 6
+        img[y, w // 4 : 3 * w // 4] = (20, 20, 25)
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+cases = {
+    "photo_rotated": photo(300, 360, 11, [(40, 30), (270, 50), (255, 330), (25, 310)], (60, 90, 140), 3),
+    "photo_left_edge": photo(320, 300, 12, [(0, 20), (290, 35), (300, 280), (0, 290)], (40, 120, 70)),
+    "photo_dark_desk": photo(280, 260, 13, [(30, 25), (250, 25), (250, 240), (30, 240)], (30, 30, 30)),
+}
+offsets = {}
+for name, img in cases.items():
+    save(name, img)
+    crop, off = autocrop_with_offset(img)
+    save(name + "_crop", crop)
+    offsets[name] = [int(off[0]), int(off[1])]
+import json  # noqa: E402
+
+json.dump(offsets, open(os.path.join(out, "photo_offsets.json"), "w"))
 
 print("written to", out)

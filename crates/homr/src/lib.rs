@@ -139,8 +139,8 @@ pub fn recognize_page(
     progress: Progress,
 ) -> Result<String, Error> {
     progress("preprocess", 0.0);
-    let page = Gray::from_png(png)?;
-    let pre = preprocess::preprocess(&page);
+    // Colour: autocrop tells paper from desk by its chromaticity.
+    let pre = preprocess::preprocess_png(png)?;
     progress("segmentation", 0.1);
     let pred = segnet::segment(models, &pre.image)?;
     progress("staffs", 0.4);
