@@ -1034,7 +1034,8 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
             move || homr_recognizer::HomrRecognizer::load(&models, &cache),
             apple_convert::CgPdfPages::default(),
             move |ev| {
-                if let convert::JobEvent::Done { title, .. } = &ev {
+                // Once per finished job: never for progress, never twice.
+                if let convert::JobEvent::Done { id, title, .. } = &ev {
                     let lang_sv = h
                         .state::<UiLang>()
                         .0
@@ -1050,7 +1051,7 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
                             "The notes are read. Open the piece and play.".to_string(),
                         )
                     };
-                    apple_convert::notify(&t, &b);
+                    apple_convert::notify(id, &t, &b);
                 }
                 selftest_log(&h, &ev);
                 let _ = h.emit("convert", ev);

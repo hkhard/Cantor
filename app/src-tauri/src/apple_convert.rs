@@ -93,7 +93,7 @@ impl CgPdfPages {
 /// permission the first time; if the user says no, nothing is shown (the
 /// in-app notice still appears).
 #[cfg(target_os = "ios")]
-pub fn notify(title: &str, body: &str) {
+pub fn notify(key: &str, title: &str, body: &str) {
     use objc2_foundation::NSString;
     use objc2_user_notifications::{
         UNAuthorizationOptions, UNMutableNotificationContent, UNNotificationRequest,
@@ -110,13 +110,18 @@ pub fn notify(title: &str, body: &str) {
     content.setTitle(&NSString::from_str(title));
     content.setBody(&NSString::from_str(body));
     content.setSound(Some(&UNNotificationSound::defaultSound()));
-    let id = NSString::from_str(&format!("choirbird-convert-{title}"));
+    // One notification per score: an earlier one for the same score is
+    // replaced, not stacked.
+    let id = NSString::from_str(&format!("choirbird-convert-{key}"));
+    let ids = objc2_foundation::NSArray::from_slice(&[&*id]);
+    center.removeDeliveredNotificationsWithIdentifiers(&ids);
+    center.removePendingNotificationRequestsWithIdentifiers(&ids);
     let req = UNNotificationRequest::requestWithIdentifier_content_trigger(&id, &content, None);
     center.addNotificationRequest_withCompletionHandler(&req, None);
 }
 
 #[cfg(not(target_os = "ios"))]
-pub fn notify(_title: &str, _body: &str) {}
+pub fn notify(_key: &str, _title: &str, _body: &str) {}
 
 #[cfg(test)]
 mod lib_10_render {
