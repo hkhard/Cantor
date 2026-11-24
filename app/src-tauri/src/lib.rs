@@ -1054,6 +1054,17 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
                     apple_convert::notify(id, &t, &b);
                 }
                 selftest_log(&h, &ev);
+                if let convert::JobEvent::Done { id, .. } = &ev {
+                    let after = display_title(&h.state::<Paths>(), id);
+                    selftest_log(
+                        &h,
+                        &convert::JobEvent::Failed {
+                            id: id.clone(),
+                            title: "selftest after".into(),
+                            error: format!("title after: {after:?}"),
+                        },
+                    );
+                }
                 let _ = h.emit("convert", ev);
             },
         ));
@@ -1090,6 +1101,19 @@ fn selftest_log(app: &tauri::AppHandle, ev: &convert::JobEvent) {
     {
         let _ = writeln!(f, "{t:.1}s peak {peak} MB {ev:?}");
     }
+}
+
+/// The title the library shows for `id` (as `list_scores` picks it).
+#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+fn display_title(paths: &Paths, id: &str) -> Option<String> {
+    let e = paths.entry(id).ok()?;
+    let st = store(paths);
+    Some(
+        st.metadata(id)
+            .map(|m| m.title.clone())
+            .filter(|t| !t.is_empty())
+            .unwrap_or(e.title),
+    )
 }
 
 /// Peak resident memory of this process in MB (ru_maxrss is bytes on Apple).
@@ -2551,20 +2575,41 @@ pub fn run() {
             app.manage(UiLang::default());
             app.manage(start_converter(app.handle().clone()));
             #[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
-            if let Ok(id) = std::env::var("CHOIRBIRD_CONVERT_SELFTEST") {
+            if let Ok(want) = std::env::var("CHOIRBIRD_CONVERT_SELFTEST") {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    let r = convert_score(
-                        id,
-                        h.state::<Paths>(),
-                        h.state::<Option<convert::Converter>>(),
-                    );
-                    let ev = convert::JobEvent::Failed {
-                        id: "selftest".into(),
-                        title: "start".into(),
-                        error: format!("{r:?}"),
+                    // "pdf-only": import what is waiting in Documents (.4sc),
+                    // then convert every PDF-only score of the user's own.
+                    let paths = h.state::<Paths>();
+                    let imported = sweep_incoming(&paths);
+                    let ids: Vec<String> = if want == "pdf-only" {
+                        cantor_library::import::list_library(&[paths.user.as_path()])
+                            .into_iter()
+                            .filter(|e| e.score_file.is_none() && e.pdf_file.is_some())
+                            .map(|e| format!("1:{}", e.stem))
+                            .collect()
+                    } else {
+                        vec![want]
                     };
-                    selftest_log(&h, &ev);
+                    for id in ids {
+                        let note = format!(
+                            "imported {imported:?}; before: {:?}",
+                            display_title(&paths, &id)
+                        );
+                        let r = convert_score(
+                            id.clone(),
+                            h.state::<Paths>(),
+                            h.state::<Option<convert::Converter>>(),
+                        );
+                        selftest_log(
+                            &h,
+                            &convert::JobEvent::Failed {
+                                id,
+                                title: "selftest start".into(),
+                                error: format!("{note}; submit {r:?}"),
+                            },
+                        );
+                    }
                 });
             }
             Ok(())
