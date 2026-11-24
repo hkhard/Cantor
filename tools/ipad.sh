@@ -27,7 +27,8 @@ if [ "${HOMR:-0}" = 1 ]; then
   # ORT_IOS_XCFWK_PATH comes from app/src-tauri/.cargo/config.toml.
   # libapp.a is static, so Xcode links ONNX Runtime and what it needs.
   cat > "$APP/gen/apple/homr.xcconfig" <<'XC'
-FRAMEWORK_SEARCH_PATHS = $(inherited) $(PROJECT_DIR)/../../../../vendor/onnxruntime.xcframework/ios-arm64
+FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*] = $(inherited) $(PROJECT_DIR)/../../../../vendor/onnxruntime.xcframework/ios-arm64
+FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*] = $(inherited) $(PROJECT_DIR)/../../../../vendor/onnxruntime.xcframework/ios-arm64_x86_64-simulator
 OTHER_LDFLAGS = $(inherited) -framework onnxruntime -framework CoreML -framework Accelerate -lz -lsqlite3 -lc++
 XC
   HOMR_ARGS=(--features homr --config "$ROOT/app/src-tauri/tauri.homr.conf.json")
