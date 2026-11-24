@@ -128,8 +128,19 @@ pub(crate) fn free_stem(dir: &Path, stem: &str) -> String {
             .map(|rd| {
                 rd.flatten().any(|e| {
                     let n = e.file_name().to_string_lossy().to_string();
-                    n.rsplit_once('.').is_some_and(|(st, _)| {
-                        st == s || st.strip_suffix(".measures").is_some_and(|x| x == s)
+                    // Files waiting to be imported (a .4sc dropped into the
+                    // folder) are not library content: they don't take a name.
+                    n.rsplit_once('.').is_some_and(|(st, ext)| {
+                        let incoming = [
+                            "4sc",
+                            "4ss",
+                            crate::bundle::BUNDLE_EXT,
+                            crate::backup::BACKUP_EXT,
+                        ]
+                        .iter()
+                        .any(|x| ext.eq_ignore_ascii_case(x));
+                        !incoming
+                            && (st == s || st.strip_suffix(".measures").is_some_and(|x| x == s))
                     })
                 })
             })

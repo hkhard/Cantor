@@ -116,6 +116,21 @@ fn lib_07_4sc_imports_its_pdf_under_its_title() {
 }
 
 #[test]
+fn lib_07_4sc_dropped_into_the_library_keeps_its_own_name() {
+    // Files, AirDrop or Finder put "Holst.4sc" straight into Documents; the
+    // sweep imports it from there. The .4sc itself must not count as taken.
+    let d = tmp("4sc-drop");
+    let bytes = cantor_library::forscore::testing::fake_4sc("Holst.pdf", "Holst", b"%PDF-1.4\n");
+    std::fs::write(d.join("Holst.4sc"), &bytes).unwrap();
+    let got = import_file(&d, "Holst.4sc", &bytes).unwrap();
+    assert_eq!(got[0].stem, "Holst");
+    assert!(d.join("Holst.pdf").exists());
+    // A real clash still gets a number.
+    let again = import_file(&d, "Holst.4sc", &bytes).unwrap();
+    assert_eq!(again[0].stem, "Holst (2)");
+}
+
+#[test]
 fn lib_01_same_name_does_not_overwrite() {
     let d = tmp("dup");
     import_file(&d, "Que.musicxml", XML.as_bytes()).unwrap();

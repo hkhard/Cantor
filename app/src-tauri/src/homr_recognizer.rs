@@ -99,3 +99,93 @@ mod lib_10_real {
         assert!(score.parts.len() >= 4);
     }
 }
+
+/// Local check with a private forScore file (never committed):
+/// `CHOIRBIRD_4SC=/path/x.4sc cargo test --features homr-host --release --lib
+/// lib_10_private_4sc -- --ignored --nocapture`. Imports it as the app does,
+/// converts the PDF, and checks the shown title is the same before and after.
+#[cfg(test)]
+mod lib_10_private {
+    use super::*;
+    use crate::apple_convert::CgPdfPages;
+    use crate::convert::{Converter, Job, JobEvent};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    #[ignore]
+    fn lib_10_private_4sc_converts_and_keeps_its_name() {
+        let Ok(src) = std::env::var("CHOIRBIRD_4SC") else {
+            eprintln!("skipped: set CHOIRBIRD_4SC");
+            return;
+        };
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let d = std::env::temp_dir().join(format!("cb-4sc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let paths = crate::Paths {
+            scores: d.join("bundled"),
+            user: d.join("user"),
+            soundfont: d.join("sf2"),
+        };
+        std::fs::create_dir_all(&paths.user).unwrap();
+        std::fs::create_dir_all(&paths.scores).unwrap();
+        let name = Path::new(&src).file_name().unwrap();
+        std::fs::copy(&src, paths.user.join(name)).unwrap();
+        let ids = crate::sweep_incoming(&paths);
+        eprintln!("imported {ids:?}");
+        assert_eq!(ids.len(), 1);
+        let id = ids[0].clone();
+        let title = |p: &crate::Paths| crate::display_title(p, &id);
+        let before = title(&paths);
+        eprintln!("title before: {before:?}");
+        let e = paths.entry(&id).unwrap();
+        let pdf = e.dir.join(e.pdf_file.unwrap());
+        let models = root.join("models/homr");
+        let cache = d.join("coreml");
+        let (tx, rx) = std::sync::mpsc::channel();
+        let c = Converter::start(
+            move || HomrRecognizer::load(&models, &cache),
+            CgPdfPages::default(),
+            move |e| {
+                let _ = tx.send(e);
+            },
+        );
+        let t = Instant::now();
+        c.submit(Job {
+            id: id.clone(),
+            title: before.clone().unwrap_or_default(),
+            pdf,
+        });
+        let mut seen = 0;
+        loop {
+            match rx.recv_timeout(Duration::from_secs(900)).expect("event") {
+                JobEvent::Progress { page, pages, .. } if page != seen => {
+                    seen = page;
+                    eprintln!("page {page}/{pages} at {:.1} s", t.elapsed().as_secs_f32());
+                }
+                JobEvent::Progress { .. } => {}
+                JobEvent::Done { measures, .. } => {
+                    eprintln!(
+                        "done: {measures} measures in {:.1} s",
+                        t.elapsed().as_secs_f32()
+                    );
+                    break;
+                }
+                JobEvent::Failed { error, .. } => panic!("failed: {error}"),
+            }
+        }
+        let after = title(&paths);
+        eprintln!("title after: {after:?}");
+        let e = paths.entry(&id).unwrap();
+        assert!(e.score_file.is_some(), "paired with the new MusicXML");
+        let xml = std::fs::read(e.dir.join(e.score_file.unwrap())).unwrap();
+        let s = cantor_score::parse_score_file(&xml).unwrap();
+        eprintln!(
+            "parts: {:?}",
+            s.parts
+                .iter()
+                .map(|p| (p.name.clone(), p.measures.len()))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(before, after, "the name must not change");
+    }
+}
