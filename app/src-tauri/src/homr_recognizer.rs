@@ -133,7 +133,13 @@ mod lib_10_private {
         std::fs::create_dir_all(&paths.scores).unwrap();
         let name = Path::new(&src).file_name().unwrap();
         std::fs::copy(&src, paths.user.join(name)).unwrap();
-        let ids = crate::sweep_incoming(&paths);
+        // A .4sc is imported by the sweep; a PDF is already a library score.
+        let ids = if src.ends_with(".pdf") {
+            let stem = Path::new(&src).file_stem().unwrap().to_string_lossy();
+            vec![format!("1:{stem}")]
+        } else {
+            crate::sweep_incoming(&paths)
+        };
         eprintln!("imported {ids:?}");
         assert_eq!(ids.len(), 1);
         let id = ids[0].clone();
@@ -189,6 +195,9 @@ mod lib_10_private {
                 .map(|p| (p.name.clone(), p.measures.len()))
                 .collect::<Vec<_>>()
         );
+        if let Ok(keep) = std::env::var("CHOIRBIRD_KEEP") {
+            std::fs::write(keep, &xml).unwrap();
+        }
         assert_eq!(before, after, "the name must not change");
     }
 }

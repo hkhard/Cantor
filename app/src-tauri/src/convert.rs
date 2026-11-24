@@ -187,40 +187,158 @@ pub fn musicxml_path(pdf: &Path) -> PathBuf {
     pdf.with_extension("musicxml")
 }
 
-/// Join per-page MusicXML into one score: the first page's part list, then
-/// each page's measures appended to the matching part (by order), with
-/// measure numbers continued.
+/// Join per-page MusicXML into one score. Pages can show different parts (a
+/// soprano solo, then S T B, then a baritone joins), so the parts of each
+/// page are matched to the score's lines by clef, top to bottom: a page part
+/// goes to the first unused line with its clef after the previous match, or
+/// becomes a new line there. Lines a page doesn't show get a measure rest per
+/// measure, so every part keeps the same bars. Measure numbers continue.
 pub fn join_pages(pages: &[String]) -> Result<String, String> {
     if pages.len() == 1 {
         return Ok(pages[0].clone());
     }
-    let first = &pages[0];
-    let mut parts: Vec<String> = split_parts(first)?;
-    let mut numbers: Vec<usize> = parts
-        .iter()
-        .map(|p| p.matches("<measure ").count())
-        .collect();
-    for page in &pages[1..] {
-        for (k, body) in split_parts(page)?.into_iter().enumerate() {
-            if k >= parts.len() {
-                break;
+    // Each line: its clef sign and its measures so far.
+    let mut lines: Vec<(char, Vec<String>)> = Vec::new();
+    let mut total = 0usize;
+    for page in pages {
+        let parts = split_parts(page)?;
+        let bars = parts.iter().map(|p| measures(p).len()).max().unwrap_or(0);
+        // Match the page's parts to the lines in order, as many as possible by
+        // clef (longest common subsequence); unmatched parts become new lines
+        // just before the next matched one.
+        let signs: Vec<char> = parts.iter().map(|p| clef_sign(p)).collect();
+        let pairs = align(&lines.iter().map(|l| l.0).collect::<Vec<_>>(), &signs);
+        let mut placed: Vec<(usize, Vec<String>)> = Vec::new();
+        let mut inserted = 0usize;
+        for (k, part) in parts.iter().enumerate() {
+            let l = match pairs.iter().find(|p| p.1 == k) {
+                Some(&(l, _)) => l + inserted,
+                None => {
+                    // Before the next matched line, or at the end.
+                    let at = pairs
+                        .iter()
+                        .find(|p| p.1 > k)
+                        .map_or(lines.len(), |&(l, _)| l + inserted);
+                    lines.insert(at, (signs[k], rest_bars(total, signs[k])));
+                    for p in placed.iter_mut() {
+                        if p.0 >= at {
+                            p.0 += 1;
+                        }
+                    }
+                    inserted += 1;
+                    at
+                }
+            };
+            let mut ms = measures(part);
+            ms.resize_with(bars, || rest_measure(None));
+            placed.push((l, ms));
+        }
+        for (l, line) in lines.iter_mut().enumerate() {
+            match placed.iter().position(|p| p.0 == l) {
+                Some(k) => line.1.extend(std::mem::take(&mut placed[k].1)),
+                None => line.1.extend((0..bars).map(|_| rest_measure(Some(line.0)))),
             }
-            let renumbered = renumber(&inner(&body), numbers[k]);
-            numbers[k] += renumbered.matches("<measure ").count();
-            let close = parts[k].rfind("</part>").ok_or("no </part>")?;
-            parts[k].insert_str(close, &renumbered);
+        }
+        total += bars;
+    }
+    // Number the measures and write the score with the first page's header.
+    let first = &pages[0];
+    let head_end = first.find("<part-list>").ok_or("no <part-list>")?;
+    let list: String = (0..lines.len())
+        .map(|k| {
+            format!(
+                r#"<score-part id="P{0}"><part-name>Voice</part-name></score-part>"#,
+                k + 1
+            )
+        })
+        .collect();
+    let body: String = lines
+        .iter()
+        .enumerate()
+        .map(|(k, (_, ms))| {
+            format!(
+                r#"<part id="P{}">{}</part>"#,
+                k + 1,
+                renumber(&ms.concat(), 0)
+            )
+        })
+        .collect();
+    Ok(format!(
+        "{}<part-list>{list}</part-list>{body}</score-partwise>",
+        &first[..head_end]
+    ))
+}
+
+/// The longest order-preserving matching of `lines` to `parts` by equal
+/// clef: pairs (line index, part index). Ties keep the earliest lines.
+fn align(lines: &[char], parts: &[char]) -> Vec<(usize, usize)> {
+    let (n, m) = (lines.len(), parts.len());
+    let mut t = vec![vec![0usize; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            t[i][j] = if lines[i] == parts[j] {
+                t[i + 1][j + 1] + 1
+            } else {
+                t[i + 1][j].max(t[i][j + 1])
+            };
         }
     }
-    let head_end = first.find("<part ").ok_or("no <part>")?;
-    let tail = first
-        .rfind("</score-partwise>")
-        .ok_or("no </score-partwise>")?;
-    Ok(format!(
-        "{}{}{}",
-        &first[..head_end],
-        parts.concat(),
-        &first[tail..]
-    ))
+    let (mut i, mut j, mut out) = (0, 0, Vec::new());
+    while i < n && j < m {
+        if lines[i] == parts[j] && t[i][j] == t[i + 1][j + 1] + 1 {
+            out.push((i, j));
+            i += 1;
+            j += 1;
+        } else if t[i][j + 1] >= t[i + 1][j] {
+            j += 1;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// The clef sign (G, F, C) a part starts with, G if none is given.
+fn clef_sign(part: &str) -> char {
+    part.find("<sign>")
+        .and_then(|i| part[i + 6..].chars().next())
+        .unwrap_or('G')
+}
+
+/// The `<measure>` elements of a part, in order.
+fn measures(part: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = part;
+    while let Some(i) = rest.find("<measure") {
+        let Some(e) = rest[i..].find("</measure>") else {
+            break;
+        };
+        let e = e + i + "</measure>".len();
+        out.push(rest[i..e].to_string());
+        rest = &rest[e..];
+    }
+    out
+}
+
+/// A whole-bar rest; with `clef`, it also sets the clef (a line that starts
+/// later still shows its clef in its first bar).
+fn rest_measure(clef: Option<char>) -> String {
+    let attr = match clef {
+        Some('F') => "<attributes><divisions>1</divisions><clef><sign>F</sign><line>4</line></clef></attributes>",
+        Some('C') => "<attributes><divisions>1</divisions><clef><sign>C</sign><line>3</line></clef></attributes>",
+        Some(_) => "<attributes><divisions>1</divisions><clef><sign>G</sign><line>2</line></clef></attributes>",
+        None => "",
+    };
+    format!(
+        r#"<measure number="0">{attr}<note><rest measure="yes"/><duration>4</duration><voice>1</voice></note></measure>"#
+    )
+}
+
+/// `n` whole-bar rests for a line that joins on a later page.
+fn rest_bars(n: usize, sign: char) -> Vec<String> {
+    (0..n)
+        .map(|i| rest_measure(if i == 0 { Some(sign) } else { None }))
+        .collect()
 }
 
 fn split_parts(xml: &str) -> Result<Vec<String>, String> {
@@ -235,12 +353,6 @@ fn split_parts(xml: &str) -> Result<Vec<String>, String> {
         return Err("no parts in the recognised page".into());
     }
     Ok(out)
-}
-
-fn inner(part: &str) -> String {
-    let s = part.find('>').map_or(0, |i| i + 1);
-    let e = part.rfind("</part>").unwrap_or(part.len());
-    part[s..e].to_string()
 }
 
 fn renumber(measures: &str, offset: usize) -> String {
@@ -283,6 +395,99 @@ mod lib_10_app {
         format!(
             r#"<?xml version="1.0"?><score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Voice</part-name></score-part></part-list><part id="P1">{ms}</part></score-partwise>"#
         )
+    }
+
+    /// One part of a test page: clef sign, clef line, notes (step, octave;
+    /// step "-" is a whole-bar rest).
+    type TestPart<'a> = (&'a str, u8, &'a [(&'a str, u8)]);
+
+    /// A page of parts.
+    fn parts_page(parts: &[TestPart]) -> String {
+        let list: String = (0..parts.len())
+            .map(|k| {
+                format!(
+                    r#"<score-part id="P{0}"><part-name>Voice</part-name></score-part>"#,
+                    k + 1
+                )
+            })
+            .collect();
+        let body: String = parts
+            .iter()
+            .enumerate()
+            .map(|(k, (sign, line, notes))| {
+                let ms: String = notes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (step, oct))| {
+                        let attr = if i == 0 {
+                            format!("<attributes><divisions>1</divisions><clef><sign>{sign}</sign><line>{line}</line></clef></attributes>")
+                        } else {
+                            String::new()
+                        };
+                        if *step == "-" {
+                            format!(r#"<measure number="{}">{attr}<note><rest measure="yes"/><duration>4</duration></note></measure>"#, i + 1)
+                        } else {
+                            format!(r#"<measure number="{}">{attr}<note><pitch><step>{step}</step><octave>{oct}</octave></pitch><duration>4</duration><type>whole</type></note></measure>"#, i + 1)
+                        }
+                    })
+                    .collect();
+                format!(r#"<part id="P{}">{ms}</part>"#, k + 1)
+            })
+            .collect();
+        format!(
+            r#"<?xml version="1.0"?><score-partwise version="4.0"><part-list>{list}</part-list>{body}</score-partwise>"#
+        )
+    }
+
+    /// The notes of each part of a joined score, as "C4" or "-" for a rest.
+    fn lines(xml: &str) -> Vec<Vec<String>> {
+        split_parts(xml)
+            .unwrap()
+            .iter()
+            .map(|p| {
+                let mut out = Vec::new();
+                let mut rest = p.as_str();
+                while let Some(i) = rest.find("<note>") {
+                    let e = rest[i..].find("</note>").unwrap() + i;
+                    let n = &rest[i..e];
+                    out.push(match (n.find("<step>"), n.find("<octave>")) {
+                        (Some(a), Some(b)) => format!("{}{}", &n[a + 6..a + 7], &n[b + 8..b + 9]),
+                        _ => "-".to_string(),
+                    });
+                    rest = &rest[e..];
+                }
+                out
+            })
+            .collect()
+    }
+
+    #[test]
+    fn lib_10_pages_with_different_parts_join_by_line() {
+        // Abide with me: page 1 has S, T, B; page 2 adds a baritone solo
+        // (bass clef) between S and T. Each line must stay one part, and the
+        // baritone gets rests on page 1.
+        let p1 = parts_page(&[
+            ("G", 2, &[("B", 4), ("G", 4)]),
+            ("G", 2, &[("-", 0), ("D", 4)]),
+            ("F", 4, &[("-", 0), ("G", 2)]),
+        ]);
+        let p2 = parts_page(&[
+            ("G", 2, &[("C", 5)]),
+            ("F", 4, &[("E", 3)]),
+            ("G", 2, &[("E", 4)]),
+            ("F", 4, &[("C", 3)]),
+        ]);
+        let joined = join_pages(&[p1, p2]).unwrap();
+        assert_eq!(
+            lines(&joined),
+            vec![
+                vec!["B4", "G4", "C5"],
+                vec!["-", "-", "E3"],
+                vec!["-", "D4", "E4"],
+                vec!["-", "G2", "C3"],
+            ]
+        );
+        cantor_score::parse_score_file(joined.as_bytes()).expect("parses");
     }
 
     struct Fake {

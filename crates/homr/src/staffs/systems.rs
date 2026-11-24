@@ -465,6 +465,15 @@ fn fit_neighbors(
     None
 }
 
+/// ChoirBird: whether a system detected with a brace or bracket stays whole
+/// in the repair although its layout is not the page's (see [`repair`]).
+fn keeps_connected_system(ar: &Arena, row: &Row, lay: &Layout) -> bool {
+    row.staffs.len() > 1
+        && !row.connections.is_empty()
+        && !layout(ar, row).iter().any(|&g| g)
+        && !lay.iter().any(|&g| g)
+}
+
 fn repair(ar: &mut Arena, rows: &[Row], lay: &Layout, strict: bool, guess_lone: bool) -> Vec<Row> {
     let gs = possible_grandstaffs(ar, rows, strict, guess_lone);
     let mut result = Vec::new();
@@ -472,6 +481,18 @@ fn repair(ar: &mut Arena, rows: &[Row], lay: &Layout, strict: bool, guess_lone: 
     while i < rows.len() {
         let rl = layout(ar, &rows[i]);
         if &rl == lay {
+            result.push(rows[i].clone());
+            i += 1;
+            continue;
+        }
+        // ChoirBird: a system of single staffs joined by a brace or bracket on
+        // the page is a real system, even if its layout differs from the
+        // page's common one (a choir piece going from one solo line to S, T,
+        // B). homr 0.7.1 split it into single staffs here when the page's
+        // layout was one single staff, and then read the page as one part.
+        // Splitting stays for systems holding repeats of a layout with grand
+        // staffs (e.g. two voice + piano systems a crease joined).
+        if keeps_connected_system(ar, &rows[i], lay) {
             result.push(rows[i].clone());
             i += 1;
             continue;
@@ -701,6 +722,7 @@ fn unify_grand_staffs(ar: &mut Arena, rows: Vec<Row>) -> Vec<Row> {
 /// homr `repair_systems`.
 pub fn repair_systems(ar: &mut Arena, rows: Vec<Row>) -> Vec<Row> {
     let rows = unify_grand_staffs(ar, rows);
+
     if is_uniform(ar, &rows) && rows[0].staffs.len() > 1 {
         return rows;
     }
@@ -714,11 +736,108 @@ pub fn repair_systems(ar: &mut Arena, rows: Vec<Row>) -> Vec<Row> {
     };
     if !is_uniform(ar, &repaired) {
         if let Some(r) = regroup_by_pattern(ar, &rows) {
-            return r;
+            // ChoirBird: unless the regrouping cuts through a system kept
+            // whole above (a regrouping only ever joins rows or keeps them).
+            let kept = lay.as_ref().map_or(Vec::new(), |l| {
+                rows.iter()
+                    .filter(|r| keeps_connected_system(ar, r, l))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            });
+            let cuts = kept.iter().any(|k| {
+                !r.iter()
+                    .any(|g| k.staffs.iter().all(|s| g.staffs.contains(s)))
+            });
+            if !cuts {
+                return r;
+            }
         }
     }
     match lay {
         None => repaired,
         Some(l) => drop_single_at_end(ar, repaired, &l),
+    }
+}
+
+#[cfg(test)]
+mod lib_06_layout_changes {
+    use super::super::model::Point;
+    use super::*;
+
+    /// A single 5-line staff at `y0` with a line gap of 20 px, x 0..1000.
+    fn staff(y0: f64) -> Staff {
+        let grid = (0..=10)
+            .map(|i| {
+                Point::new(
+                    i as f64 * 100.0,
+                    (0..5).map(|k| y0 + 20.0 * k as f64).collect(),
+                    0.0,
+                )
+            })
+            .collect();
+        Staff::new(grid)
+    }
+
+    fn bracket(ar: &Arena, a: usize, b: usize) -> AngledBox {
+        let top = ar.0[a].min_y as i64;
+        let bottom = ar.0[b].max_y as i64;
+        AngledBox::axis(-20, top, -10, bottom, Vec::new(), -2)
+    }
+
+    fn shape(ar: &Arena, rows: &[Row]) -> Vec<String> {
+        rows.iter()
+            .map(|r| {
+                r.staffs
+                    .iter()
+                    .map(|&s| if ar.g(s) { 'G' } else { 's' })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn lib_06_bracketed_system_after_solo_lines_is_kept() {
+        // Abide with me, page 1: three solo lines (S), then S, T, B joined by a
+        // bracket, then T and B as a grand staff. homr's repair took the single
+        // staff as the page layout and split the bracketed system apart.
+        let mut ar = Arena(vec![staff(500.0), staff(800.0), staff(1100.0)]);
+        let rows = vec![
+            Row::new(&ar, vec![0], vec![]),
+            Row::new(&ar, vec![1], vec![]),
+            Row::new(&ar, vec![2], vec![]),
+        ];
+        let (s1, s2, s3) = (
+            ar.push(staff(1400.0)),
+            ar.push(staff(1620.0)),
+            ar.push(staff(1840.0)),
+        );
+        let c = bracket(&ar, s1, s3);
+        let mut rows = rows;
+        rows.push(Row::new(&ar, vec![s1, s2, s3], vec![c]));
+        let (u, l) = (ar.push(staff(2100.0)), ar.push(staff(2320.0)));
+        let g = ar.merge(u, l);
+        rows.push(Row::new(&ar, vec![g], vec![]));
+        let out = repair_systems(&mut ar, rows);
+        assert_eq!(shape(&ar, &out), ["s", "s", "s", "sss", "G"]);
+    }
+
+    #[test]
+    fn lib_06_system_without_connection_is_still_repaired() {
+        // homr's repair still applies where no brace or bracket was found: a
+        // stray 3-staff group with no connection is split to the page layout.
+        let mut ar = Arena(vec![
+            staff(500.0),
+            staff(800.0),
+            staff(1100.0),
+            staff(1400.0),
+            staff(1700.0),
+        ]);
+        let rows = vec![
+            Row::new(&ar, vec![0], vec![]),
+            Row::new(&ar, vec![1], vec![]),
+            Row::new(&ar, vec![2, 3, 4], vec![]),
+        ];
+        let out = repair_systems(&mut ar, rows);
+        assert_eq!(shape(&ar, &out), ["s", "s", "s", "s", "s"]);
     }
 }

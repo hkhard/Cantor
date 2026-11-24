@@ -164,4 +164,28 @@ mod lib_10_render {
     fn lib_10_bad_pdf_is_an_error() {
         assert!(CgPdfPages::default().pages(b"not a pdf").is_err());
     }
+
+    /// Dev aid: write the pages exactly as the converter sees them, to compare
+    /// with homr in Python. `CHOIRBIRD_PDF=x.pdf CHOIRBIRD_OUT=dir cargo test
+    /// --lib dump_pdf_pages -- --ignored`.
+    #[test]
+    #[ignore]
+    fn dump_pdf_pages() {
+        let (Ok(pdf), Ok(out)) = (
+            std::env::var("CHOIRBIRD_PDF"),
+            std::env::var("CHOIRBIRD_OUT"),
+        ) else {
+            return;
+        };
+        let pages = CgPdfPages::default()
+            .pages(&std::fs::read(pdf).unwrap())
+            .unwrap();
+        for (i, p) in pages.iter().enumerate() {
+            std::fs::write(
+                std::path::Path::new(&out).join(format!("page{}.png", i + 1)),
+                p,
+            )
+            .unwrap();
+        }
+    }
 }

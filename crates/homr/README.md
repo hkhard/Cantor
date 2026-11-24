@@ -53,6 +53,27 @@ Each stage is checked against homr's Python output on a public-domain page
 Models (129 MB) are not in git. `tools/omr/homr_port/fetch_models.sh` gets
 them from homr's GitHub release and checks their SHA-256.
 
+## Where the port differs from homr 0.7.1 (on purpose)
+
+Every stage matches homr exactly on the Lacrymosa page. Two changes go
+beyond homr, because homr's output was wrong for choir scores whose layout
+changes on a page (found on *Abide with me*: a soprano solo for three
+systems, then S, T and B joined by a bracket, then T and B on a grand staff):
+
+- **System repair** (`staffs/systems.rs`): a system of single staffs joined
+  by a found brace or bracket stays whole, even when the page's common layout
+  is one single staff. homr split it into single staffs. Systems with grand
+  staffs are repaired as before.
+- **Parts** (`musicxml/voices.rs`): when systems differ and can't be matched
+  by layout, homr read every staff as one line of a single part. The port now
+  gives the largest system's staffs one part each and puts every staff (each
+  half of a grand staff) in the part with the same clef, in order; parts a
+  system doesn't show get measure rests.
+
+Tests: `lib_06_bracketed_system_after_solo_lines_is_kept`,
+`lib_06_system_without_connection_is_still_repaired`,
+`lib_10_solo_then_three_staffs_then_two_gives_three_parts`.
+
 ## Testing
 
 ```sh
