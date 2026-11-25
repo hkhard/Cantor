@@ -3,11 +3,14 @@
 hand): docs/store/app-store.md -> metadata/<locale>/*.txt, and the finished
 screenshots -> screenshots/<locale>/.
 
-  python3 tools/store/export_deliver.py SCREENSHOT_FINAL_DIR OUT_DIR
+  python3 tools/store/export_deliver.py [SCREENSHOT_FINAL_DIR OUT_DIR]
+
+Without arguments: store-out/final -> store-out/deliver (what
+tools/store/make_screenshots.sh writes; it also runs this script).
 
 Then, with an App Store Connect API key (Users and Access > Integrations):
   fastlane deliver --api_key_path key.json --app_identifier se.nikielhard.choirbird \
-    --metadata_path OUT_DIR/metadata --screenshots_path OUT_DIR/screenshots \
+    --metadata_path store-out/deliver/metadata --screenshots_path store-out/deliver/screenshots \
     --skip_binary_upload --overwrite_screenshots --force
 fastlane uses the image size to pick the device slot.
 """
@@ -35,7 +38,9 @@ URLS = {
 
 
 def main():
-    shots, out = Path(sys.argv[1]), Path(sys.argv[2])
+    args = sys.argv[1:]
+    shots = Path(args[0]) if args else ROOT / "store-out/final"
+    out = Path(args[1]) if len(args) > 1 else ROOT / "store-out/deliver"
     text = (ROOT / "docs/store/app-store.md").read_text(encoding="utf-8")
     review = re.search(r"\*\*Notes for the reviewer:\*\*\s*\n\n```\n(.*?)\n```", text, re.S).group(1)
     n_files = 0

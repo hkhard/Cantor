@@ -3,13 +3,17 @@
 #   1. tools/ui_harness/run.sh store   raw screens (real UI, public-domain titles)
 #   2. tools/store/compose.py          headline + device frame, exact store sizes
 #   3. a check of every file's size and colour mode, and a contact sheet
-#   OUT=$JCODE_SCRATCH_DIR/store bash tools/store/make_screenshots.sh
-# Result: $OUT/final/<en|sv>/<iphone-69|iphone-63|ipad-13>/NN-name.png
+#   4. tools/store/export_deliver.py   the upload package (fastlane deliver layout)
+#   bash tools/store/make_screenshots.sh
+# Result (git-ignored, inside the repo; OUT=/some/dir to put it elsewhere):
+#   store-out/final/<en|sv>/<iphone-69|iphone-63|ipad-13>/NN-name.png
+#   store-out/deliver/{metadata,screenshots}/    ready to upload
 # Headlines: tools/store/headlines.json. Text for App Store Connect:
 # docs/store/app-store.md.
 set -euo pipefail
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-OUT="${OUT:-${TMPDIR:-/tmp}/choirbird-store}"
+OUT="${OUT:-$ROOT/store-out}"
 PY="$ROOT/tools/store/.venv/bin/python"
 if [ ! -x "$PY" ]; then
   python3 -m venv "$ROOT/tools/store/.venv"
@@ -44,4 +48,6 @@ for lang in ('en', 'sv'):
     sheet.save(f'{out}/final/showcase-{lang}.png')
 sys.exit(1 if bad or len(files) != 36 else 0)
 EOF
+"$PY" "$ROOT/tools/store/export_deliver.py" "$OUT/final" "$OUT/deliver"
 echo "App Store screenshots: $OUT/final"
+echo "Upload package:        $OUT/deliver"

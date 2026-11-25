@@ -24,3 +24,6 @@ target-wt/
 # the models copied into the app (tools/bundle_homr_models.sh).
 /vendor/
 app/src-tauri/resources/homr/
+
+# App Store screenshots and upload package (tools/store/make_screenshots.sh)
+/store-out/

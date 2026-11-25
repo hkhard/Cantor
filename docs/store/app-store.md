@@ -228,20 +228,25 @@ question is asked per build.
 
 ## Putting it into App Store Connect
 
-1. `OUT=$JCODE_SCRATCH_DIR/store bash tools/store/make_screenshots.sh`
-2. `python3 tools/store/export_deliver.py $OUT/final $OUT/deliver` lays it
-   all out as `fastlane deliver` expects: `metadata/en-GB|sv/*.txt`
-   (name, subtitle, promotional text, keywords, description, release notes,
-   URLs), review notes, categories, and `screenshots/en-GB|sv/` (36 files).
-   It exits 1 unless all 36 screenshots are there. Fill in
-   `metadata/copyright.txt` first.
+1. `bash tools/store/make_screenshots.sh` (from the repository root; no
+   variables needed). It captures and frames the screenshots and builds the
+   upload package in `store-out/` (git-ignored):
+   - `store-out/final/<en|sv>/<slot>/`: the 36 screenshots.
+   - `store-out/deliver/`: the same, laid out as `fastlane deliver`
+     expects: `metadata/en-GB|sv/*.txt` (name, subtitle, promotional text,
+     keywords, description, release notes, URLs), review notes,
+     categories, and `screenshots/en-GB|sv/`. It stops unless all 36
+     screenshots are there.
+2. Fill in `store-out/deliver/metadata/copyright.txt`. (After changing only
+   the text in this file, `python3 tools/store/export_deliver.py` rebuilds
+   the package without new screenshots.)
 3. Either upload by hand (App Store Connect › ChoirBird › the version ›
    English (U.K.) / Swedish: paste each `.txt`, drag the screenshots into
    each display size in file order), or with an App Store Connect API key:
 
 ```
 fastlane deliver --api_key_path key.json --app_identifier se.nikielhard.choirbird \
-  --metadata_path $OUT/deliver/metadata --screenshots_path $OUT/deliver/screenshots \
+  --metadata_path store-out/deliver/metadata --screenshots_path store-out/deliver/screenshots \
   --skip_binary_upload --overwrite_screenshots --force
 ```
 
@@ -260,7 +265,7 @@ titles only, framed by `tools/store/compose.py` after the
 aso-appstore-screenshots skill: navy background, coral action verb, cream
 benefit line, drawn device frame). Headlines live in
 `tools/store/headlines.json`. Output (not in git; regenerate any time):
-`$OUT/store/<lang>/<slot>/NN-name.png`, 6 per slot, 36 in total.
+`store-out/final/<lang>/<slot>/NN-name.png`, 6 per slot, 36 in total.
 
 | App Store Connect slot | Folder | Size (portrait) |
 |---|---|---|
