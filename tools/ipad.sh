@@ -76,7 +76,7 @@ case "${1:-sim}" in
     cd "$APP"
     CANTOR_VERSION="$TAG" cargo tauri ios build --target aarch64 \
       --export-method "${2:-release-testing}" --build-number "$BUILD" \
-      --config "{\"version\":\"$VERSION\"}"
+      --config "{\"version\":\"$VERSION\"}" ${HOMR_ARGS[@]+"${HOMR_ARGS[@]}"}
     echo "ChoirBird $TAG (build $BUILD): $APP/gen/apple/build/arm64/ChoirBird.ipa"
     ;;
   *)
