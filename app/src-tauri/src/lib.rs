@@ -1507,6 +1507,21 @@ fn perf_mark(name: String, ms: f64, paths: State<'_, Paths>) -> serde_json::Valu
     serde_json::json!({ "name": name, "ms": ms, "memory_mb": mem })
 }
 
+/// NFR-03 device self-test: `Some(ms since the Rust side started)` when the
+/// app was launched with CHOIRBIRD_PERF_SELFTEST=1 (devicectl/simctl), so
+/// the UI runs `lib/perfrun.ts`; `None` for everyone else. (Measured from
+/// `run()`, so the time iOS takes to load the binary is not included.)
+#[tauri::command]
+fn perf_selftest() -> Option<f64> {
+    std::env::var_os("CHOIRBIRD_PERF_SELFTEST")?;
+    Some(started_at().elapsed().as_secs_f64() * 1000.0)
+}
+
+fn started_at() -> &'static std::time::Instant {
+    static T: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    T.get_or_init(std::time::Instant::now)
+}
+
 /// NFR-02 device soak (see `CHOIRBIRD_SOAK_SELFTEST` in `run`): play a score
 /// for `minutes` on the real audio output and log, once a minute, how far
 /// the audio clock (frames the device pulled through the engine) has moved
@@ -2666,6 +2681,7 @@ fn resource_paths(app: &tauri::App) -> Paths {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    started_at();
     tauri::Builder::default()
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -2849,6 +2865,7 @@ pub fn run() {
             pending_backups,
             restore_pending,
             perf_mark,
+            perf_selftest,
             correct_note,
             attach_track,
             remove_track,

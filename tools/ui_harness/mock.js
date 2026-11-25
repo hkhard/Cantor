@@ -148,6 +148,12 @@ exports.setup = async function setup(page, dir) {
         },
         // LIB-10: on-device note reading (the harness drives the events).
         convert_status: () => [true, []],
+        // NFR-03 device self-test: off unless a test sets __perfSelftest.
+        perf_selftest: () => (window.__perfSelftest ? 1234 : null),
+        perf_mark: ({ name, ms }) => {
+          store.perf = [...(store.perf ?? []), [name, ms]]
+          return { name, ms, memory_mb: 0 }
+        },
         convert_score: ({ file }) => {
           store.converts = [...(store.converts ?? []), file]
         },

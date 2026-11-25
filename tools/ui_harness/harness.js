@@ -1530,6 +1530,29 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button[aria-label="Library"]')
   })
 
+  await step('nfr_03 device perf self-test runs end to end and reports every measurement', async () => {
+    // Only when the backend asks for it (CHOIRBIRD_PERF_SELFTEST on a device):
+    // a fresh page here, so the main flow above is not disturbed.
+    const ctx2 = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 2, hasTouch: true })
+    const p2 = await ctx2.newPage()
+    await require('./mock.js').setup(p2, DIR)
+    await p2.addInitScript(() => {
+      window.__perfSelftest = true
+      window.__store.hints = ['reader', 'intro', 'start']
+    })
+    await p2.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
+    await p2.waitForFunction(() => (window.__store.perf ?? []).some(([n]) => n === 'perf done'), null, { timeout: 60000 })
+    const names = await p2.evaluate(() => window.__store.perf.map(([n]) => n))
+    for (const want of ['perf launch to library', 'perf library scroll', 'perf open Lacrymosa to first page', 'perf open Lacrymosa', 'perf page turn tap x8', 'perf page turn swipe x4', 'perf mixer scroll']) {
+      if (!names.some((n) => n.startsWith(want))) throw new Error(`missing "${want}": ${JSON.stringify(names)}`)
+    }
+    if (names.some((n) => n.startsWith('perf error'))) throw new Error(JSON.stringify(names))
+    // Without the request nothing runs (the main page above never logged it).
+    const main = await page.evaluate(() => (window.__store.perf ?? []).map(([n]) => n))
+    if (main.some((n) => n.startsWith('perf '))) throw new Error('perf run started without being asked: ' + main)
+    await ctx2.close()
+  })
+
   console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors')
   await browser.close()
   process.exit(failed || errors.length ? 1 : 0)

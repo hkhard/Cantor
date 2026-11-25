@@ -441,6 +441,10 @@
       const hit = want && scores.find((s) => s.title.toLowerCase().includes(want.toLowerCase()))
       if (hit) await open(hit)
       if (hit && import.meta.env.VITE_AUTOPLAY) await toggle()
+      // NFR-03 device self-test (only when the app was launched for it).
+      api.perfSelftest().then((ms) => {
+        if (ms != null) import('./lib/perfrun').then((m) => m.perfRun(ms)).catch((e) => api.perfMark(`perf error ${e}`, 0))
+      }).catch(() => {})
     } catch (e) {
       error = String(e)
     }
