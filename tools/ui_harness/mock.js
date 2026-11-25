@@ -56,7 +56,28 @@ exports.setup = async function setup(page, dir) {
           { file: '1:Sicut', title: 'Sicut cervus', playable: true, pdf: true, user: true },
           { file: '1:Locus', title: 'Locus iste', playable: true, pdf: true, user: true },
           { file: '1:Cantique', title: 'Cantique de Jean Racine', playable: false, pdf: true, user: true },
+          // Public-domain pieces only (composers dead more than 70 years).
+          { file: '1:Ubi', title: 'Ubi caritas', playable: true, pdf: true, user: true },
+          { file: '1:Sanctus', title: 'Sanctus', playable: true, pdf: true, user: true },
+          { file: '1:Bogoroditse', title: 'Bogoroditse Devo', playable: true, pdf: true, user: true },
+          { file: '1:Abendlied', title: 'Abendlied', playable: true, pdf: true, user: true },
+          { file: '1:Jubilate', title: 'Jubilate Deo', playable: true, pdf: true, user: true },
+          { file: '1:Vesper', title: 'Den blomstertid nu kommer', playable: true, pdf: true, user: true },
+          { file: '1:Miserere', title: 'Miserere mei, Deus', playable: true, pdf: true, user: true },
+          { file: '1:Magnum', title: 'O magnum mysterium', playable: true, pdf: true, user: true },
+          { file: '1:Osjusti', title: 'Os justi', playable: true, pdf: true, user: true },
+          { file: '1:Cantate', title: 'Cantate Domino', playable: true, pdf: true, user: true },
+          { file: '1:Nacht', title: 'Die Nacht', playable: true, pdf: true, user: true },
+          { file: '1:Linden', title: 'Der Lindenbaum', playable: true, pdf: true, user: true },
         )
+        // A concert setlist, as a choir singer would have one.
+        if (!store.setlists.length)
+          store.setlists = [
+            { id: 'spring', name: localStorage.getItem('cantor.lang') === 'sv' ? 'Vårkonsert' : 'Spring concert', items: ['1:Ave', '1:Locus', '1:Lacrymosa', '1:Hallelujah'].map((score) => ({ kind: 'score', score, start_page: null })) },
+            { id: 'advent', name: 'Advent', items: ['1:Bogoroditse', '1:Ubi', '1:Jubilate'].map((score) => ({ kind: 'score', score, start_page: null })) },
+          ]
+        const composers = { '1:Lacrymosa': 'W. A. Mozart', '1:Ave': 'W. A. Mozart', '1:Hallelujah': 'G. F. Handel', '1:Sicut': 'G. P. da Palestrina', '1:Locus': 'Anton Bruckner', '1:Cantique': 'Gabriel Fauré', '1:Ubi': 'Gregorian chant', '1:Sanctus': 'Charles Gounod', '1:Bogoroditse': 'Sergei Rachmaninoff', '1:Abendlied': 'Josef Rheinberger', '1:Jubilate': 'Giovanni Gabrieli', '1:Vesper': 'Swedish folk hymn', '1:Miserere': 'Gregorio Allegri', '1:Magnum': 'T. L. de Victoria', '1:Osjusti': 'Anton Bruckner', '1:Cantate': 'H. L. Hassler', '1:Nacht': 'Franz Schubert', '1:Linden': 'Franz Schubert' }
+        for (const [f, composer] of Object.entries(composers)) store.metadata[f] = { ...(store.metadata[f] ?? {}), composer }
       }
       // Test hook: add scores (e.g. a MusicXML and a PDF that arrived apart).
       window.__addScores = (list) => scores.push(...list.filter((n) => !scores.some((x) => x.file === n.file)))

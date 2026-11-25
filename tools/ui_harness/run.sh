@@ -7,7 +7,8 @@
 # Uses the public fixture fixtures/scores/mozart-lacrymosa (no private scores).
 #   skins.js    VIEW-06: each skin on library, PDF, notation, mixer; page contrast >= 7:1
 #   shots.js    marketing screenshots for nikielhard.se/en/choirbird (public-domain titles only)
-#   tools/ui_harness/run.sh [harness|a11y|skins|all|shots]   screenshots in $OUT/shots
+#   store.js    raw App Store screenshots at iPhone 6.9" and iPad 13" sizes (same rules)
+#   tools/ui_harness/run.sh [harness|a11y|skins|all|shots|store]   screenshots in $OUT/shots
 set -euo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -15,7 +16,7 @@ OUT="${OUT:-${TMPDIR:-/tmp}/cantor-ui}"
 FIX="$ROOT/fixtures/scores/mozart-lacrymosa"
 WHAT="${1:-all}"
 mkdir -p "$OUT/shots"
-cp "$ROOT"/tools/ui_harness/{harness,mock,a11y,skins,shots}.js "$OUT/"
+cp "$ROOT"/tools/ui_harness/{harness,mock,a11y,skins,shots,store}.js "$OUT/"
 unzip -p "$FIX/mozart-lacrymosa-from-requiem-satb-with-piano.mxl" score.xml >"$OUT/score.musicxml"
 cp "$FIX/mozart-lacrymosa-from-requiem-satb-with-piano.pdf" "$OUT/score.pdf"
 # Measure map: `cargo run -q -p cantor-score --example layout_boxes -- <mxl>`.
@@ -42,4 +43,6 @@ if [ "$WHAT" = all ] || [ "$WHAT" = a11y ]; then node "$OUT/a11y.js" || status=1
 if [ "$WHAT" = all ] || [ "$WHAT" = skins ]; then node "$OUT/skins.js" || status=1; fi
 # Marketing screenshots for the web page (not part of "all").
 if [ "$WHAT" = shots ]; then node "$OUT/shots.js" || status=1; fi
+# Raw App Store screenshots at store sizes (tools/store/compose.py frames them).
+if [ "$WHAT" = store ]; then node "$OUT/store.js" || status=1; fi
 exit $status

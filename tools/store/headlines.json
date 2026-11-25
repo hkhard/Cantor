@@ -1,0 +1,18 @@
+{
+  "en": [
+    {"shot": "1-score", "verb": "PRACTISE", "rest": "YOUR PART IN YOUR OWN SCORE"},
+    {"shot": "2-mixer", "verb": "HEAR", "rest": "EVERY VOICE ON ITS OWN"},
+    {"shot": "3-notation", "verb": "FOLLOW", "rest": "THE MUSIC BAR BY BAR"},
+    {"shot": "4-annotate", "verb": "MARK", "rest": "BREATHS, DYNAMICS AND CUES"},
+    {"shot": "5-library", "verb": "KEEP", "rest": "YOUR WHOLE REPERTOIRE AT HAND"},
+    {"shot": "6-dark", "verb": "READ", "rest": "IN ANY LIGHT, EVEN ON STAGE"}
+  ],
+  "sv": [
+    {"shot": "1-score", "verb": "ÖVA", "rest": "DIN STÄMMA I DINA EGNA NOTER"},
+    {"shot": "2-mixer", "verb": "HÖR", "rest": "VARJE STÄMMA FÖR SIG"},
+    {"shot": "3-notation", "verb": "FÖLJ", "rest": "MUSIKEN TAKT FÖR TAKT"},
+    {"shot": "4-annotate", "verb": "MARKERA", "rest": "ANDNINGAR, DYNAMIK OCH INSATSER"},
+    {"shot": "5-library", "verb": "SAMLA", "rest": "HELA REPERTOAREN PÅ ETT STÄLLE"},
+    {"shot": "6-dark", "verb": "LÄS", "rest": "I ALLA LJUS, ÄVEN PÅ SCENEN"}
+  ]
+}

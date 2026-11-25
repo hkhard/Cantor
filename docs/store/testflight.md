@@ -1,5 +1,8 @@
 # ChoirBird on TestFlight
 
+For the full App Store release (listing text, privacy answers, screenshots)
+see `docs/store/app-store.md`.
+
 Text to paste into App Store Connect › ChoirBird › TestFlight. Swedish
 first (the choir is Swedish), English below. Limits: Beta App Description
 4,000 characters, "What to Test" 4,000.
