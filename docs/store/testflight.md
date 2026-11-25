@@ -12,20 +12,34 @@ TestFlight › External Testing › (group) › Public Link, then paste it here:
 `https://testflight.apple.com/join/XXXXXXXX`
 
 **Before turning on the public link** (it gives the app to people outside
-the team, so these must be true first):
+the team):
 
-1. **Source must be public (AGPL section 6):** everyone who gets a build
-   must be able to get its exact source. Make `hkhard/Cantor` public (or push
-   a clean public copy) and check that About › Source points at the tag of
-   the build (build 0.2.0 → tag `v0.2.0`). See `docs/ROADMAP.md`, phase 0.
-2. **Clear *The Anchor Song* fixture** before the repository goes public
-   (Björk's song; only the arrangement is ours).
+1. **Source is public (AGPL section 6):** done. `hkhard/Cantor` is public and
+   About › Source points at the tag of the build (build 0.3.0 (153) →
+   tag `v0.3.0`).
+2. ***The Anchor Song* fixture** in the public history still needs a decision
+   by the product owner (Björk's song; only the arrangement is ours).
 3. **External testing needs Beta App Review** by Apple for the first build:
    allow about a day.
-4. **Builds with on-device note recognition (homr)** may go on the public
-   link once the repository is public and About links the exact source of
-   that build (decision 2026-11-24, see `crates/homr/README.md` for the
-   accepted residual risk). Build 0.2.0 does not contain homr.
+4. **On-device note recognition (homr):** build 0.3.0 contains it. Allowed
+   because the source of the exact build is public (decision 2026-11-24, see
+   `crates/homr/README.md` for the accepted residual risk). homr, its
+   training data and ONNX Runtime are credited in About.
+
+## Uploading a build
+
+1. Build the archive (`HOMR=1 tools/ipad.sh release`, see
+   `docs/DEVELOPING.md`), tag the commit `vX.Y.Z` and push the tag.
+2. Upload: Xcode › Window › Organizer › Archives › the build ›
+   Distribute App › App Store Connect › Upload. (Needs an Apple ID with
+   access to team 33ZQ6Q226L under Xcode › Settings › Accounts. Without it
+   `xcodebuild -exportArchive` fails with "App Store Connect access for
+   33ZQ6Q226L is required".)
+3. Export compliance is answered by the build itself
+   (`ITSAppUsesNonExemptEncryption` = NO in `Info.plist`), so the build is
+   ready for testing once App Store Connect has processed it.
+4. Paste "What to Test" for the build from this file (both languages),
+   add it to the internal group, then to the external group.
 
 ## Beta App Description (svenska)
 
@@ -59,27 +73,29 @@ Mozart's Lacrymosa is included so you can try it straight away.
 
 ChoirBird is free software (GNU AGPL-3.0). The source is linked in About ChoirBird › Licence.
 
-## What to Test (build 0.2.0)
+## What to Test (build 0.3.0)
 
 Svenska:
-• Importera några av dina egna noter (PDF, MusicXML eller forScore .4sc/.4ss) och öppna dem.
-• Öva med din stämma: Min stämma, Utan mig, tempo och slinga. Följer markören musiken i PDF:en?
-• Vänd blad genom att svepa och genom att trycka i kanterna. Prova "Tryck flyttar en takt" under •••.
-• Prova läget Framför i en repertoarlista: hoppa mellan sidor och stycken.
-• På iPhone: täcker något noterna? Fungerar övningspanelen (⌃) och liggande läge?
-• Berätta vad som var svårt, gick fel eller saknas (skärmbild i TestFlight).
+• Nytt: ChoirBird kan läsa noterna ur en PDF, direkt på enheten. Öppna en PDF som saknar MusicXML och tryck "Läs in noterna" längst ner. Det tar ungefär en minut per sida (första gången längre) och fortsätter medan du gör annat. Spelar stämmorna rätt efteråt? Blev det rätt antal stämmor?
+• Nytt: forScore-filer (.4sc) med bara PDF kan läsas in på samma sätt. Behåller stycket sitt namn?
+• Repriser, volta (1. och 2. gång), D.S. al Coda och Coda spelas nu som i MuseScore. Lyssna på ett stycke med många repriser: hoppar uppspelningen rätt?
+• Bundna noter (överbindningar) ska hållas ut, inte slås an igen, även när två stämmor håller samma ton.
+• Fortsätt gärna testa som förut: din stämma, Utan mig, tempo, slinga, bladvändning och läget Framför.
+• Berätta vad som var svårt, gick fel eller saknas (skärmbild i TestFlight). Skriv gärna vilket stycke och vilken takt.
 
 English:
-• Import some of your own scores (PDF, MusicXML or forScore .4sc/.4ss) and open them.
-• Practise your part: My part, Without me, tempo and loop. Does the cursor follow the music on the PDF?
-• Turn pages by swiping and by tapping the edges. Try "Tap moves one bar" under •••.
-• Try Performance mode in a setlist: jump between pages and pieces.
-• On iPhone: does anything cover the music? Do the practice sheet (⌃) and landscape work?
-• Tell us what was hard, broken or missing (screenshot feedback in TestFlight).
+• New: ChoirBird can read the notes from a PDF, on the device. Open a PDF that has no MusicXML and tap "Read the notes" at the bottom. It takes about a minute per page (longer the first time) and carries on while you do other things. Do the parts play correctly afterwards? Did you get the right number of parts?
+• New: forScore files (.4sc) with only a PDF can be read the same way. Does the piece keep its name?
+• Repeats, first and second endings, D.S. al Coda and Coda now play as in MuseScore. Listen to a piece with many repeats: does playback jump to the right places?
+• Tied notes should be held, not struck again, also when two parts hold the same note.
+• Please keep testing as before: your part, Without me, tempo, loop, page turns and Performance mode.
+• Tell us what was hard, broken or missing (screenshot feedback in TestFlight). Mention the piece and the bar if you can.
 
 ## Feedback email and other fields
 
-- **Feedback email:** _(fill in)_
-- **Marketing URL / Privacy Policy URL:** needed for external testing. The privacy statement is short: ChoirBird collects no data, has no tracking and makes no network calls; scores stay on the device or in a folder you choose (see `app/src-tauri/gen/apple/PrivacyInfo.xcprivacy`).
+- **Feedback email:** choirbird-support@nikielhard.se
+- **Marketing URL:** https://nikielhard.se/en/choirbird (Swedish: https://nikielhard.se/se/choirbird)
+- **Privacy Policy URL:** https://nikielhard.se/en/choirbird/privacy. ChoirBird collects no data, has no tracking and makes no network calls; scores stay on the device or in a folder you choose (see `app/src-tauri/gen/apple/PrivacyInfo.xcprivacy`). Note recognition also runs on the device.
 - **Sign-in required:** no.
+- **Beta App Review notes:** ChoirBird needs no account. To try it, open the included Lacrymosa and press Play. To try note recognition, open any PDF score without MusicXML and tap "Read the notes"; it runs on the device and takes about a minute per page.
 - **Licence agreement:** the GNU AGPL-3.0 with the app store permission (`LICENSE`, `LICENSE-EXCEPTIONS.md`).
