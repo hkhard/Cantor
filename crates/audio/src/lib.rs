@@ -337,6 +337,17 @@ impl<S: Synth> Engine<S> {
         self.duration
     }
 
+    /// Output frames rendered since the engine was made, playing or not:
+    /// the audio device's own sample clock, for drift checks (NFR-02).
+    pub fn frames_rendered(&self) -> u64 {
+        self.out_frames
+    }
+
+    /// Output sample rate in Hz.
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
     pub fn finished(&self) -> bool {
         self.next >= self.events.len() && self.position() >= self.duration
     }

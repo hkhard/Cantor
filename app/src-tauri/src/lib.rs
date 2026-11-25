@@ -1507,6 +1507,100 @@ fn perf_mark(name: String, ms: f64, paths: State<'_, Paths>) -> serde_json::Valu
     serde_json::json!({ "name": name, "ms": ms, "memory_mb": mem })
 }
 
+/// NFR-02 device soak (see `CHOIRBIRD_SOAK_SELFTEST` in `run`): play a score
+/// for `minutes` on the real audio output and log, once a minute, how far
+/// the audio clock (frames the device pulled through the engine) has moved
+/// against the wall clock, and the memory footprint.
+fn soak(h: tauri::AppHandle, spec: &str) {
+    use std::io::Write;
+    let (id, minutes) = match spec.rsplit_once(':') {
+        Some((a, m)) if m.parse::<u64>().is_ok() && a.contains(':') => {
+            (a.to_string(), m.parse().unwrap())
+        }
+        _ => (spec.to_string(), 120u64),
+    };
+    let log_path = h.state::<Paths>().user.join("soak.log");
+    let line = |s: String| {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let _ = writeln!(f, "{s}");
+        }
+    };
+    // Let the UI settle first, so its start-up does not count.
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    let opened = open_score(
+        id.clone(),
+        None,
+        None,
+        None,
+        h.state::<Paths>(),
+        h.state::<Shared>(),
+        h.state::<remote::SharedEngine>(),
+    );
+    let opened = match opened {
+        Ok(o) => o,
+        Err(e) => return line(format!("soak {id}: open failed: {e}")),
+    };
+    let engine = match guard::lock(&h.state::<Shared>()).engine.clone() {
+        Some(e) => e,
+        None => return line(format!("soak {id}: no engine")),
+    };
+    let (f0, rate) = {
+        let mut e = guard::lock(&engine);
+        e.seek(0.0);
+        e.play();
+        (e.frames_rendered(), e.sample_rate())
+    };
+    let t0 = std::time::Instant::now();
+    let m0 = resident_mb();
+    line(format!(
+        "soak {id} \"{}\" for {minutes} min at {rate} Hz; {} channels, {:.1} s per play; start memory {m0:.0} MB",
+        opened.title,
+        opened.channels.len(),
+        opened.duration
+    ));
+    line("min\twall_s\taudio_s\tdrift_ms\tmem_MB\tplays\tplaying".into());
+    let mut plays = 1u32;
+    let mut next_log = 60u64;
+    while t0.elapsed().as_secs() < minutes * 60 {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let (frames, playing) = {
+            let mut e = guard::lock(&engine);
+            if e.finished() {
+                // Start again: a choir member practising the piece on repeat.
+                e.seek(0.0);
+                e.play();
+                plays += 1;
+            }
+            (e.frames_rendered(), e.is_playing())
+        };
+        let wall = t0.elapsed().as_secs_f64();
+        if wall as u64 >= next_log {
+            next_log += 60;
+            let audio = (frames - f0) as f64 / rate as f64;
+            line(format!(
+                "{}\t{wall:.3}\t{audio:.3}\t{:.1}\t{:.0}\t{plays}\t{playing}",
+                wall as u64 / 60,
+                (audio - wall) * 1000.0,
+                resident_mb()
+            ));
+        }
+    }
+    let frames = guard::lock(&engine).frames_rendered();
+    let wall = t0.elapsed().as_secs_f64();
+    let audio = (frames - f0) as f64 / rate as f64;
+    guard::lock(&engine).pause();
+    line(format!(
+        "done: wall {wall:.3} s, audio {audio:.3} s, drift {:.1} ms ({:.2} ppm), memory {m0:.0} -> {:.0} MB, {plays} plays",
+        (audio - wall) * 1000.0,
+        (audio - wall) / wall * 1e6,
+        resident_mb()
+    ));
+}
+
 /// Physical memory footprint of this process in MB (what iOS uses for its
 /// memory limit), via the Mach task_info call.
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -2595,6 +2689,18 @@ pub fn run() {
             app.manage(slot);
             app.manage(UiLang::default());
             app.manage(start_converter(app.handle().clone()));
+            // NFR-02 soak on a device: launched with
+            // CHOIRBIRD_SOAK_SELFTEST=<score id>[:<minutes>] (default 120),
+            // the app opens the score through the real command, plays it
+            // over and over on the real audio output, and appends one line a
+            // minute to Documents/soak.log: wall seconds, seconds of audio
+            // the device clock asked for (frames rendered / rate), their
+            // difference, memory footprint, plays so far. Only
+            // `devicectl`/`simctl launch` set it.
+            if let Ok(spec) = std::env::var("CHOIRBIRD_SOAK_SELFTEST") {
+                let h = app.handle().clone();
+                std::thread::spawn(move || soak(h, &spec));
+            }
             // PLAY-02 check on a simulator or device: launched with
             // CHOIRBIRD_PLAYORDER_SELFTEST=<score id>, the app writes the
             // playback order of that score's bars (1-based, runs) to

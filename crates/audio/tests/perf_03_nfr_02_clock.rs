@@ -333,6 +333,21 @@ fn nfr_02_position_is_rendered_frames_over_sample_rate() {
 }
 
 #[test]
+fn nfr_02_frames_rendered_counts_every_output_frame_playing_or_not() {
+    // The device soak (CHOIRBIRD_SOAK_SELFTEST) compares this counter with
+    // the wall clock to measure drift, so it must count paused frames too.
+    let sc = score();
+    let mut e = engine(&sc);
+    let mut rng = Rng(5);
+    run(&mut e, &mut rng, 7_000);
+    assert_eq!(e.frames_rendered(), 7_000, "paused frames count");
+    e.play();
+    run(&mut e, &mut rng, 30_001);
+    assert_eq!(e.frames_rendered(), 37_001);
+    assert_eq!(e.sample_rate() as f64, SRF);
+}
+
+#[test]
 fn nfr_02_position_does_not_move_with_wall_time() {
     let sc = score();
     let mut e = engine(&sc);
