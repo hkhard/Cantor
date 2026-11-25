@@ -625,6 +625,12 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                         continue;
                     };
                     let tie = |ty: &str| child.children("tie").any(|t| t.attr("type") == Some(ty));
+                    let slur = |ty: &str| {
+                        child
+                            .children("notations")
+                            .flat_map(|n| n.children("slur"))
+                            .any(|s| s.attr("type") == Some(ty))
+                    };
                     let offset = if is_chord { last_onset } else { cursor };
                     events.push(Event {
                         offset,
@@ -634,6 +640,8 @@ fn parse_part_measures(part_id: &str, part: &Element) -> Result<Vec<Measure>, Pa
                         kind,
                         tie_start: tie("start"),
                         tie_stop: tie("stop"),
+                        slur_start: slur("start"),
+                        slur_stop: slur("stop"),
                         lyrics: parse_lyrics(child),
                         dynamic: dynamics.get(&staff).copied(),
                         articulation: articulation_of(child),

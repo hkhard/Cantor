@@ -175,10 +175,20 @@ pub fn build_timemap(score: &Score) -> Timemap {
         // Open ties by (staff, voice, pitch): two voices can hold the same
         // pitch tied at once (each continues its own note).
         let mut open: HashMap<(u32, u32, u8), usize> = HashMap::new();
+        // Slurs open per (staff, voice): (depth, onset of the pending change,
+        // its change). Changes apply after every note of a chord has been
+        // seen, so a slur mark on one chord note covers the whole chord.
+        let mut slur: HashMap<(u32, u32), (i32, Tick, i32)> = HashMap::new();
+        // Last note per (staff, voice, pitch), to hold on through a slur.
+        let mut last: HashMap<(u32, u32, u8), usize> = HashMap::new();
         for (visit, &mi) in measure_order.iter().enumerate() {
             let Some(m) = p.measures.get(mi) else {
                 continue;
             };
+            // A slur does not carry over a jump (repeat, volta, D.S.).
+            if visit > 0 && mi != measure_order[visit - 1] + 1 {
+                slur.clear();
+            }
             // A tie into a measure the music skips (a volta not taken this
             // pass) still sounds its written length, as MuseScore plays it.
             if let Some(&prev) = visit.checked_sub(1).and_then(|v| measure_order.get(v)) {
@@ -218,6 +228,8 @@ pub fn build_timemap(score: &Score) -> Timemap {
             }
             for e in &m.events {
                 let EventKind::Note(pitch) = &e.kind else {
+                    // A rest ends a slur left open (OMR output often has one).
+                    slur.remove(&(e.staff, e.voice));
                     continue;
                 };
                 if e.duration == 0 {
@@ -241,6 +253,14 @@ pub fn build_timemap(score: &Score) -> Timemap {
                     .unwrap_or(DEFAULT_VELOCITY)
                     .saturating_add(e.articulation.accent)
                     .min(127);
+                // Slur depth for this staff and voice (see `slur`).
+                let st = slur.entry((e.staff, e.voice)).or_insert((0, on, 0));
+                if st.1 != on {
+                    st.0 = (st.0 + st.2).max(0);
+                    *st = (st.0, on, 0);
+                }
+                let st_under = st.0 > 0;
+                st.2 += i32::from(e.slur_start) - i32::from(e.slur_stop);
                 if e.tie_stop {
                     // This voice's own tie first; else one of the same pitch
                     // from another voice (a tie that moves between voices).
@@ -264,6 +284,22 @@ pub fn build_timemap(score: &Score) -> Timemap {
                         }
                     }
                 }
+                let key = (e.staff, e.voice, midi);
+                // Product owner, 2026-11-25: an arc between two notes of the
+                // same pitch is one note, tie or slur alike. Under a slur, a
+                // note that follows the same pitch without a gap holds it on.
+                let under_slur = st_under;
+                if under_slur && !e.tie_stop {
+                    if let Some(&idx) = last.get(&key) {
+                        if notes[idx].tick_off == on && notes[idx].tick_on < on {
+                            notes[idx].tick_off = off;
+                            if e.tie_start {
+                                open.insert(key, idx);
+                            }
+                            continue;
+                        }
+                    }
+                }
                 notes.push(TimedNote {
                     part: pi,
                     staff: e.staff,
@@ -279,6 +315,7 @@ pub fn build_timemap(score: &Score) -> Timemap {
                     chord_size: 1,
                 });
                 let key = (e.staff, e.voice, midi);
+                last.insert(key, notes.len() - 1);
                 if e.tie_start {
                     open.insert(key, notes.len() - 1);
                 } else {

@@ -333,3 +333,70 @@ fn play_01_tie_into_a_skipped_volta_is_held_its_written_length() {
     // Pass 2: bar 2 is skipped, still held 3 beats into bar 3.
     assert_eq!(g, vec![(3 * PPQ, 6 * PPQ), (11 * PPQ, 14 * PPQ)], "{g:?}");
 }
+
+/// Product owner, 2026-11-25: any arc between two notes of the same pitch
+/// is one note, whether written as a tie or a slur. Only You bars 51-59.
+#[test]
+fn play_01_slur_between_same_pitches_is_one_held_note() {
+    // G4 (slur start) - G4 (slur stop, slur start) | G4 (slur stop):
+    // one note of 8 beats, even with a new syllable under each note.
+    let s = one_voice(&[
+        &format!(
+            "{}{}",
+            g4(
+                2,
+                r#"<notations><slur type="start" number="1"/></notations><lyric><text>da</text></lyric>"#
+            ),
+            g4(
+                2,
+                r#"<notations><slur type="stop" number="1"/><slur type="start" number="1"/></notations><lyric><text>a</text></lyric>"#
+            )
+        ),
+        &g4(
+            4,
+            r#"<notations><slur type="stop" number="1"/></notations><lyric><text>ah</text></lyric>"#,
+        ),
+    ]);
+    let tm = build_timemap(&s);
+    let es: Vec<_> = tm.notes.iter().map(|n| (n.tick_on, n.tick_off)).collect();
+    assert_eq!(es, vec![(0, 8 * PPQ)]);
+}
+
+#[test]
+fn play_01_slur_over_different_pitches_plays_each_note_full_length() {
+    // G4 - A4 - G4 under one slur: three notes, bound (no gap between them).
+    let a4 = |d: u32, x: &str| {
+        format!(
+            r#"<note><pitch><step>A</step><octave>4</octave></pitch><duration>{d}</duration>{x}</note>"#
+        )
+    };
+    let s = one_voice(&[&format!(
+        "{}{}{}",
+        g4(1, r#"<notations><slur type="start"/></notations>"#),
+        a4(1, ""),
+        g4(2, r#"<notations><slur type="stop"/></notations>"#)
+    )]);
+    let tm = build_timemap(&s);
+    let es: Vec<_> = tm
+        .notes
+        .iter()
+        .map(|n| (n.pitch, n.tick_on, n.tick_off))
+        .collect();
+    assert_eq!(
+        es,
+        vec![(67, 0, PPQ), (69, PPQ, 2 * PPQ), (67, 2 * PPQ, 4 * PPQ)]
+    );
+}
+
+#[test]
+fn play_01_repeated_pitch_without_arc_or_after_a_rest_is_struck_again() {
+    // No arc: two notes. A slur left open (OMR) does not join across a rest.
+    let s = one_voice(&[&format!(
+        "{}{}<note><rest/><duration>1</duration></note>{}",
+        g4(1, ""),
+        g4(1, r#"<notations><slur type="start"/></notations>"#),
+        g4(1, "")
+    )]);
+    let tm = build_timemap(&s);
+    assert_eq!(tm.notes.len(), 3);
+}

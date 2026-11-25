@@ -323,6 +323,11 @@ pub struct Event {
     pub tie_start: bool,
     /// `<tie type="stop">`: this note continues the previous one, no new attack.
     pub tie_stop: bool,
+    /// A `<slur type="start">` on this note.
+    pub slur_start: bool,
+    /// A `<slur type="stop">` on this note. Under a slur, two neighbouring
+    /// notes of the same pitch play as one held note (PLAY-01).
+    pub slur_stop: bool,
     /// Lyrics on this note, one per verse (VOX-01).
     pub lyrics: Vec<Lyric>,
     /// Velocity (1..127) from the dynamic in effect for this staff, if the
