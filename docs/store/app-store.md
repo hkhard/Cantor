@@ -18,12 +18,15 @@ Screenshots: see "Screenshots" at the end. No app preview video for now.
 | Content rights | Contains no third-party content (the bundled Lacrymosa is Mozart, public domain; users bring their own scores) |
 | Age rating | 4+ (no objectionable content; every answer "None"/"No"; no unrestricted web access; no user-generated content shared with others) |
 | Price | Free, all countries (no In-App Purchases) |
-| Copyright | 2026 Nikiel Hård |
+| Copyright | 2026 (fill in: the legal name of the copyright holder) |
 | Licence agreement | Apple's standard EULA. The source code is AGPL-3.0 with the app store permission in `LICENSE-EXCEPTIONS.md`; this does not need a custom EULA |
 | Support URL | https://nikielhard.se/en/choirbird |
 | Marketing URL | https://nikielhard.se/en/choirbird |
 | Privacy Policy URL | https://nikielhard.se/en/choirbird/privacy |
 | Swedish Privacy Policy URL | https://nikielhard.se/se/choirbird/privacy |
+| App icon (1024 px) | Taken from the build (`ChoirBird.appiconset/AppIcon-1024.png`, with dark and tinted variants); nothing to upload |
+
+All four URLs above and the source link answered HTTP 200 on 2026-11-25.
 
 ## App Privacy ("nutrition label")
 
