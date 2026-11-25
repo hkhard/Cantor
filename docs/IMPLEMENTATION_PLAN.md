@@ -384,6 +384,21 @@ tests (NFR-11: 100% of P0 criteria automated).
   - Dynamic Type at the largest accessibility sizes on the device.
   - Pencil drawing on the notation on the device.
 - [x] Measured checks for timing, load and coverage (PERF-03, PLAY-06/07/08, NFR-01/02/11, LIB-02, 2026-11-22).
+  - **NFR-03 frame rate and start-up on the iPad mini (A17 Pro, 60 Hz display), 2026-11-25:** the App Store-like build (release, `HOMR=1`) launched three times cold with `CHOIRBIRD_PERF_SELFTEST=1`. The UI then drives itself (`app/ui/src/lib/perfrun.ts`, harness step `nfr_03 device perf self-test runs end to end and reports every measurement`) and times every frame with `requestAnimationFrame`; results in `Documents/.perf.log`. Three runs, all close:
+
+    | What | Result (3 cold launches) | NFR-03 |
+    |---|---|---|
+    | Launch (Rust start) to library | 326-332 ms | - |
+    | Library scroll, down and back | 60.0-60.4 fps, p95 17 ms, 0 dropped frames | 60 fps: met |
+    | Open Lacrymosa to first page shown | 846-940 ms | first page < 1.5 s: met |
+    | Page turn by tap (8 turns) | 59.1-59.6 fps, p95 18-19 ms, max 34-38 ms, 6-7 dropped | about 1 frame per turn |
+    | Page turn by swipe, the book curl (4 turns) | 59.7 fps, p95 17 ms, max 34 ms, 4 dropped | about 1 frame per turn |
+    | Mixer scroll | 60.2-60.4 fps, p95 17 ms, 0 dropped | 60 fps: met |
+    | Memory | 46 MB at the library, 90 MB while opening, 54 MB reading | - |
+
+    - Scrolling (library, mixer) holds 60 fps with no dropped frame. The curl itself animates at 60 fps: the one late frame per turn (34 ms, i.e. one 60 Hz frame missed) comes when the new page's full-size canvas is swapped in at the end (`PdfPage.svelte` copies the off-screen render onto the visible canvas on the main thread). Hardly visible at 60 Hz; would be the thing to fix first for 120 Hz iPads (pre-render the next page, or swap with `transferControlToOffscreen`/`ImageBitmap`).
+    - Opening a piece has 2-3 long frames (210-290 ms) while pdf.js loads the document and renders the first page and the score is parsed; once per open, within the 1.5 s budget.
+    - Not measured: a finger (the swipe is synthetic pointer events, the same path the touch takes), a 100-page score, notation (Verovio) page turns, Dark/Sepia recolouring cost, iPhone, 120 Hz iPads; time from tapping the icon to the Rust start (iOS loading the binary).
   - **NFR-02 2-hour soak on the iPad mini (A17 Pro), 2026-11-25 18:45-20:45:** the App Store-like build (release config, `HOMR=1`) launched with `CHOIRBIRD_SOAK_SELFTEST=0:mozart-lacrymosa-from-requiem-satb-with-piano:120`: it opens the bundled Lacrymosa through the real `open_score` command, plays it on repeat on the speaker (48 kHz, 5 channels, 180.7 s per play), and logs once a minute to `Documents/soak.log` the wall clock against the audio clock (output frames the device pulled through the engine, `Engine::frames_rendered`, test `nfr_02_frames_rendered_counts_every_output_frame_playing_or_not`) and the memory footprint.
     - **Result:** 120 minutes, 40 plays, playing every minute. Final: wall 7200.106 s, audio 7200.107 s, **1.1 ms apart after 2 hours (0.15 ppm)**. Per-minute readings range −19.3 to +2.5 ms (mean −9.6 ms) with no trend (first 10 minutes mean −10.4 ms, last 10 −9.7 ms): that spread is the 250 ms sampling tick against audio buffers, not drift. **Memory 55 MB at every minute** (89 MB right after opening, before the first minute), so no growth.
     - Meaning: the audio clock and the wall clock agree to within one buffer over 2 hours, and the score position (derived only from rendered frames, NFR-02) cannot drift from the sound. The cursor follows the same position.
