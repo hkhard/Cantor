@@ -41,8 +41,12 @@ the team):
 3. Export compliance is answered by the build itself
    (`ITSAppUsesNonExemptEncryption` = NO in `Info.plist`), so the build is
    ready for testing once App Store Connect has processed it.
-4. Paste "What to Test" for the build from this file (both languages),
-   add it to the internal group, then to the external group.
+4. Set "What to Test" (both languages, from the section in this file named
+   after the version): `tools/store/testflight_notes.rb X.Y.Z` waits for
+   processing, sets both texts, reads them back and lists the beta groups
+   (the internal group gets every build). Then add the build to the
+   external group `ChoirBird_Testers` and submit it for Beta App Review (in
+   App Store Connect, or with the API as done for 0.3.3).
 
 ## Beta App Description (svenska)
 

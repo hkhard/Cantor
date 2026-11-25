@@ -186,8 +186,10 @@ to get the exact source. Before handing out a build:
    in `docs/store/testflight.md`.
 
 First upload: ChoirBird 0.2.0 (build 0.2.0.110, tag `v0.2.0`), 2026-11-23,
-"Upload succeeded". Latest: ChoirBird 0.3.2 (build 0.3.2.159, tag `v0.3.2`,
-with on-device note recognition, `HOMR=1`), 2026-11-25, "Upload succeeded".
+"Upload succeeded". Latest: ChoirBird 0.3.3 (build 0.3.3.179, tag `v0.3.3`,
+with on-device note recognition, `HOMR=1`), 2026-11-25, "Upload succeeded";
+What to Test set and the build added to the external group with
+`tools/store/testflight_notes.rb`, submitted for Beta App Review.
 Run the release build with `nohup` and a log file: it takes over a minute
 even when cached and must not die with the shell. Processing and TestFlight availability are checked in
 App Store Connect.
