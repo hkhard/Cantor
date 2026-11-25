@@ -226,6 +226,33 @@ The source code is public (GNU AGPL-3.0): https://github.com/hkhard/Cantor
 `ITSAppUsesNonExemptEncryption` = NO is in the build's `Info.plist`, so no
 question is asked per build.
 
+## Putting it into App Store Connect
+
+1. `OUT=$JCODE_SCRATCH_DIR/store bash tools/store/make_screenshots.sh`
+2. `python3 tools/store/export_deliver.py $OUT/final $OUT/deliver` lays it
+   all out as `fastlane deliver` expects: `metadata/en-GB|sv/*.txt`
+   (name, subtitle, promotional text, keywords, description, release notes,
+   URLs), review notes, categories, and `screenshots/en-GB|sv/` (36 files).
+   It exits 1 unless all 36 screenshots are there. Fill in
+   `metadata/copyright.txt` first.
+3. Either upload by hand (App Store Connect › ChoirBird › the version ›
+   English (U.K.) / Swedish: paste each `.txt`, drag the screenshots into
+   each display size in file order), or with an App Store Connect API key:
+
+```
+fastlane deliver --api_key_path key.json --app_identifier se.nikielhard.choirbird \
+  --metadata_path $OUT/deliver/metadata --screenshots_path $OUT/deliver/screenshots \
+  --skip_binary_upload --overwrite_screenshots --force
+```
+
+4. In App Store Connect: App Privacy (no data collected), age rating
+   questionnaire, price Free, the build (0.3.2 (159) or later), then
+   Add for Review.
+
+Status 2026-11-25: the package is built and checked; nothing is uploaded
+(this machine has no App Store Connect API key, no fastlane, and the browser
+bridge was not available).
+
 ## Screenshots
 
 Made by `tools/store/make_screenshots.sh` (real UI in WebKit, public-domain
