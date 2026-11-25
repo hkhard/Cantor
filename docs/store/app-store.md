@@ -39,6 +39,70 @@ All four URLs above and the source link answered HTTP 200 on 2026-11-25.
 
 ## Accessibility Nutrition Labels
 
+### What App Store Connect asks, and what to tick (2026-11-25)
+
+App Store Connect › ChoirBird › App Accessibility › iPhone and iPad. Answer
+per device; the answers are the same for iPhone and iPad. Tick a feature
+only when people can do the app's **common tasks** with it (Apple's rule:
+for ChoirBird, open a piece, play it, choose your part in the mixer, turn
+pages, use the library).
+
+| Label | Tick now? | Why |
+|---|---|---|
+| Dark Interface | **Yes** | Dark skin across the whole app; the music page is light grey on black |
+| Sufficient Contrast | **Yes** | Text ≥ 4.5:1 and music pages ≥ 7:1 in all three skins (harness `skins`, `a11y`) |
+| Reduced Motion | **Yes** | With Reduce Motion on, animations stop (splash, page curl, transitions) |
+| Larger Text | Not yet | Built (see below), but only tried at 200 % in WebKit, not with iOS Dynamic Type on a device |
+| VoiceOver | Not yet | Every control has a name (0 axe findings) but nobody has done the common tasks with VoiceOver on a device |
+| Voice Control | Not yet | Not tried |
+| Differentiate Without Color Alone | Not yet | Voice lines carry their names and state words as well as colour, but not reviewed against Apple's criteria |
+| Captions, Audio Descriptions | Leave off | The app has no video |
+
+To add a label later: do the common tasks on the iPad and the iPhone with
+that feature on, note the result in `docs/IMPLEMENTATION_PLAN.md`, then tick
+it. The labels can change without a new app version.
+
+### Accessibility features in ChoirBird
+
+What the app does today (checked in the UI harness, `tools/ui_harness/a11y.js`
+and `skins.js`, on every release; the harness runs the real UI in WebKit):
+
+- **Named controls.** Every button, slider and toggle has an accessible name
+  in Swedish and English (for example "Solo Alto", "Mute Bass", "Next page").
+  Toggles report their state (pressed / not pressed); progress for "Read the
+  notes" is announced as a status. axe-core (WCAG 2.2 A and AA rules) finds
+  0 problems on every screen, in all three skins and both languages.
+- **Text size.** The app follows the iOS text size (Dynamic Type) and has its
+  own setting in About › Text size: 90 %, 100 %, 125 %, 150 %, 200 %. All
+  sizes are in rem, so the whole interface grows; the reader's controls stay
+  on screen at 200 %.
+- **Dark Interface and three reading skins.** Light (black on white), Sepia
+  (black on warm paper) and Dark (light grey on black), chosen in the
+  library or following the system setting. The PDF page itself is recoloured
+  in Dark.
+- **Contrast.** The brand coral is used in a darker shade for text on light
+  backgrounds; text and controls meet WCAG AA (4.5:1), music pages 7:1.
+- **Reduced Motion.** With Reduce Motion on, the flapping-bird splash becomes
+  a still picture, the book-like page curl and transitions are switched off.
+- **Not only colour.** Each voice in the mixer is named (Soprano, Alto, ...);
+  My part, Mute and Solo are words or letters with a pressed state, not just
+  a colour.
+- **Keyboard and switch-friendly page turns.** Arrow keys, Page Up/Down,
+  Space and Enter turn pages or play/pause (also used by Bluetooth page-turn
+  pedals); the keys can be changed in Pedal settings. Keyboard focus is
+  always visible.
+- **Big touch targets in Performance.** Performance mode hides the editing
+  controls and turns the whole left and right edges into page-turn areas.
+- **Sound without the screen.** Playback continues with the screen locked and
+  shows title and position on the lock screen.
+
+**Not verified:** VoiceOver, Voice Control and Dynamic Type on a real iPad or
+iPhone; Switch Control; full keyboard navigation through every dialog (Tab
+reaches the library controls and focus is visible; deeper screens are not
+tested by keyboard).
+
+### Earlier assessment (kept for reference)
+
 Claim only what was verified (see `docs/IMPLEMENTATION_PLAN.md`):
 
 | Label | Claim? | Evidence |
