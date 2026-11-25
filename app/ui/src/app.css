@@ -970,6 +970,14 @@ select {
 }
 .pf-cover {
   background: var(--paper);
+  /* Clips the page underneath to the lifted part. */
+  overflow: hidden;
+}
+.pf-peek {
+  position: absolute;
+  inset: 0;
+  /* The desk around the page, as in the reader. */
+  background: color-mix(in srgb, var(--paper, #fff) 88%, var(--paper-ink, #000));
 }
 .pf-flap {
   background: linear-gradient(

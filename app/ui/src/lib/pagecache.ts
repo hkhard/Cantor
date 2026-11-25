@@ -20,6 +20,8 @@ export interface Rendered {
 const KEEP = 8
 
 const cache = new WeakMap<PDFDocumentProxy, Map<string, Promise<Rendered | null>>>()
+/** The result of each finished render, for callers that cannot wait. */
+const done = new WeakMap<Promise<Rendered | null>, Rendered>()
 
 function key(n: number, w: number, h: number, dpr: number, skin: string) {
   return `${n}|${Math.round(w)}|${Math.round(h)}|${dpr}|${skin}`
@@ -88,9 +90,18 @@ export function renderedPage(doc: PDFDocumentProxy, n: number, w: number, h: num
   // A failed render is not kept, so the next ask tries again.
   p.then((r) => {
     if (!r) m.delete(k)
+    else done.set(p, r)
   })
   while (m.size > KEEP) m.delete(m.keys().next().value as string)
   return p
+}
+
+/** Page `n` if it is already drawn at this size, else null (no render). */
+export function readyPage(doc: PDFDocumentProxy, n: number, w: number, h: number): Rendered | null {
+  const dpr = window.devicePixelRatio || 1
+  const skin = document.documentElement.dataset.skin ?? ''
+  const p = cache.get(doc)?.get(key(n, w, h, dpr, skin))
+  return (p && done.get(p)) ?? null
 }
 
 /** Render pages ahead while the browser is idle (after the visible one). */

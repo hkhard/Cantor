@@ -899,7 +899,7 @@
   // left/right halves of the screen page-turn zones; editing is locked.
   let performance = $state(false)  // PERF-07: false = Practice mode
 
-  let pdfView: { turn: (d: number) => void; turnPage: (d: number) => void; goto: (p: number) => void; pageInfo: () => { page: number; pages: number } } | undefined = $state()
+  let pdfView: { turn: (d: number) => void; turnPage: (d: number) => void; goto: (p: number) => void; pageInfo: () => { page: number; pages: number }; peek: (d: number) => ReturnType<NonNullable<import('./lib/swipe').SwipeOpts['peek']>> } | undefined = $state()
   /** PERF-07: shown PDF page and count (for the performance bar). */
   let pdfPage = $state({ page: 1, pages: 1 })
   /** The page and count of whichever view is showing. */
@@ -1247,7 +1247,7 @@
     <div class="body" onclickcapture={phoneTap}>
       <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
       {#if view === 'pdf' && opened.pdf_url}
-        <div class="score pdf" use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage, canturn: canSwipe }}>
+        <div class="score pdf" use:swipe={{ enabled: swipeTurns && !(annotating && !performance), onswipe: swipePage, canturn: canSwipe, peek: (d) => pdfView?.peek(d) ?? null }}>
           <PdfView
             bind:this={pdfView}
             url={scoreFileUrl(opened.pdf_url)}

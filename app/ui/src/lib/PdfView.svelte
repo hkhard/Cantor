@@ -8,7 +8,7 @@
   import type { PDFDocumentProxy } from 'pdfjs-dist'
   import { closePdf, openPdf, type MeasureBox, type PageMode } from './pdf'
   import PdfPage from './PdfPage.svelte'
-  import { prefetch } from './pagecache'
+  import { prefetch, readyPage } from './pagecache'
   import type { AnnDoc, AnnCommand, Tool } from './annot'
   import { t } from './i18n.svelte'
 
@@ -130,6 +130,38 @@
     const todo = near.filter((p) => p >= 1 && p <= pages)
     untrack(() => prefetch(d, todo, w, h))
   })
+  /** PERF-05: the page(s) a whole-page turn in direction `d` will show,
+   * already drawn, with where they will sit on screen (viewport pixels).
+   * The page curl shows them under the lifted sheet, as in a book; null
+   * when there is nothing drawn yet (the curl then shows plain paper). */
+  export function peek(d: number): { bitmap: HTMLCanvasElement; x: number; y: number; w: number; h: number; page: number }[] | null {
+    if (!doc || !host || mode === 'scroll') return null
+    let p = page + d * step
+    if (p < 1 || p > pages) return null
+    if (twoUp && p % 2 === 0) p -= 1
+    const hr = host.getBoundingClientRect()
+    if (fitWidth) {
+      const r = readyPage(doc, p, box.w - 8, fitH)
+      if (!r || !fitEl) return null
+      // show() scrolls the new page to its first system.
+      const b = boxes?.find((x) => x.page === p)
+      const scroll = b ? Math.max(0, fitEl.offsetTop + b.y * r.h - 8) : 0
+      return [{ page: p, bitmap: r.bitmap, x: hr.left + (hr.width - r.w) / 2, y: hr.top + fitEl.offsetTop - scroll, w: r.w, h: r.h }]
+    }
+    if (twoUp) {
+      const a = readyPage(doc, p, box.w / 2 - 6, box.h)
+      const c = p + 1 <= pages ? readyPage(doc, p + 1, box.w / 2 - 6, box.h) : null
+      if (!a || (p + 1 <= pages && !c)) return null
+      const total = a.w + (c ? c.w + 12 : 0)
+      const x0 = hr.left + (hr.width - total) / 2
+      const out = [{ page: p, bitmap: a.bitmap, x: x0, y: hr.top + (hr.height - a.h) / 2, w: a.w, h: a.h }]
+      if (c) out.push({ page: p + 1, bitmap: c.bitmap, x: x0 + a.w + 12, y: hr.top + (hr.height - c.h) / 2, w: c.w, h: c.h })
+      return out
+    }
+    const r = readyPage(doc, p, box.w, box.h)
+    return r ? [{ page: p, bitmap: r.bitmap, x: hr.left + (hr.width - r.w) / 2, y: hr.top + (hr.height - r.h) / 2, w: r.w, h: r.h }] : null
+  }
+
   /** Top of the first system on page `p`, in host scroll pixels. */
   function firstSystemTop(p: number): number {
     const b = boxes?.find((x) => x.page === p)

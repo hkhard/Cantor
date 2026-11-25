@@ -1286,13 +1286,47 @@ const H = Number(process.env.H || 1133)
     // The page edge started at the pane's right edge and moved with the
     // finger: 0.4 of the pdf pane's width to the left.
     const finger = mid.pl + mid.pw - b.width * 0.4
-    if (Math.abs(mid.cr - (mid.pl + mid.pw)) > 2) throw new Error('cover not anchored at the page edge')
+    // The cover is clipped by the fold layer: its visible right edge is the pane's.
+    if (Math.abs(Math.min(mid.cr, mid.pl + mid.pw) - (mid.pl + mid.pw)) > 2) throw new Error('cover not anchored at the page edge')
+    // As in a book, the lifted part shows the next page (not blank paper),
+    // in the place it will have once turned.
+    const under = await page.evaluate((want) => {
+      const c = document.querySelector('.pagefold .pf-cover .pf-peek canvas')
+      if (!c) return 'no page under the lifted part'
+      const peek = c.closest('.pf-peek')
+      if (peek.dataset.page !== String(want)) return 'under the fold is page ' + peek.dataset.page
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+      let ink = 0
+      for (let i = 0; i < d.length; i += 400) if (d[i] < 128) ink++
+      if (ink < 20) return 'the page under the fold is blank'
+      const real = document.querySelector('.sheet canvas').getBoundingClientRect()
+      const r = c.getBoundingClientRect()
+      const pane = document.querySelector('.pagefold').getBoundingClientRect()
+      // Cover inner layer is translated back: the page sits where the real one is.
+      if (Math.abs(r.width - real.width) > 2 || Math.abs(r.top - real.top) > 2) return `peek at ${JSON.stringify(r)}, page at ${JSON.stringify(real)}`
+      void pane
+      return ''
+    }, Number(before.split('/')[0]) + 1)
+    if (under) throw new Error(under)
+    // Watch every frame of the finishing turn: the pane is never blank
+    // (the full cover always carries the next page until the real one shows).
+    await page.evaluate(() => {
+      window.__blank = 0
+      const watch = () => {
+        const f = document.querySelector('.pagefold')
+        if (f && !f.querySelector('.pf-peek canvas')) window.__blank++
+        if (f || window.__blankWatch++ < 5) requestAnimationFrame(watch)
+      }
+      window.__blankWatch = 0
+      requestAnimationFrame(watch)
+    })
     if (Math.abs(mid.fl - finger) > 12) throw new Error(`flap does not start at the finger: ${JSON.stringify(mid)}`)
     if (Math.abs(mid.fr - mid.cl) > 2) throw new Error('flap and cover do not meet at the fold')
     await shot('52-page-fold')
     await page.mouse.up()
     await page.waitForTimeout(600)
     if ((await pg()) === before) throw new Error(`drag past a quarter did not turn (${before})`)
+    if (await page.evaluate(() => window.__blank)) throw new Error('blank page frames during the turn: ' + (await page.evaluate(() => window.__blank)))
     if (await page.locator('.pagefold').count()) throw new Error('fold left behind')
     // Back: drag to the right.
     await page.mouse.move(b.x + b.width * 0.1, cy)

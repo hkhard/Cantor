@@ -10,21 +10,39 @@ export interface SwipeOpts {
   /** Is there a page that way? At the first or last page the drag only
    * gives a little resistance (no fold) and nothing turns. */
   canturn?: (d: number) => boolean
+  /** The page(s) a turn that way will show, already drawn, at viewport
+   * positions. Shown under the lifted sheet, as in a book. */
+  peek?: (d: number) => { bitmap: HTMLCanvasElement; x: number; y: number; w: number; h: number; page: number }[] | null
 }
 
 const reduced = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
-/** The fold drawn over the pane: `cover` hides the lifted part of the page,
- * `flap` is the back of the sheet folded over, `shade` darkens the page
- * under the flap. All positioned with transforms only. */
-function makeFold(node: HTMLElement) {
+/** The fold drawn over the pane: `cover` hides the lifted part of the page
+ * and shows the page underneath (the next one, `peek`), `flap` is the back
+ * of the sheet folded over, `shade` darkens the page under the flap. All
+ * positioned with transforms only. */
+function makeFold(node: HTMLElement, pages: ReturnType<NonNullable<SwipeOpts['peek']>>) {
   const el = document.createElement('div')
   el.className = 'pagefold'
   el.setAttribute('aria-hidden', 'true')
-  el.innerHTML = '<div class="pf-cover"></div><div class="pf-shade"></div><div class="pf-flap"></div>'
+  el.innerHTML = '<div class="pf-cover"><div class="pf-peek"></div></div><div class="pf-shade"></div><div class="pf-flap"></div>'
   node.appendChild(el)
   const [cover, shade, flap] = Array.from(el.children) as HTMLElement[]
-  return { el, cover, shade, flap }
+  const peek = cover.firstElementChild as HTMLElement
+  if (pages?.length) {
+    // One layout read when the drag starts, none while it moves.
+    const r = node.getBoundingClientRect()
+    peek.dataset.page = String(pages[0].page)
+    for (const p of pages) {
+      const c = document.createElement('canvas')
+      c.width = p.bitmap.width
+      c.height = p.bitmap.height
+      c.getContext('2d')!.drawImage(p.bitmap, 0, 0)
+      c.style.cssText = `position:absolute;left:${p.x - r.left}px;top:${p.y - r.top}px;width:${p.w}px;height:${p.h}px;box-shadow:0 2px 10px rgba(0,0,0,0.15);background:var(--paper)`
+      peek.appendChild(c)
+    }
+  }
+  return { el, cover, shade, flap, peek }
 }
 
 /** Fold geometry for a finger at `x` (0..w) turning in direction `d`. */
@@ -41,12 +59,17 @@ function place(f: ReturnType<typeof makeFold>, w: number, x: number, d: number) 
   if (d > 0) {
     f.cover.style.transformOrigin = 'right center'
     f.cover.style.transform = `scaleX(${k})`
+    // The page under the cover is not squeezed: undo the scale.
+    f.peek.style.transformOrigin = 'right center'
+    f.peek.style.transform = `scaleX(${1 / k})`
     f.flap.style.transformOrigin = 'left center'
     f.flap.style.transform = `translateX(${fx}px) scaleX(${k})`
     f.shade.style.transform = `translateX(${fx - w * 0.06}px)`
   } else {
     f.cover.style.transformOrigin = 'left center'
     f.cover.style.transform = `scaleX(${k})`
+    f.peek.style.transformOrigin = 'left center'
+    f.peek.style.transform = `scaleX(${1 / k})`
     f.flap.style.transformOrigin = 'right center'
     f.flap.style.transform = `translateX(${fx - w}px) scaleX(${k})`
     f.shade.style.transform = `translateX(${fx}px)`
@@ -94,7 +117,7 @@ export function swipe(node: HTMLElement, opts: SwipeOpts) {
       const r = node.getBoundingClientRect()
       const d = dx < 0 ? 1 : -1
       const can = o.canturn ? o.canturn(d) : true
-      drag = { d, f: can ? makeFold(node) : null, w: r.width, left: r.left, lastX: e.clientX, lastT: e.timeStamp, v: 0 }
+      drag = { d, f: can ? makeFold(node, o.peek?.(d) ?? null) : null, w: r.width, left: r.left, lastX: e.clientX, lastT: e.timeStamp, v: 0 }
       node.setPointerCapture?.(e.pointerId)
     }
     if (!drag.f) {
