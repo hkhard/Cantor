@@ -186,7 +186,7 @@ to get the exact source. Before handing out a build:
    in `docs/store/testflight.md`.
 
 First upload: ChoirBird 0.2.0 (build 0.2.0.110, tag `v0.2.0`), 2026-11-23,
-"Upload succeeded". Latest: ChoirBird 0.3.1 (build 0.3.1.155, tag `v0.3.1`,
+"Upload succeeded". Latest: ChoirBird 0.3.2 (build 0.3.2.159, tag `v0.3.2`,
 with on-device note recognition, `HOMR=1`), 2026-11-25, "Upload succeeded".
 Run the release build with `nohup` and a log file: it takes over a minute
 even when cached and must not die with the shell. Processing and TestFlight availability are checked in
