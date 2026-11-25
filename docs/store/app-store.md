@@ -255,6 +255,12 @@ Upload `en/` to English (U.K.) and `sv/` to Swedish, in file order:
 App Store Connect accepts PNG or JPEG, RGB without alpha; the script checks
 every file's size and mode.
 
+Checked 2026-11-25: all 36 files at the exact size, RGB. Each headline was
+read back from the finished image with Apple Vision (`cantor-ocr`): 32 of
+36 match `headlines.json` letter for letter; the other 4 also match, but
+Vision added the phone's own "9:41" status bar (2) or read the heavy "Ä" in
+LÄS as "Ă" and the "I" as "L" (2, checked by eye).
+
 **Not verified:** how the set looks in App Store Connect's own preview and on
 a phone in the App Store; the status bar and device frame are drawn, not
 taken from a device.
