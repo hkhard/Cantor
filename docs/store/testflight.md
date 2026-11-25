@@ -15,13 +15,13 @@ TestFlight › External Testing › (group) › Public Link, then paste it here:
 the team):
 
 1. **Source is public (AGPL section 6):** done. `hkhard/Cantor` is public and
-   About › Source points at the tag of the build (build 0.3.0 (153) →
-   tag `v0.3.0`).
+   About › Source points at the tag of the build (build 0.3.1 (155) →
+   tag `v0.3.1`).
 2. ***The Anchor Song* fixture** in the public history still needs a decision
    by the product owner (Björk's song; only the arrangement is ours).
 3. **External testing needs Beta App Review** by Apple for the first build:
    allow about a day.
-4. **On-device note recognition (homr):** build 0.3.0 contains it. Allowed
+4. **On-device note recognition (homr):** build 0.3.1 contains it. Allowed
    because the source of the exact build is public (decision 2026-11-24, see
    `crates/homr/README.md` for the accepted residual risk). homr, its
    training data and ONNX Runtime are credited in About.
@@ -73,7 +73,7 @@ Mozart's Lacrymosa is included so you can try it straight away.
 
 ChoirBird is free software (GNU AGPL-3.0). The source is linked in About ChoirBird › Licence.
 
-## What to Test (build 0.3.0)
+## What to Test (build 0.3.1 (155))
 
 Svenska:
 • Nytt: ChoirBird kan läsa noterna ur en PDF, direkt på enheten. Öppna en PDF som saknar MusicXML och tryck "Läs in noterna" längst ner. Det tar ungefär en minut per sida (första gången längre) och fortsätter medan du gör annat. Spelar stämmorna rätt efteråt? Blev det rätt antal stämmor?

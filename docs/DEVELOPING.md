@@ -181,9 +181,13 @@ to get the exact source. Before handing out a build:
    -exportOptionsPlist upload-options.plist -exportPath out -allowProvisioningUpdates`,
    where the options plist has `method = app-store-connect`,
    `destination = upload`, `teamID = 33ZQ6Q226L`.
-4. **Internal testers only** until the repository is public (AGPL 6:
-   external testers must be able to get the exact source of their build).
+4. External testers are allowed now that the repository is public (AGPL 6):
+   About links the exact tag of the build. Texts for App Store Connect are
+   in `docs/store/testflight.md`.
 
 First upload: ChoirBird 0.2.0 (build 0.2.0.110, tag `v0.2.0`), 2026-11-23,
-"Upload succeeded". Processing and TestFlight availability are checked in
+"Upload succeeded". Latest: ChoirBird 0.3.1 (build 0.3.1.155, tag `v0.3.1`,
+with on-device note recognition, `HOMR=1`), 2026-11-25, "Upload succeeded".
+Run the release build with `nohup` and a log file: it takes over a minute
+even when cached and must not die with the shell. Processing and TestFlight availability are checked in
 App Store Connect.
