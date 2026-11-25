@@ -281,3 +281,55 @@ fn play_01_same_pitch_tied_in_two_voices_sounds_once_per_voice() {
         .collect();
     assert_eq!(es, vec![(1, 0, 8 * PPQ), (2, 0, 8 * PPQ)]);
 }
+
+/// One staff of 4/4 with `divisions` 1 from measure bodies.
+fn one_voice(measures: &[&str]) -> cantor_score::Score {
+    let body: String = measures
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let attrs = if i == 0 {
+                "<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            } else {
+                ""
+            };
+            format!(r#"<measure number="{}">{attrs}{m}</measure>"#, i + 1)
+        })
+        .collect();
+    let xml = format!(
+        r#"<?xml version="1.0"?><score-partwise version="4.0">
+        <part-list><score-part id="P1"><part-name>T</part-name></score-part></part-list>
+        <part id="P1">{body}</part></score-partwise>"#
+    );
+    parse_musicxml(xml.as_bytes()).unwrap()
+}
+
+fn g4(dur: u32, extra: &str) -> String {
+    format!(
+        r#"<note><pitch><step>G</step><octave>4</octave></pitch><duration>{dur}</duration>{extra}</note>"#
+    )
+}
+
+#[test]
+fn play_01_tie_into_a_skipped_volta_is_held_its_written_length() {
+    // Only You bars 19-21 on the last pass: bar 19 ends with G4 tied into
+    // bar 20 (volta 1-3), but the music goes on to bar 21 (volta 4). MuseScore
+    // holds the G4 for the written tied length anyway (1/2 + 1 beat).
+    let s = one_voice(&[
+        &format!(
+            r#"<note><rest/><duration>3</duration></note>{}"#,
+            g4(1, r#"<tie type="start"/>"#)
+        ),
+        &format!(
+            r#"<barline location="left"><ending number="1" type="start"/></barline>{}<note><rest/><duration>2</duration></note><barline location="right"><ending number="1" type="stop"/><repeat direction="backward"/></barline>"#,
+            g4(2, r#"<tie type="stop"/>"#)
+        ),
+        r#"<barline location="left"><ending number="2" type="start"/></barline><note><rest/><duration>4</duration></note>"#,
+    ]);
+    let tm = build_timemap(&s);
+    assert_eq!(tm.measure_order, vec![0, 1, 0, 2]);
+    let g: Vec<_> = tm.notes.iter().map(|n| (n.tick_on, n.tick_off)).collect();
+    // Pass 1: tied into bar 2 (3 beats total ending at beat 2 of bar 2).
+    // Pass 2: bar 2 is skipped, still held 3 beats into bar 3.
+    assert_eq!(g, vec![(3 * PPQ, 6 * PPQ), (11 * PPQ, 14 * PPQ)], "{g:?}");
+}

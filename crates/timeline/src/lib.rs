@@ -10,7 +10,7 @@ mod unfold;
 
 pub use unfold::unfold;
 
-use cantor_score::{EventKind, Score, Swing, Tick};
+use cantor_score::{EventKind, Measure, Score, Swing, Tick};
 use std::collections::{BTreeMap, HashMap};
 
 /// Quarter notes per minute used when a score has no tempo marking
@@ -179,6 +179,43 @@ pub fn build_timemap(score: &Score) -> Timemap {
             let Some(m) = p.measures.get(mi) else {
                 continue;
             };
+            // A tie into a measure the music skips (a volta not taken this
+            // pass) still sounds its written length, as MuseScore plays it.
+            if let Some(&prev) = visit.checked_sub(1).and_then(|v| measure_order.get(v)) {
+                if mi != prev + 1 {
+                    if let Some(written_next) = p.measures.get(prev + 1) {
+                        let start = measure_starts[visit];
+                        let tie_in = |meas: &Measure, staff: u32, voice: u32, midi: u8| {
+                            meas.events
+                                .iter()
+                                .find(|e| {
+                                    e.tie_stop
+                                        && e.offset == 0
+                                        && e.staff == staff
+                                        && e.voice == voice
+                                        && e.kind.midi().map(|x| x + meas.transpose)
+                                            == Some(midi as i32)
+                                })
+                                .map(|e| e.duration)
+                        };
+                        open.retain(|&(staff, voice, midi), &mut idx| {
+                            // Continued by the measure played next: the normal path.
+                            if notes[idx].tick_off != start
+                                || tie_in(m, staff, voice, midi).is_some()
+                            {
+                                return true;
+                            }
+                            match tie_in(written_next, staff, voice, midi) {
+                                Some(d) => {
+                                    notes[idx].tick_off += d;
+                                    false
+                                }
+                                None => true,
+                            }
+                        });
+                    }
+                }
+            }
             for e in &m.events {
                 let EventKind::Note(pitch) = &e.kind else {
                     continue;
