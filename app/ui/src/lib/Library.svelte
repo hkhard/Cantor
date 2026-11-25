@@ -1,3 +1,10 @@
+<script module lang="ts">
+  /** Where the library list was scrolled. Module scope: the Library is
+   * unmounted while a score is open, and coming back puts the list where
+   * it was (not at the top). Not kept across launches. */
+  let savedScroll = 0
+</script>
+
 <script lang="ts">
   // Library screen: all scores with search (LIB-04), metadata (LIB-03),
   // setlists (SET-01, incl. ones imported from forScore, LIB-08), import and
@@ -21,7 +28,15 @@
     onopen: (s: ScoreEntry, set?: { list: Setlist; index: number }) => void
     onrefresh: () => Promise<void>
   }
-  let { scores, notice = $bindable(), error, loading, onopen, onrefresh }: Props = $props()
+  let { scores, notice = $bindable(), error, loading, onopen: openScore, onrefresh }: Props = $props()
+  /** Open a score, remembering where the list was (the list is unmounted
+   * while reading and may report scroll 0 on the way out). */
+  const onopen: Props['onopen'] = (s, set) => {
+    if (scrollerEl) savedScroll = scrollerEl.scrollTop
+    leaving = true
+    openScore(s, set)
+  }
+  let leaving = false
 
   // Getting started: how to add scores, and the bundled demo (Lacrymosa).
   // Shown until "Do not show again" (here or in the reader's intro hint);
@@ -105,6 +120,37 @@
   // edit mode (cards wiggle, drags start at once); Done ends it.
   let editMode = $state(false)
   let scrollerEl: HTMLElement | undefined = $state()
+  // Back from a score: scroll to where the list was. The list fills in
+  // asynchronously (metadata, setlists, sync), so keep trying for a short
+  // while until the position can be reached, unless the user scrolls first.
+  $effect(() => {
+    const el = scrollerEl
+    if (!el) return
+    const target = savedScroll
+    let restoring = target > 0
+    const t0 = performance.now()
+    let raf = 0
+    const step = () => {
+      if (!restoring) return
+      el.scrollTop = target
+      if (Math.abs(el.scrollTop - target) < 2 || performance.now() - t0 > 3000) restoring = false
+      else raf = requestAnimationFrame(step)
+    }
+    step()
+    const onScroll = () => {
+      if (!restoring && !leaving) savedScroll = el.scrollTop
+    }
+    const userMoved = () => (restoring = false)
+    el.addEventListener('scroll', onScroll, { passive: true })
+    el.addEventListener('pointerdown', userMoved)
+    el.addEventListener('wheel', userMoved, { passive: true })
+    return () => {
+      cancelAnimationFrame(raf)
+      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('pointerdown', userMoved)
+      el.removeEventListener('wheel', userMoved)
+    }
+  })
   let tabsEl: HTMLElement | undefined = $state()
 
   async function reorderScores(ids: string[]) {

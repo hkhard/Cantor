@@ -38,7 +38,11 @@ const H = Number(process.env.H || 1133)
   await require('./mock.js').setup(page, DIR)
   const shot = async (n) => page.screenshot({ path: path.join(out, `${n}.png`) })
   let failed = 0
+  // ONLY=<text>: run just the steps whose name contains it (quick checks;
+  // later steps may depend on earlier ones, so not every step runs alone).
+  const only = process.env.ONLY
   const step = async (name, fn) => {
+    if (only && !name.includes(only)) return
     try {
       await fn()
       console.log('ok  ', name)
@@ -66,6 +70,42 @@ const H = Number(process.env.H || 1133)
     if (n !== 1) throw new Error(`expected 1 hit, got ${n}`)
     await page.fill('input[type=search]', '')
     await page.waitForTimeout(300)
+  })
+
+  await step('lib_04 back from a score returns to the same place in the library', async () => {
+    // Scroll down, open the last score, come back: the list is where it
+    // was, not at the top. At iPad size (a short window is the phone
+    // layout); room above the list so the few mock scores scroll and the
+    // last one is still in view at the bottom.
+    const lib = page.locator('main.library')
+    await page.addStyleTag({ content: 'main.library ul.scores { margin-top: 1600px !important }' })
+    await page.evaluate(() => (document.head.lastElementChild.id = 'tallLib'))
+    try {
+      await page.waitForTimeout(300)
+      const max = await lib.evaluate((el) => el.scrollHeight - el.clientHeight)
+      if (max < 80) throw new Error('library does not scroll in the test window: ' + max)
+      await lib.evaluate((el, y) => el.scrollTo({ top: y }), max - 20)
+      await page.waitForTimeout(800)
+      // Where the list is when the score is tapped (it may still have grown).
+      const at = await lib.evaluate((el) => el.scrollTop)
+      if (at < 400) throw new Error('library not scrolled down: ' + at)
+      await page.locator('ul.scores > li').last().locator('button.open').click()
+      await page.waitForSelector('main.reader')
+      await page.waitForTimeout(500)
+      // The first open shows the intro hint over the reader.
+      if (await page.locator('.hintbg').count()) await page.locator('.hintbg').click({ position: { x: 5, y: 5 } })
+      await page.waitForTimeout(300)
+      await page.click(`.top button[aria-label="Library"]`)
+      await page.waitForSelector('main.library')
+      await page.waitForTimeout(800)
+      const back = await page.locator('main.library').evaluate((el) => el.scrollTop)
+      if (Math.abs(back - at) > 4) throw new Error(`library back at ${back}, was ${at}`)
+    } finally {
+      if (await page.locator('main.reader').count()) await page.click(`.top button[aria-label="Library"]`).catch(() => {})
+      await page.evaluate(() => document.getElementById('tallLib')?.remove())
+      await lib.evaluate((el) => el.scrollTo({ top: 0 })).catch(() => {})
+      await page.waitForTimeout(200)
+    }
   })
 
   await step('lib_03 metadata editor saves', async () => {
