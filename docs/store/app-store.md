@@ -265,6 +265,33 @@ the three display sizes per language (36). Not yet set: copyright, App
 Review contact and notes, App Privacy, age rating, price, build. "What's
 New" is skipped by App Store Connect for a first version.
 
+## Product page header and search results (creative assets)
+
+App Store Connect's creative assets (iOS 27 and later) are made by
+`bash tools/store/make_banners.sh` (after `make_screenshots.sh`):
+
+- `store-out/banners/universal-en.png` and `universal-sv.png`: 5244 × 2950,
+  PNG, RGB, the universal asset (16:9) used for both the product page header
+  and the search results. Key art (the ChoirBird mark, the name and one
+  line: "Hear your part. Sing it better." / "Hör din stämma. Sjung
+  säkrare.") sits inside Apple's art safe area, 1402 × 962 at (1921, 660);
+  the script fails if it does not. Around it, on navy with faint staff
+  lines, the real iPad mixer and iPhone score screens fill the auxiliary
+  area. No prices, URLs, © or awards (Apple's rules).
+- `header-<en|sv>.png`: a 3840 × 1646 header-only variant (safe area
+  1646 × 661 at (1097, 493)), not uploaded.
+- `*-safearea.png`: the same with the safe area outlined, for checking.
+
+`bash tools/store/make_banners.sh --upload` uploads each language's
+universal PNG to the app's Asset Library (App Store Connect API 4.5.1) and
+places it as `PRODUCT_PAGE_HEADER_ASSET` and `APP_STORE_SEARCH_RESULTS_ASSET`
+on the version being prepared (old placements of those types are replaced).
+
+Status 2026-11-25: uploaded and read back: en-US and sv each have the header
+and the search results asset, state ACTIVE, and their 18 screenshots.
+They are reviewed with version 1.0. Not seen yet in App Store Connect's
+product page preview.
+
 ## Screenshots
 
 Made by `tools/store/make_screenshots.sh` (real UI in WebKit, public-domain
