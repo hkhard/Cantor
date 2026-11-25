@@ -54,7 +54,7 @@ not part of this phase (see "held back").
 | **Performance on the iPad mini:** 60 fps for page turns, scrolling the library and the mixer; cold start and score open times logged | `.perf.log` numbers recorded in plan section 7, within NFR-01/03 |
 | **Accessibility on the device:** VoiceOver through library, reader, mixer; larger text; reduced motion | Product owner or VoiceOver walkthrough notes; axe stays at 0 |
 | **Swedish and English complete** | `nfr_10_sv_en_localisation_complete` passes; no hard-coded strings in the UI. **Passes (2026-11-23), in CI** |
-| **Long-session soak:** 2 hours of playback without drift or memory growth | `nfr_02_no_drift_gt_5ms`; memory probe in `.perf.log` |
+| **Long-session soak:** 2 hours of playback without drift or memory growth | `nfr_02_no_drift_gt_5ms`; memory probe in `.perf.log`. **Done 2026-11-25 on the iPad mini (A17 Pro):** 120 min, 40 plays of Lacrymosa on the speaker; audio clock vs wall clock 1.1 ms apart after 2 h (0.15 ppm), no trend; memory 55 MB throughout (see plan section 7) |
 | **Release build:** version and build number from a git tag, shown in About with the source link; Release (not debug) configuration; final app icon and launch screen; `PrivacyInfo.xcprivacy` (no tracking, no data collected) | `tools/ipad.sh release` builds an archive; About shows the tag |
 | **Store-ready material (not submitted):** description sv/en, screenshots of the iPad mini and 13", privacy statement, support page | Files in a new store folder under docs; submission waits for the decision below |
 
