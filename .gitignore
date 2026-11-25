@@ -27,3 +27,6 @@ app/src-tauri/resources/homr/
 
 # App Store screenshots and upload package (tools/store/make_screenshots.sh)
 /store-out/
+
+# The Anchor Song: private test fixture (the song is Björk's). Kept locally, never on GitHub.
+/fixtures/scores/the-anchor-song/

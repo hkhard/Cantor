@@ -599,7 +599,7 @@ tests (NFR-11: 100% of P0 criteria automated).
       - The choice and the selected tab are saved in `library.json` (`home`) and restored on start.
       - Tests: `lib_04_home_view_defaults_to_all_scores_and_persists`, plus UI scenario `lib_04 start view` (group by tags, filter, restart, restored).
     - **Public test scores in `fixtures/scores/`:**
-      - *The Anchor Song*, TB arrangement by the product owner. Arrangement © HKH; the song's copyright belongs to Björk / her publisher, so it must be cleared or removed before going public (README there).
+      - *The Anchor Song*, TB arrangement by the product owner. Arrangement © HKH; the song's copyright belongs to Björk / her publisher. **2026-11-25: taken off GitHub** (product owner): untracked and git-ignored (`/fixtures/scores/the-anchor-song/`), kept only on local machines, and removed from the whole git history. Its tests skip with "private sample not present" when the folder is absent, like the other private samples; the app's page-count check uses a two-page PDF written in the test instead. Only Lacrymosa is public.
       - Mozart *Lacrymosa*, SATB + piano: MusicXML, PDF, MuseScore and MP3; public domain. Its title and composer exist only as untyped credits, which tests the fallback.
     - Not verified on the iPad yet: the start view and the titles of the user's own imported files.
 

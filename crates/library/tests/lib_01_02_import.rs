@@ -54,17 +54,20 @@ fn lib_01_musicxml_imported_and_listed_as_playable() {
 #[test]
 fn lib_01_title_composer_arranger_from_the_file_not_the_file_name() {
     let d = tmp("anchor");
-    let mxl = std::fs::read(concat!(
+    // The Anchor Song is a private fixture (not on GitHub: the song is
+    // Björk's); skip when it is absent.
+    let base = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../fixtures/scores/the-anchor-song/the-anchor-song.mxl"
-    ))
-    .unwrap();
+        "/../../fixtures/scores/the-anchor-song/"
+    );
+    let (Ok(mxl), Ok(pdf)) = (
+        std::fs::read(format!("{base}the-anchor-song.mxl")),
+        std::fs::read(format!("{base}the-anchor-song.pdf")),
+    ) else {
+        eprintln!("skipped: private sample not present");
+        return;
+    };
     import_file(&d, "the-anchor-song.mxl", &mxl).unwrap();
-    let pdf = std::fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../fixtures/scores/the-anchor-song/the-anchor-song.pdf"
-    ))
-    .unwrap();
     import_file(&d, "the-anchor-song.pdf", &pdf).unwrap();
     let lib = list_library(&[d.as_path()]);
     assert_eq!(lib.len(), 1, "MXL and PDF with the same stem are one score");

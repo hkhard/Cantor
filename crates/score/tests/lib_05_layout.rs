@@ -14,9 +14,21 @@ fn fixture(p: &str) -> Vec<u8> {
     .unwrap()
 }
 
+/// A fixture that is not on GitHub (The Anchor Song: the song is Björk's).
+fn private_fixture(p: &str) -> Option<Vec<u8>> {
+    std::fs::read(format!(
+        "{}/../../fixtures/scores/{p}",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .ok()
+}
+
 #[test]
 fn lib_05_measure_boxes_from_musicxml_layout_anchor_song() {
-    let mxl = fixture("the-anchor-song/the-anchor-song.mxl");
+    let Some(mxl) = private_fixture("the-anchor-song/the-anchor-song.mxl") else {
+        eprintln!("skipped: private sample not present");
+        return;
+    };
     let score = parse_score_file(&mxl).unwrap();
     let boxes = layout_measure_boxes(&mxl).expect("layout");
     // One box per written measure, in order.

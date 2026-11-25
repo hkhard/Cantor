@@ -228,8 +228,14 @@ fn lib_05_pdf_info_title_text_pages() {
         ))
         .unwrap()
     };
-    let a = cantor_annotations::pdf_info(&read("the-anchor-song/the-anchor-song.pdf")).unwrap();
-    assert_eq!((a.title.as_str(), a.pages), ("The Anchor Song", 2));
+    // The Anchor Song is a private fixture (not on GitHub): checked when present.
+    if let Ok(pdf) = std::fs::read(format!(
+        "{}/../../fixtures/scores/the-anchor-song/the-anchor-song.pdf",
+        env!("CARGO_MANIFEST_DIR")
+    )) {
+        let a = cantor_annotations::pdf_info(&pdf).unwrap();
+        assert_eq!((a.title.as_str(), a.pages), ("The Anchor Song", 2));
+    }
     let l = cantor_annotations::pdf_info(&read(
         "mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.pdf",
     ))

@@ -20,8 +20,8 @@ the team):
 1. **Source is public (AGPL section 6):** done. `hkhard/Cantor` is public and
    About › Source points at the tag of the build (build 0.3.2 (159) →
    tag `v0.3.2`).
-2. ***The Anchor Song* fixture** in the public history still needs a decision
-   by the product owner (Björk's song; only the arrangement is ours).
+2. ***The Anchor Song* fixture:** removed from GitHub and its history
+   (2026-11-25); only Lacrymosa is public.
 3. **External testing needs Beta App Review** by Apple for the first build:
    allow about a day.
 4. **On-device note recognition (homr):** build 0.3.2 contains it. Allowed

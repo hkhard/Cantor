@@ -2904,12 +2904,21 @@ mod lib_05_app {
         // Cached as the measure map file; a later open reads it.
         assert!(d.join("lacrymosa.measures.json").exists());
         // A PDF with another page count is a different engraving: no map.
+        // (A minimal two-page PDF; Lacrymosa's has five.)
         std::fs::remove_file(d.join("lacrymosa.measures.json")).unwrap();
         std::fs::write(
             d.join("lacrymosa.pdf"),
-            fixture("the-anchor-song/the-anchor-song.pdf"),
+            b"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+              2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> endobj\n\
+              3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >> endobj\n\
+              4 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >> endobj\n\
+              trailer << /Root 1 0 R >>\n%%EOF\n",
         )
         .unwrap();
+        assert_eq!(
+            pdf_page_count(&std::fs::read(d.join("lacrymosa.pdf")).unwrap()),
+            Some(2)
+        );
         let e = cantor_library::import::list_library(&[d.as_path()]).remove(0);
         assert!(measure_map(&e).is_none());
         assert!(!d.join("lacrymosa.measures.json").exists());

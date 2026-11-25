@@ -85,13 +85,19 @@ fn lib_05_combine_moves_the_pdf_and_its_files_to_the_score() {
 fn lib_05_mscz_is_kept_with_its_score_not_played() {
     use cantor_library::import::{import_file, list_library};
     let d = tmp("mscz");
-    let read = |p: &str| {
-        std::fs::read(format!(
-            "{}/../../fixtures/scores/the-anchor-song/{p}",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .unwrap()
-    };
+    // Private fixture (the song is Björk's, not on GitHub): skip when absent.
+    let dir = format!(
+        "{}/../../fixtures/scores/the-anchor-song",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    if !std::path::Path::new(&dir)
+        .join("the-anchor-song.mscz")
+        .exists()
+    {
+        eprintln!("skipped: private sample not present");
+        return;
+    }
+    let read = |p: &str| std::fs::read(format!("{dir}/{p}")).unwrap();
     // Alone it cannot be used: the message says what to do.
     let err = import_file(&d, "the-anchor-song.mscz", &read("the-anchor-song.mscz")).unwrap_err();
     assert!(err.contains("MusicXML"), "{err}");
