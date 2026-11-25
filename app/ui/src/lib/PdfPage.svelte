@@ -1,11 +1,12 @@
 <script lang="ts">
   // One PDF page with its overlays: play cursor, loop shading, annotations.
   // Fits inside `fitW` x `fitH` CSS pixels (fitH = 0: fit width only).
-  import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
+  import type { PDFDocumentProxy } from 'pdfjs-dist'
   import type { MeasureBox } from './pdf'
   import AnnotLayer from './AnnotLayer.svelte'
   import { t } from './i18n.svelte'
   import type { AnnDoc, AnnCommand, Tool } from './annot'
+  import { renderedPage } from './pagecache'
 
   interface Props {
     doc: PDFDocumentProxy
@@ -47,7 +48,8 @@
 
   let canvas: HTMLCanvasElement | undefined = $state()
   let size = $state({ w: 0, h: 0 })
-  let task: RenderTask | null = null
+  /** The latest draw request; an older render that finishes later is dropped. */
+  let want = 0
   // Re-render when the skin changes (paper and ink are tokens on <html>).
   let skin = $state(document.documentElement.dataset.skin ?? '')
   $effect(() => {
@@ -56,60 +58,19 @@
     return () => mo.disconnect()
   })
 
-  /** "#RRGGBB" to [r, g, b]. */
-  function hex(v: string): [number, number, number] | null {
-    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(v)
-    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null
-  }
-  /** Map each pixel's lightness onto ink..paper (a duotone). Colours in the
-   * PDF become shades of the ink: right for reading music. */
-  function recolour(c: HTMLCanvasElement, bg: number[], fg: number[]) {
-    const ctx = c.getContext('2d')!
-    const img = ctx.getImageData(0, 0, c.width, c.height)
-    const d = img.data
-    const lut = [new Uint8ClampedArray(256), new Uint8ClampedArray(256), new Uint8ClampedArray(256)]
-    for (let l = 0; l < 256; l++) for (let k = 0; k < 3; k++) lut[k][l] = fg[k] + ((bg[k] - fg[k]) * l) / 255
-    for (let i = 0; i < d.length; i += 4) {
-      const l = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8
-      d[i] = lut[0][l]
-      d[i + 1] = lut[1][l]
-      d[i + 2] = lut[2][l]
-    }
-    ctx.putImageData(img, 0, 0)
-  }
-
   async function draw(d: PDFDocumentProxy, p: number, w: number, h: number) {
     if (!canvas || w < 10) return
-    task?.cancel()
-    const page = await d.getPage(p)
-    const base = page.getViewport({ scale: 1 })
-    const scale = h > 0 ? Math.min(w / base.width, h / base.height) : w / base.width
-    const dpr = window.devicePixelRatio || 1
-    const vp = page.getViewport({ scale: scale * dpr })
-    // Render off-screen first so a cancelled render never blanks the page.
-    const off = document.createElement('canvas')
-    off.width = Math.floor(vp.width)
-    off.height = Math.floor(vp.height)
-    // VIEW-06: the page follows the skin's paper and ink (black on white,
-    // black on sepia, light grey on black). Rendered as usual, then every
-    // pixel's lightness is mapped from ink (dark) to paper (light), so
-    // vector music and scanned pages (images) are recoloured alike.
-    const css = getComputedStyle(document.documentElement)
-    const bg = hex(css.getPropertyValue('--paper').trim()) ?? [255, 255, 255]
-    const fg = hex(css.getPropertyValue('--paper-ink').trim()) ?? [0, 0, 0]
-    const t = page.render({ canvasContext: off.getContext('2d')!, viewport: vp, canvas: off })
-    task = t
-    try {
-      await t.promise
-    } catch {
-      return // cancelled by a newer render
+    const me = ++want
+    // From the page cache: drawn ahead for the neighbours of the page on
+    // screen, so a turn usually only copies a finished bitmap (NFR-03).
+    const r = await renderedPage(d, p, w, h)
+    if (me !== want || !r || !canvas) return // a newer page was asked for
+    if (canvas.width !== r.bitmap.width || canvas.height !== r.bitmap.height) {
+      canvas.width = r.bitmap.width
+      canvas.height = r.bitmap.height
     }
-    if (task !== t || !canvas) return
-    if (!(bg.every((v) => v === 255) && fg.every((v) => v === 0))) recolour(off, bg, fg)
-    canvas.width = off.width
-    canvas.height = off.height
-    canvas.getContext('2d')!.drawImage(off, 0, 0)
-    size = { w: vp.width / dpr, h: vp.height / dpr }
+    canvas.getContext('2d')!.drawImage(r.bitmap, 0, 0)
+    size = { w: r.w, h: r.h }
     canvas.style.width = `${size.w}px`
     canvas.style.height = `${size.h}px`
   }

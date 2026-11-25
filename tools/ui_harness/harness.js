@@ -1530,6 +1530,46 @@ const H = Number(process.env.H || 1133)
     await page.click('.top button[aria-label="Library"]')
   })
 
+  await step('nfr_03 the next PDF page is drawn ahead: a page turn renders nothing new', async () => {
+    // A fresh page so the count starts at zero; pdf.js render calls are
+    // counted on CanvasRenderingContext2D (every render draws into one).
+    const ctx3 = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 2, hasTouch: true })
+    const p3 = await ctx3.newPage()
+    await require('./mock.js').setup(p3, DIR)
+    await p3.addInitScript(() => {
+      window.__store.hints = ['reader', 'intro', 'start']
+      window.__renders = 0
+      // pdf.js begins each page render with save() + a white fill of the
+      // whole canvas; count those transforms per canvas instead: a new
+      // off-screen canvas gets its first 2d context once per render.
+      const gc = HTMLCanvasElement.prototype.getContext
+      HTMLCanvasElement.prototype.getContext = function (k, ...a) {
+        if (k === '2d' && !this.__counted && !this.isConnected) {
+          this.__counted = true
+          window.__renders++
+        }
+        return gc.call(this, k, ...a)
+      }
+    })
+    await p3.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
+    await p3.waitForSelector('ul.scores > li')
+    await p3.locator('ul.scores > li', { hasText: 'Lacrymosa' }).first().locator('button.open').click()
+    await p3.waitForSelector('.sheet canvas')
+    // Pages 1, 2 (ahead) and later 3 get drawn while idle.
+    await p3.waitForFunction(() => window.__renders >= 3, null, { timeout: 15000 })
+    await p3.waitForTimeout(800)
+    const before = await p3.evaluate(() => window.__renders)
+    await p3.click('button.pageturn.right')
+    await p3.waitForFunction(() => /^2\s*\//.test(document.querySelector('.pageno')?.textContent ?? ''))
+    await p3.waitForTimeout(50)
+    const during = await p3.evaluate(() => window.__renders)
+    if (during !== before) throw new Error(`turn rendered ${during - before} page(s) instead of using the drawn-ahead one`)
+    // The page shown is page 2 (not a stale bitmap of page 1).
+    const label = await p3.locator('.sheet canvas').first().getAttribute('aria-label')
+    if (!/2/.test(label ?? '')) throw new Error('canvas label ' + label)
+    await ctx3.close()
+  })
+
   await step('nfr_03 device perf self-test runs end to end and reports every measurement', async () => {
     // Only when the backend asks for it (CHOIRBIRD_PERF_SELFTEST on a device):
     // a fresh page here, so the main flow above is not disturbed.

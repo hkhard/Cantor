@@ -8,6 +8,7 @@
   import type { PDFDocumentProxy } from 'pdfjs-dist'
   import { closePdf, openPdf, type MeasureBox, type PageMode } from './pdf'
   import PdfPage from './PdfPage.svelte'
+  import { prefetch } from './pagecache'
   import type { AnnDoc, AnnCommand, Tool } from './annot'
   import { t } from './i18n.svelte'
 
@@ -117,6 +118,17 @@
     const tallest = Math.max(...boxes.map((b) => b.h))
     // Page height allowed so the tallest system still fits, with a margin.
     return tallest > 0 ? (box.h * 0.94) / tallest : 0
+  })
+  // NFR-03: draw the pages a turn will show next while the reader is still
+  // on this one (one ahead and one behind; two ahead in a spread), at the
+  // size the current mode shows them, so a turn only copies a bitmap.
+  $effect(() => {
+    if (!doc || box.w <= 0 || mode === 'scroll') return
+    const d = doc
+    const [w, h] = fitWidth ? [box.w - 8, fitH] : twoUp ? [box.w / 2 - 6, box.h] : [box.w, box.h]
+    const near = twoUp ? [page + 2, page + 3, page - 2, page - 1] : [page + 1, page - 1, page + 2]
+    const todo = near.filter((p) => p >= 1 && p <= pages)
+    untrack(() => prefetch(d, todo, w, h))
   })
   /** Top of the first system on page `p`, in host scroll pixels. */
   function firstSystemTop(p: number): number {
