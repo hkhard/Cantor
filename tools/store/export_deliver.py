@@ -8,10 +8,8 @@ screenshots -> screenshots/<locale>/.
 Without arguments: store-out/final -> store-out/deliver (what
 tools/store/make_screenshots.sh writes; it also runs this script).
 
-Then, with an App Store Connect API key (Users and Access > Integrations):
-  fastlane deliver --api_key_path key.json --app_identifier se.nikielhard.choirbird \
-    --metadata_path store-out/deliver/metadata --screenshots_path store-out/deliver/screenshots \
-    --skip_binary_upload --overwrite_screenshots --force
+Then upload text and screenshots (settings in tools/store/Deliverfile):
+  cd tools/store && fastlane deliver
 fastlane uses the image size to pick the device slot.
 """
 
@@ -21,8 +19,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LOCALES = {"English": "en-GB", "Swedish": "sv"}
-SHOT_LANG = {"en-GB": "en", "sv": "sv"}
+LOCALES = {"English": "en-US", "Swedish": "sv"}
+SHOT_LANG = {"en-US": "en", "sv": "sv"}
 FIELDS = {
     "subtitle": "subtitle.txt",
     "promotional text": "promotional_text.txt",
@@ -32,7 +30,7 @@ FIELDS = {
     "nyheter i den här versionen": "release_notes.txt",
 }
 URLS = {
-    "en-GB": ("https://nikielhard.se/en/choirbird", "https://nikielhard.se/en/choirbird/privacy"),
+    "en-US": ("https://nikielhard.se/en/choirbird", "https://nikielhard.se/en/choirbird/privacy"),
     "sv": ("https://nikielhard.se/se/choirbird", "https://nikielhard.se/se/choirbird/privacy"),
 }
 
@@ -68,11 +66,28 @@ def main():
             for p in sorted((shots / SHOT_LANG[locale] / slot).glob("*.png")):
                 shutil.copy(p, sd / f"{slot}_{p.name}")
                 n_files += 1
+    # App Review contact: App Store Connect requires first name, last name
+    # and phone (+country code) together with the notes. Fill them in
+    # docs/store/app-store.md ("Contact: First Last, +46 ..."); until then the
+    # review information is left out and entered by hand.
     rv = out / "metadata" / "review_information"
-    rv.mkdir(parents=True, exist_ok=True)
-    (rv / "notes.txt").write_text(review + "\n", encoding="utf-8")
-    (rv / "email_address.txt").write_text("choirbird-support@nikielhard.se\n", encoding="utf-8")
-    (out / "metadata" / "copyright.txt").write_text("2026 FILL-IN-COPYRIGHT-HOLDER\n", encoding="utf-8")
+    if rv.exists():
+        shutil.rmtree(rv)
+    cm = re.search(r"^- \*\*Contact:\*\* (\S.*?), (\+[\d ]{8,})$", text, re.M)
+    if cm:
+        first, _, last = cm.group(1).partition(" ")
+        rv.mkdir(parents=True)
+        for f, v in {"notes": review, "email_address": "choirbird-support@nikielhard.se",
+                     "first_name": first, "last_name": last, "phone_number": cm.group(2).strip()}.items():
+            (rv / f"{f}.txt").write_text(v + "\n", encoding="utf-8")
+    # Copyright only once the owner has filled in the holder's name (the
+    # first line of the App information table in docs/store/app-store.md).
+    m = re.search(r"^\| Copyright \| (.+?) \|$", text, re.M)
+    cp = out / "metadata" / "copyright.txt"
+    if m and "fill in" not in m.group(1).lower():
+        cp.write_text(m.group(1) + "\n", encoding="utf-8")
+    elif cp.exists():
+        cp.unlink()
     (out / "metadata" / "primary_category.txt").write_text("MUSIC\n", encoding="utf-8")
     (out / "metadata" / "secondary_category.txt").write_text("EDUCATION\n", encoding="utf-8")
     print(f"metadata for {', '.join(LOCALES.values())}; {n_files} screenshots in {out}")

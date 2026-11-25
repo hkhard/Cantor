@@ -1,0 +1,18 @@
+# fastlane deliver settings for ChoirBird's App Store listing.
+# Run from tools/store:   cd tools/store && fastlane deliver
+# (Text and screenshots come from tools/store/make_screenshots.sh, which
+#  writes store-out/deliver. The API key JSON is private and stays outside
+#  the repository.) This uploads text and screenshots only: no binary, no
+#  submission for review.
+api_key_path(File.expand_path("~/.appstoreconnect/choirbird-asc.json"))
+app_identifier("se.nikielhard.choirbird")
+platform("ios")
+app_version("1.0")
+metadata_path("../../store-out/deliver/metadata")
+screenshots_path("../../store-out/deliver/screenshots")
+skip_binary_upload(true)
+skip_app_version_update(true)
+overwrite_screenshots(true)
+submit_for_review(false)
+run_precheck_before_submit(false)
+force(true)

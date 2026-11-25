@@ -12,7 +12,7 @@ Screenshots: see "Screenshots" at the end. No app preview video for now.
 | Name | ChoirBird |
 | Bundle ID | se.nikielhard.choirbird |
 | SKU | choirbird-ios |
-| Primary language | English (U.K.) |
+| Primary language | English (U.S.) (set when the app record was created; the texts below are written in British spelling and are fine for en-US) |
 | Primary category | Music |
 | Secondary category | Education |
 | Content rights | Contains no third-party content (the bundled Lacrymosa is Mozart, public domain; users bring their own scores) |
@@ -54,7 +54,7 @@ Claim only what was verified (see `docs/IMPLEMENTATION_PLAN.md`):
 
 ## Version information (per version)
 
-### English (U.K.)
+### English (U.S.)
 
 **Subtitle** (30):
 
@@ -210,7 +210,9 @@ ChoirBirds första version på App Store.
 ## App Review information
 
 - **Sign-in required:** No.
-- **Contact:** choirbird-support@nikielhard.se (name and phone: fill in).
+- **Contact:** fill in as `First Last, +46 70 123 45 67` on this line, then
+  run `python3 tools/store/export_deliver.py` and `fastlane deliver` again
+  (App Store Connect requires first name, last name and phone with the notes).
 - **Notes for the reviewer:**
 
 ```
@@ -237,26 +239,31 @@ question is asked per build.
      keywords, description, release notes, URLs), review notes,
      categories, and `screenshots/en-GB|sv/`. It stops unless all 36
      screenshots are there.
-2. Fill in `store-out/deliver/metadata/copyright.txt`. (After changing only
-   the text in this file, `python3 tools/store/export_deliver.py` rebuilds
-   the package without new screenshots.)
-3. Either upload by hand (App Store Connect › ChoirBird › the version ›
-   English (U.K.) / Swedish: paste each `.txt`, drag the screenshots into
-   each display size in file order), or with an App Store Connect API key:
+2. Fill in the copyright holder and the review contact in this file (see
+   above), then `python3 tools/store/export_deliver.py` rebuilds the package
+   without new screenshots.
+3. Upload text and screenshots (API key JSON at
+   `~/.appstoreconnect/choirbird-asc.json`, private; settings in
+   `tools/store/Deliverfile`: version 1.0, no binary, no submission):
 
 ```
-fastlane deliver --api_key_path key.json --app_identifier se.nikielhard.choirbird \
-  --metadata_path store-out/deliver/metadata --screenshots_path store-out/deliver/screenshots \
-  --skip_binary_upload --overwrite_screenshots --force
+cd tools/store && fastlane deliver
 ```
+
+   Or by hand: App Store Connect › ChoirBird › 1.0 › English (U.S.) /
+   Swedish: paste each `.txt`, drag the screenshots into each display size.
 
 4. In App Store Connect: App Privacy (no data collected), age rating
    questionnaire, price Free, the build (0.3.2 (159) or later), then
    Add for Review.
 
-Status 2026-11-25: the package is built and checked; nothing is uploaded
-(this machine has no App Store Connect API key, no fastlane, and the browser
-bridge was not available).
+Status 2026-11-25: uploaded with `fastlane deliver` and read back from App
+Store Connect: version 1.0 (Prepare for Submission) has the description,
+keywords, promotional text and URLs in en-US and sv, name and subtitle in
+both, categories Music / Education, and 6 screenshots in order in each of
+the three display sizes per language (36). Not yet set: copyright, App
+Review contact and notes, App Privacy, age rating, price, build. "What's
+New" is skipped by App Store Connect for a first version.
 
 ## Screenshots
 
@@ -273,7 +280,7 @@ benefit line, drawn device frame). Headlines live in
 | iPhone with Dynamic Island, medium display (6.3", **required**) | `iphone-63` | 1206 × 2622 |
 | iPad 13" display (**required**, the app runs on iPad) | `ipad-13` | 2064 × 2752 |
 
-Upload `en/` to English (U.K.) and `sv/` to Swedish, in file order:
+Upload `en/` to English (U.S.) and `sv/` to Swedish, in file order:
 
 | # | English | Swedish | Shows |
 |---|---|---|---|
