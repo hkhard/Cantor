@@ -2546,6 +2546,14 @@ fn set_click(
     })
 }
 
+/// NFR-01 probe: the real output buffer and the platform's reported output
+/// delay, as seen by the audio callback (see `audio::Latency`).
+#[tauri::command]
+fn audio_latency(player: State<'_, Shared>) -> Result<audio::Latency, String> {
+    let sr = with_engine(&player, |e| e.sample_rate())?;
+    Ok(audio::latency(sr))
+}
+
 #[tauri::command]
 fn status(player: State<'_, Shared>) -> Result<Status, String> {
     let title = player
@@ -2896,6 +2904,7 @@ pub fn run() {
             restore_pending,
             perf_mark,
             perf_selftest,
+            audio_latency,
             correct_note,
             attach_track,
             remove_track,
