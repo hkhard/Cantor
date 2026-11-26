@@ -283,6 +283,25 @@
   // items are measured once when the drag starts and again after the view
   // slides; per frame only rectangles are compared (no layout reads).
   let dragging = $state(false)
+  /** Columns: the score whose ⋯ menu is open. */
+  let rowMenu: string | null = $state(null)
+  /** The ⋯ menu: focus its first item; Escape or a tap outside closes it. */
+  function menuFocus(node: HTMLElement) {
+    node.querySelector<HTMLElement>('[role=menuitem]')?.focus()
+    const away = (e: PointerEvent) => {
+      const t = e.target as Element
+      if (!node.contains(t) && !t.closest('button.more')) rowMenu = null
+    }
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && (rowMenu = null)
+    window.addEventListener('pointerdown', away, true)
+    window.addEventListener('keydown', esc)
+    return {
+      destroy() {
+        window.removeEventListener('pointerdown', away, true)
+        window.removeEventListener('keydown', esc)
+      },
+    }
+  }
   let hoverContent = $state(false)
   /** Where a drop into the open list would go: insert before item `at`. */
   let insertAt: number | null = $state(null)
@@ -357,6 +376,85 @@
     insertAt = null
     setRowHover(null)
     measureAfter = 0
+  }
+
+  // LIB-11 Columns (portrait): swipe right to go back to the scores, left
+  // to reopen the last list. The row follows the finger (transform only,
+  // one layout read when the swipe is recognised), then settles or snaps
+  // back. Only a clearly sideways move counts, so vertical scrolling and
+  // the long-press drag of a score are left alone.
+  let rowEl: HTMLElement | undefined = $state()
+  let lastDrill: string | null = null
+  $effect(() => {
+    if (drill) lastDrill = drill
+  })
+  function colSwipe(node: HTMLElement) {
+    let s: { id: number; x: number; y: number; t: number; on: boolean; w: number; base: number; dir: number } | null = null
+    const down = (e: PointerEvent) => {
+      if (threeCols || dragging || !e.isPrimary || (e.target as Element).closest('input, textarea, select, .rowmenu')) return
+      s = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, on: false, w: 0, base: 0, dir: 0 }
+    }
+    const move = (e: PointerEvent) => {
+      if (!s || e.pointerId !== s.id || dragging) return
+      const dx = e.clientX - s.x
+      const dy = e.clientY - s.y
+      if (!s.on) {
+        if (Math.abs(dx) < 14 || Math.abs(dx) < Math.abs(dy) * 1.6) {
+          if (Math.abs(dy) > 20) s = null // a scroll
+          return
+        }
+        const shifted = !!drillList
+        // Right goes back (only when shifted); left reopens (only when not).
+        if ((dx > 0 && !shifted) || (dx < 0 && (shifted || !lastDrill || !setlists.some((x) => x.id === lastDrill)))) {
+          s = null
+          return
+        }
+        if (!shifted) drill = lastDrill // render the content before it slides in
+        // How far the row slides: the songs column plus one gap.
+        const songs = rowEl?.querySelector<HTMLElement>('.pane.songs')
+        const lists = rowEl?.querySelector<HTMLElement>('.pane.lists')
+        const w = songs && lists ? lists.offsetLeft - songs.offsetLeft : node.getBoundingClientRect().width / 2
+        s.on = true
+        s.w = w
+        s.base = shifted ? -w : 0
+        s.dir = dx > 0 ? 1 : -1
+        if (rowEl) rowEl.style.transition = 'none'
+      }
+      const off = Math.max(-s.w, Math.min(0, s.base + dx))
+      if (rowEl) rowEl.style.transform = `translateX(${off}px)`
+      e.preventDefault()
+    }
+    const up = (e: PointerEvent) => {
+      if (!s || e.pointerId !== s.id) return
+      const g = s
+      s = null
+      if (!g.on || !rowEl) return
+      const dx = e.clientX - g.x
+      const fast = Math.abs(dx) / Math.max(1, e.timeStamp - g.t) > 0.5
+      const done = e.type === 'pointerup' && (Math.abs(dx) > g.w / 3 || fast)
+      // Hand the end position to the CSS class (same transition).
+      rowEl.style.transition = ''
+      rowEl.style.transform = ''
+      if (g.dir > 0) {
+        if (done) drill = null
+      } else if (!done) drill = null
+      // The click that ends a swipe opens nothing.
+      const eat = (c: Event) => (c.stopPropagation(), c.preventDefault())
+      node.addEventListener('click', eat, { capture: true, once: true })
+      setTimeout(() => node.removeEventListener('click', eat, { capture: true }), 400)
+    }
+    node.addEventListener('pointerdown', down)
+    window.addEventListener('pointermove', move, { passive: false })
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return {
+      destroy() {
+        node.removeEventListener('pointerdown', down)
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        window.removeEventListener('pointercancel', up)
+      },
+    }
   }
 
   let pending: string[] = $state([])
@@ -592,6 +690,38 @@
     }}
   >
     {#each shown as s (s.file)}
+      {#if inPane}
+        <!-- LIB-11 Columns: a compact row. The whole title shows (wraps);
+             actions are behind one ⋯ button. -->
+        <li data-sort-id={s.file} class="crow">
+          <button class="open" onclick={() => onopen(s)}>
+            <span class="t">
+              <span>{s.title}</span>
+              <span class="meta">{[sub(s), s.playable ? t('lib.plays') : '', s.pdf ? 'PDF' : ''].filter(Boolean).join(' · ')}</span>
+            </span>
+          </button>
+          <button
+            class="more"
+            data-nodrag
+            aria-haspopup="menu"
+            aria-expanded={rowMenu === s.file}
+            onclick={() => (rowMenu = rowMenu === s.file ? null : s.file)}
+            aria-label={t('lib.actionsFor', { title: s.title })}>⋯</button
+          >
+          {#if rowMenu === s.file}
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div class="rowmenu glass" role="menu" tabindex="-1" use:menuFocus onkeydown={(e) => e.key === 'Escape' && (rowMenu = null)}>
+              {#each setlists as sl (sl.id)}
+                <button role="menuitem" onclick={() => { rowMenu = null; addToList(sl, s) }}>{t('set.add')}: {sl.name}</button>
+              {/each}
+              <button role="menuitem" onclick={() => { rowMenu = null; editing = s }}>{t('lib.edit')}</button>
+              {#if s.user}
+                <button role="menuitem" class="danger" onclick={() => { rowMenu = null; removeScore(s) }}>{t('common.delete')}</button>
+              {/if}
+            </div>
+          {/if}
+        </li>
+      {:else}
       <li data-sort-id={s.file}>
         <button class="open" onclick={() => onopen(s)}>
           <span class="t">
@@ -619,6 +749,7 @@
           </span>
         {/if}
       </li>
+      {/if}
     {:else}
       <li class="empty">{t('lib.noHits')}</li>
     {/each}
@@ -913,8 +1044,8 @@
          its own; the page does not. In landscape all three show; in
          portrait two at a time, and opening a list slides the view left
          (scores out, the list's content in). -->
-    <div class="colclip" bind:this={colsEl}>
-    <div class="columns" class:three={threeCols} class:shifted={!threeCols && !!drillList}>
+    <div class="colclip" bind:this={colsEl} use:colSwipe>
+    <div class="columns" class:three={threeCols} class:shifted={!threeCols && !!drillList} bind:this={rowEl}>
       <section class="pane songs" aria-label={t('lib.all')} bind:this={songsEl} inert={!threeCols && !!drillList}>
         {@render libBar()}
         {@render scoreGrid(true)}
@@ -1084,21 +1215,22 @@
     overflow: hidden;
     display: flex;
   }
-  /* Portrait: two columns fill the clip box C with gap g, so a column is
-     (C - g) / 2 and the row of three is 3(C - g)/2 + 2g = 150% + g/2.
-     Sliding one column plus one gap is (C + g) / 2. Percentages in a
-     transform refer to the row itself, so use a custom property for C. */
+  /* Portrait: three columns, two on screen. Scores and the list's content
+     get 60%, the lists 40%: songs | lists fills the clip box, and so does
+     lists | content after sliding left by the songs column plus a gap.
+     With C the clip width and g the gap: songs = content = 0.6(C - g),
+     lists = 0.4(C - g); the row is 1.6(C - g) + 2g = 160% + 0.4g. */
   .colclip > .columns:not(.three) {
     flex: none;
     gap: 1rem;
-    width: calc(150% + 0.5rem);
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: calc(160% + 0.4rem);
+    grid-template-columns: 3fr 2fr 3fr;
     transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .colclip > .columns.shifted {
-    /* (C + g) / 2 where the row R = 1.5C + g/2, so C = (R - g/2) / 1.5:
-       (C + g) / 2 = R/3 - g/6 + g/2 = R/3 + g/3. */
-    transform: translateX(calc(-100% / 3 - 1rem / 3));
+    /* songs + g = 0.6(C - g) + g; the row R = 1.6(C - g) + 2g, so
+       C - g = (R - 2g) / 1.6 and the shift = 0.375R - 0.75g + g. */
+    transform: translateX(calc(-37.5% - 0.25rem));
   }
   .colclip > .columns.three {
     width: 100%;
@@ -1131,6 +1263,84 @@
   }
   .pane.songs .scores {
     grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  /* Compact score row: the title gets the full width and wraps; the line
+     below holds composer and badges, with the ⋯ in the card's lower right
+     corner (on that line, never over the title). */
+  .scores > li.crow {
+    position: relative;
+  }
+  .scores > li.crow > :global(button.open) {
+    width: 100%;
+    min-height: 0;
+    padding: 0.625rem 0.875rem 0.25rem;
+    justify-content: flex-start;
+    font-size: 1.0625rem;
+  }
+  .crow .t {
+    padding-right: 0;
+    width: 100%;
+  }
+  .crow .t > span:first-child {
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+  .crow .meta {
+    font-family: -apple-system, system-ui, sans-serif;
+    /* As tall as the ⋯ button, and clear of it on the right. */
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+    padding-right: 3rem;
+  }
+  .scores > li.crow > :global(button.more) {
+    position: absolute;
+    right: 0.25rem;
+    bottom: 0.25rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    min-height: 0;
+    padding: 0;
+    font-size: 1.25rem;
+    line-height: 1;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    color: var(--ink-muted, var(--muted));
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+  .rowmenu {
+    position: absolute;
+    right: 0;
+    top: calc(100% - 0.25rem);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 12rem;
+    max-width: 100%;
+    padding: 0.375rem;
+    border-radius: 0.75rem;
+    gap: 0.25rem;
+  }
+  .rowmenu :global(button) {
+    min-height: 2.75rem;
+    justify-content: flex-start;
+    text-align: left;
+    font-size: 0.9375rem;
+    padding: 0.5rem 0.875rem;
+    font-family: -apple-system, system-ui, sans-serif;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .rowmenu :global(button.danger) {
+    color: var(--danger, #b91c1c);
   }
   .pane.songs .libbar {
     flex-wrap: wrap;

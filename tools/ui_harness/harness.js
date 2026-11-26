@@ -576,6 +576,111 @@ const H = Number(process.env.H || 1133)
     await page.waitForFunction(() => !document.querySelector('.columns')?.classList.contains('shifted'))
   })
 
+  await step('lib_11 columns (portrait): whole titles in the song column, ⋯ menu adds to a list and opens Info', async () => {
+    // A long title must show in full (wrapping, not hidden under buttons).
+    await page.evaluate(() => {
+      window.__store.metadata = window.__store.metadata || {}
+      window.__store.metadata['1:Mine'] = { ...(window.__store.metadata['1:Mine'] || {}), title: 'Min egen mycket långa titel på ett stycke' }
+    })
+    await page.reload()
+    await page.waitForSelector('.pane.songs ul.scores > li')
+    await page.waitForSelector('.splash', { state: 'detached' })
+    const cut = await page.evaluate(() => {
+      const out = []
+      for (const li of document.querySelectorAll('.pane.songs ul.scores > li')) {
+        const t = li.querySelector('.t > span:first-child')
+        const tr = t.getBoundingClientRect()
+        if (t.scrollWidth > t.clientWidth + 1) out.push(t.textContent + ': clipped')
+        // Nothing clickable lies on top of the title.
+        for (const b of li.querySelectorAll('button:not(.open)')) {
+          const br = b.getBoundingClientRect()
+          if (br.width && br.left < tr.right - 1 && br.right > tr.left + 1 && br.top < tr.bottom - 1 && br.bottom > tr.top + 1) out.push(t.textContent + ': under ' + (b.getAttribute('aria-label') || b.textContent))
+        }
+      }
+      return out
+    })
+    if (cut.length) throw new Error(cut.join('; '))
+    // Lists column narrower than the songs column.
+    const w = await page.evaluate(() => [document.querySelector('.pane.songs').getBoundingClientRect().width, document.querySelector('.pane.lists').getBoundingClientRect().width])
+    if (!(w[0] > w[1] * 1.2)) throw new Error('songs column not wider: ' + w)
+    await shot('35-columns-titles')
+    // One ⋯ button per row: Add to list, Info, Delete.
+    const row = page.locator('.pane.songs ul.scores > li', { hasText: 'Skannad' })
+    if ((await row.locator('button.side, button.remove').count()) !== 0) throw new Error('old row buttons still in the column')
+    // The ⋯ sits in the card's lower right corner (inside the card).
+    const pos = await row.evaluate((li) => {
+      const c = li.querySelector('button.open').getBoundingClientRect()
+      const m = li.querySelector('button.more').getBoundingClientRect()
+      return { inside: m.left >= c.left && m.right <= c.right + 0.5 && m.top >= c.top && m.bottom <= c.bottom + 0.5, right: c.right - m.right, bottom: c.bottom - m.bottom, h: c.height }
+    })
+    if (!pos.inside || pos.right > 12 || pos.bottom > 12) throw new Error('⋯ not in the card corner ' + JSON.stringify(pos))
+    await row.locator('button.more').click()
+    await page.waitForSelector('.rowmenu')
+    await page.locator('.rowmenu button', { hasText: 'Duo' }).click()
+    await page.waitForTimeout(200)
+    const duo = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Duo').items.at(-1).score)
+    if (duo !== '1:Scanned') throw new Error('not added via menu: ' + duo)
+    await row.locator('button.more').click()
+    await page.locator('.rowmenu button', { hasText: 'Info' }).click()
+    await page.waitForSelector('.metasheet')
+    await page.locator('.metasheet button', { hasText: 'Cancel' }).click()
+    await page.waitForSelector('.metasheet', { state: 'detached' })
+    // Delete is offered (not used here: the score is needed later).
+    await row.locator('button.more').click()
+    if (!(await page.locator('.rowmenu button', { hasText: 'Delete' }).count())) throw new Error('no Delete in the menu')
+    await page.keyboard.press('Escape')
+    await page.waitForSelector('.rowmenu', { state: 'detached' })
+    // Tidy: remove the added item from Duo.
+    await page.evaluate(() => {
+      const d = window.__store.setlists.find((s) => s.name === 'Duo')
+      d.items.pop()
+    })
+    await page.reload()
+    await page.waitForSelector('.pane.songs ul.scores > li')
+  })
+
+  await step('lib_11 columns (portrait): swipe right goes back to the scores, swipe left reopens the list', async () => {
+    await page.waitForSelector('.splash', { state: 'detached' })
+    await page.locator('.pane.lists .rows > li', { hasText: 'Vårkonsert' }).locator('button').first().click()
+    await page.waitForFunction(() => document.querySelector('.columns')?.classList.contains('shifted'))
+    await page.waitForTimeout(400)
+    const swipe = async (dx) => {
+      const box = await page.locator('.colclip').boundingBox()
+      const x0 = box.x + box.width / 2 - dx / 2
+      const y = box.y + 200
+      await page.evaluate(([x0, y, dx]) => {
+        const el = document.elementFromPoint(x0, y)
+        const o = { pointerId: 11, isPrimary: true, pointerType: 'touch', bubbles: true, cancelable: true }
+        el.dispatchEvent(new PointerEvent('pointerdown', { ...o, clientX: x0, clientY: y }))
+        return new Promise((done) => {
+          let i = 0
+          const step = () => {
+            i++
+            window.dispatchEvent(new PointerEvent('pointermove', { ...o, clientX: x0 + (dx * i) / 12, clientY: y + i }))
+            if (i < 12) requestAnimationFrame(step)
+            else {
+              window.dispatchEvent(new PointerEvent('pointerup', { ...o, clientX: x0 + dx, clientY: y + 12 }))
+              done()
+            }
+          }
+          requestAnimationFrame(step)
+        })
+      }, [x0, y, dx])
+      await page.waitForTimeout(500)
+    }
+    // While dragging, the row follows the finger (checked by the end state).
+    await swipe(320)
+    if (await page.locator('.columns.shifted').count()) throw new Error('swipe right did not go back')
+    await swipe(-320)
+    if (!(await page.locator('.columns.shifted').count())) throw new Error('swipe left did not reopen the list')
+    if (!(await page.locator('.pane.content h2.setname', { hasText: 'Vårkonsert' }).count())) throw new Error('not the same list')
+    // A small sideways wobble while scrolling does nothing.
+    await swipe(30)
+    if (!(await page.locator('.columns.shifted').count())) throw new Error('a short wobble went back')
+    await page.click('.pane.content button.drillback')
+    await page.waitForFunction(() => !document.querySelector('.columns')?.classList.contains('shifted'))
+  })
+
   await step('lib_11 columns in edit mode: the song column still scrolls with a swipe', async () => {
     // Enough cards to scroll the column.
     await page.addStyleTag({ content: '.pane.songs ul.scores { padding-bottom: 1400px !important }' })
