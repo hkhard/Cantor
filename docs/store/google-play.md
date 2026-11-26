@@ -17,7 +17,7 @@ Bluetooth page-turn pedals (untested).
 |---|---|
 | App name | ChoirBird |
 | Package name | se.nikielhard.choirbird (same as the iOS bundle id) |
-| Default language | English (United Kingdom) – en-GB; Swedish – sv-SE added as a translation |
+| Default language | English (United States) – en-US (set when the app was created; the text is British English, fine for en-US, as on the App Store); Swedish – sv-SE added as a translation |
 | App or game | App |
 | Free or paid | Free (no in-app products, no ads) |
 | Category | Music & Audio |
@@ -253,7 +253,17 @@ $R bundle alpha      # the same build on Closed testing (the 12-tester test)
 
 The very first release of a new app may have to be created in the Play
 Console by hand (Google requires the app's first AAB there); after that the
-API works for every update. Play App Signing:
+API works for every update.
+
+Status 2026-11-26 (read back with `play_upload.rb status`): the listing is
+uploaded (en-US default and sv-SE: name, short and full description, icon,
+feature graphic, 6 phone, 6 seven-inch and 6 ten-inch screenshots each;
+contact email and website); **Internal testing: 1.0.0 (208) completed**.
+Closed testing (alpha) could not be started through the API: Google answers
+"Only releases with status draft may be created on draft app" until the app
+has been through its first review. Next: in the Play Console, Publishing
+overview › send the changes for review; then Closed testing › create the
+release from the library (build 208) and add the 12+ testers. Play App Signing:
 accept Google-managed app signing; the upload key stays in
 `~/.android-keys/` (password in the macOS Keychain, item
 `choirbird-android-upload`). **Back the upload key up** (a password

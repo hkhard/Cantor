@@ -19,7 +19,7 @@ ROOT = File.expand_path("../..", __dir__)
 PKG = "se.nikielhard.choirbird"
 AAB = File.join(ROOT, "app/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab")
 PLAY = File.join(ROOT, "store-out/play")
-LANGS = { "en-GB" => ["English (en-GB)", "en"], "sv-SE" => ["Swedish (sv-SE)", "sv"] }
+LANGS = { "en-US" => ["English (en-GB)", "en"], "sv-SE" => ["Swedish (sv-SE)", "sv"] }
 AP = Google::Apis::AndroidpublisherV3
 
 def service
@@ -76,7 +76,7 @@ when "listing"
   tx = texts
   with_edit(svc) do |id|
     svc.patch_edit_detail(PKG, id, AP::AppDetails.new(
-      default_language: "en-GB",
+      default_language: "en-US",
       contact_email: "choirbird-support@nikielhard.se",
       contact_website: "https://nikielhard.se/en/choirbird"
     ))
