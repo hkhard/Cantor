@@ -120,9 +120,11 @@
   // edit mode (cards wiggle, drags start at once); Done ends it.
   let editMode = $state(false)
   let scrollerEl: HTMLElement | undefined = $state()
-  // Back from a score: scroll to where the list was. The list fills in
-  // asynchronously (metadata, setlists, sync), so keep trying for a short
-  // while until the position can be reached, unless the user scrolls first.
+  // Back from a score: scroll to where the list was. The list fills in and
+  // changes height asynchronously (metadata, setlists, sync, Getting
+  // started), and WebKit may clamp the position when it shrinks for a
+  // moment, so hold the place for a short while (until the user touches
+  // or scrolls it, or 1.5 s have passed), not only until it is reached.
   $effect(() => {
     const el = scrollerEl
     if (!el) return
@@ -132,8 +134,8 @@
     let raf = 0
     const step = () => {
       if (!restoring) return
-      el.scrollTop = target
-      if (Math.abs(el.scrollTop - target) < 2 || performance.now() - t0 > 3000) restoring = false
+      if (Math.abs(el.scrollTop - target) >= 2) el.scrollTop = target
+      if (performance.now() - t0 > 1500) restoring = false
       else raf = requestAnimationFrame(step)
     }
     step()
@@ -143,11 +145,13 @@
     const userMoved = () => (restoring = false)
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener('pointerdown', userMoved)
+    el.addEventListener('touchstart', userMoved, { passive: true })
     el.addEventListener('wheel', userMoved, { passive: true })
     return () => {
       cancelAnimationFrame(raf)
       el.removeEventListener('scroll', onScroll)
       el.removeEventListener('pointerdown', userMoved)
+      el.removeEventListener('touchstart', userMoved)
       el.removeEventListener('wheel', userMoved)
     }
   })

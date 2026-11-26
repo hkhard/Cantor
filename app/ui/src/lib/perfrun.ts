@@ -172,21 +172,25 @@ export async function perfRun(launchMs: number) {
       await wait(300)
       const t1 = performance.now()
       let landed = -1
-      let ms = 0
+      let ms = -1
+      const trace: string[] = []
       const s = await frames(async () => {
         q<HTMLElement>('.top > button.icon')?.click()
         const el = await until(() => q<HTMLElement>('main.library'))
-        for (;;) {
+        // Watch 2 s: when the list first is in place, and any change of its
+        // height or position on the way (to see what moves it).
+        let last = ''
+        while (performance.now() - t1 < 2000) {
           await raf()
-          if (Math.abs(el.scrollTop - at) < 2) break
-          if (performance.now() - t1 > 3000) break
+          const m = `${el.scrollHeight - el.clientHeight}/${Math.round(el.scrollTop)}`
+          if (m !== last && trace.length < 10) trace.push(`${Math.round(performance.now() - t1)}:${m}`)
+          last = m
+          if (ms < 0 && Math.abs(el.scrollTop - at) < 2) ms = performance.now() - t1
         }
-        ms = performance.now() - t1
-        await wait(500)
         landed = el.scrollTop
       })
       await api
-        .perfMark(`perf library back: was ${Math.round(at)}, back at ${Math.round(landed)}, in place after ${Math.round(ms)} ms, dropped ${s.dropped}`, Math.abs(landed - at))
+        .perfMark(`perf library back: was ${Math.round(at)}, at ${Math.round(landed)} after 2 s, first in place after ${Math.round(ms)} ms, dropped ${s.dropped}; ms:max/top ${trace.join(' ')}`, Math.abs(landed - at))
         .catch(() => {})
     }
   }
