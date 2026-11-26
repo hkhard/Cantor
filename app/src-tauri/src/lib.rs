@@ -1242,7 +1242,12 @@ async fn scan_document(name: String, app: tauri::AppHandle) -> Result<Option<Str
     let paths = app.state::<Paths>();
     let item = cantor_library::scan::save_scan(&paths.user, &name, &pages)?;
     log::info!("scan: {} page(s) saved as {}", pages.len(), item.stem);
-    Ok(Some(format!("1:{}", item.stem)))
+    let id = format!("1:{}", item.stem);
+    // Like a shared file: App opens a single new score at once, even if the
+    // library view was rebuilt while the scanner was in front (Android).
+    use tauri::Emitter;
+    let _ = app.emit("library-changed", vec![id.clone()]);
+    Ok(Some(id))
 }
 
 /// Import a file picked in the app (raw bytes, name in the `x-name` header).

@@ -635,9 +635,9 @@
     try {
       const id = await api.scanDocument(name)
       if (!id) return
+      // The backend announces the new score (`library-changed`) and App
+      // opens it, also when this view was rebuilt during the scan.
       await onrefresh()
-      const s = scores.find((x) => x.file === id)
-      if (s) onopen(s)
     } catch (e) {
       notice = t('lib.scanFailed', { e: String(e) })
     } finally {

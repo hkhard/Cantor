@@ -128,6 +128,8 @@ exports.setup = async function setup(page, dir) {
           if (r !== 'ok') throw r
           const file = '1:' + name
           scores.push({ file, title: name, playable: false, pdf: true, user: true })
+          // Like the backend: announce the new score (App opens it).
+          setTimeout(() => window.__emit('library-changed', [file]), 0)
           return file
         },
         pdf_url_of: ({ file }) => (scores.find((s) => s.file === file)?.pdf ? '0/x.pdf' : null),
