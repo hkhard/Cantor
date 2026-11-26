@@ -1744,6 +1744,14 @@ const H = Number(process.env.H || 1133)
         return t('first.share')
       })
       if (!/AirDrop/.test(ios)) throw new Error('iOS lost AirDrop: ' + ios)
+      // Android's picker filters by MIME type and greys out .mxl,
+      // .musicxml and .cantorbackup (no MIME it knows): no filter there.
+      await p6.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
+      await p6.waitForSelector('.splash', { state: 'detached' })
+      const acc = await p6.evaluate(() => [...document.querySelectorAll('input[type=file]')].map((i) => i.getAttribute('accept')))
+      if (!acc.length || acc.some((a) => a)) throw new Error('Android file inputs still filter: ' + JSON.stringify(acc))
+      const iosAcc = await page.evaluate(() => document.querySelector('input[type=file]')?.getAttribute('accept'))
+      if (!iosAcc || !iosAcc.includes('.mxl')) throw new Error('iOS lost its file filter: ' + iosAcc)
     } finally {
       await ctx6.close()
     }

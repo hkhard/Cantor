@@ -1,6 +1,6 @@
 <script lang="ts">
   // NFR-09: About, with the licences of what Cantor is built on.
-  import { t, i18n, setLang, textSize, setTextScale } from './i18n.svelte'
+  import { t, i18n, setLang, textSize, setTextScale, pickerAccept } from './i18n.svelte'
   import { api } from './api'
   import { confirmBox } from './prompts.svelte'
 
@@ -167,7 +167,7 @@
   <div class="row">
     <button onclick={makeBackup} disabled={busy}>{t('backup.make')}</button>
     <button onclick={() => restoreInput?.click()} disabled={busy}>{t('backup.restore')}</button>
-    <input bind:this={restoreInput} type="file" accept=".cantorbackup" style="display:none" onchange={restorePicked} aria-label={t('backup.restore')} />
+    <input bind:this={restoreInput} type="file" accept={pickerAccept(".cantorbackup")} style="display:none" onchange={restorePicked} aria-label={t('backup.restore')} />
   </div>
   {#if backupMsg}<p role="status">{backupMsg}</p>{/if}
   <h4>{t('about.licence')}</h4>

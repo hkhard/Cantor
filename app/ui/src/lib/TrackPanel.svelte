@@ -2,7 +2,7 @@
   // PERF-04: a backing track (recording) for a score: attach, line up with
   // the score (offset) and page turns on the track timeline.
   import { api, type TrackInfo } from './api'
-  import { t } from './i18n.svelte'
+  import { t, pickerAccept } from './i18n.svelte'
 
   interface Props {
     file: string
@@ -104,7 +104,7 @@
     <p class="hint">{t('trk.hint')}</p>
     <button onclick={() => input?.click()} disabled={busy}>{busy ? t('lib.importing') : t('trk.add')}</button>
   {/if}
-  <input bind:this={input} type="file" accept="audio/*,.m4a,.mp3,.wav,.flac,.aif,.aiff" style="display:none" onchange={pick} aria-label={t('trk.add')} />
+  <input bind:this={input} type="file" accept={pickerAccept("audio/*,.m4a,.mp3,.wav,.flac,.aif,.aiff")} style="display:none" onchange={pick} aria-label={t('trk.add')} />
   {#if msg}<p class="hint" role="alert">{msg}</p>{/if}
 </div>
 

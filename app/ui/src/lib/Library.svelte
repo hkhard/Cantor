@@ -18,7 +18,7 @@
   import Appearance from './Appearance.svelte'
   import MetaEditor from './MetaEditor.svelte'
   import About from './About.svelte'
-  import { t } from './i18n.svelte'
+  import { t, pickerAccept } from './i18n.svelte'
   import { ask, confirmBox, primeKeyboard } from './prompts.svelte'
   import { sortable } from './reorder'
   import Instructions from './Instructions.svelte'
@@ -1005,7 +1005,7 @@
     bind:this={fileInput}
     type="file"
     multiple
-    accept=".mxl,.musicxml,.xml,.pdf,.mscz,.4sc,.4ss,.cantorset,.cantorbackup,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
+    accept={pickerAccept(".mxl,.musicxml,.xml,.pdf,.mscz,.4sc,.4ss,.cantorset,.cantorbackup,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml")}
     style="display:none"
     onchange={importPicked}
   />

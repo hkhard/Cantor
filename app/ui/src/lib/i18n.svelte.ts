@@ -698,6 +698,13 @@ export const i18n = $state({ lang: initial() })
 /** Running in the Android app (its web view says so in the user agent). */
 const android = typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent)
 
+/** A file input's `accept` list. Android's picker filters by MIME type and
+ *  greys out files it has no type for (.mxl, .musicxml, .cantorbackup), so
+ *  there every file can be picked and the import says if one is wrong. */
+export function pickerAccept(list: string): string | undefined {
+  return android ? undefined : list
+}
+
 export function setLang(l: Lang) {
   i18n.lang = l
   localStorage.setItem('cantor.lang', l)
