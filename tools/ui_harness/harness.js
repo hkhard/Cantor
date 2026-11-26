@@ -1711,6 +1711,44 @@ const H = Number(process.env.H || 1133)
     }
   })
 
+  await step('and_05 Android shows Android words, never iPhone, AirDrop, iCloud or the Files app', async () => {
+    const ctx6 = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 1, hasTouch: true })
+    const p6 = await ctx6.newPage()
+    await p6.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 12; SM-G973F) Harness' })
+    })
+    await require('./mock.js').setup(p6, DIR)
+    const apple = /iPhone|iPad|AirDrop|iCloud|Files app|appen Filer|På min|On My|Files ›|Filer ›/
+    try {
+      for (const lang of ['en', 'sv']) {
+        await p6.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
+        await p6.evaluate((l) => {
+          localStorage.setItem('cantor.lang', l)
+          window.__store.hints = []
+        }, lang)
+        await p6.reload()
+        await p6.waitForSelector('.splash', { state: 'detached' })
+        await p6.waitForSelector('.welcome')
+        const welcome = await p6.locator('.welcome').innerText()
+        if (apple.test(welcome)) throw new Error(`${lang} Getting started: ${welcome.match(apple)[0]}`)
+        if (!/Android|Google|Dela|Share|Nedladdningar|Downloads/.test(welcome)) throw new Error(`${lang} Getting started has no Android way: ${welcome}`)
+        // About: sync and backup hints.
+        await p6.click('header button:has-text("About"), header button:has-text("Om")')
+        await p6.waitForSelector('.about, [role=dialog]')
+        const about = await p6.locator('.about, [role=dialog]').first().innerText()
+        if (apple.test(about)) throw new Error(`${lang} About: ${about.match(apple)[0]}`)
+      }
+      // The Apple wording is unchanged on iOS (main page: non-Android UA).
+      const ios = await page.evaluate(async () => {
+        const { t } = await import('/src/lib/i18n.svelte.ts')
+        return t('first.share')
+      })
+      if (!/AirDrop/.test(ios)) throw new Error('iOS lost AirDrop: ' + ios)
+    } finally {
+      await ctx6.close()
+    }
+  })
+
   await step('and_02 the PDF opens on an older Android WebView (no Uint8Array.toHex/fromBase64)', async () => {
     // Android WebView 133 (the Android 16 emulator, many phones) lacks the
     // new Uint8Array hex/base64 helpers that the modern pdf.js build calls.

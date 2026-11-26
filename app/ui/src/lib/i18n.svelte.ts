@@ -290,6 +290,12 @@ const sv = {
   'first.import': 'Tryck på Importera och välj MusicXML-, MXL- eller PDF-filer.',
   'first.share': 'Skicka en fil med AirDrop, eller välj ”Öppna i ChoirBird” i en annan app.',
   'first.files': 'Lägg filer i appen Filer under På min {device} › ChoirBird.',
+  // Android wording for the same texts (t() picks the .android key there).
+  'first.share.android': 'I Importera › Från filer kan du också välja filer direkt från Google Drive.',
+  'first.files.android': 'Ladda ner noterna till telefonen och tryck på Importera › Från filer, där du hittar dem under Nedladdningar.',
+  'backup.hint.android': 'Allt i ditt bibliotek i en fil: noter, PDF:er, anteckningar, listor och mixar. Spara den i Google Drive eller på en dator.',
+  'sync.hint.android': 'Välj en mapp i Google Drive eller OneDrive. Noter, anteckningar, listor och mixar hålls lika på alla dina enheter som använder samma mapp.',
+  'tr.exported.android': 'Klart: {n} fil(er) sparade i ChoirBird.',
   'first.try': 'Prova Lacrymosa',
   'first.tryBody': 'Mozarts Lacrymosa finns med. Öppna den och lyssna på alla stämmor.',
   'hint.title': 'Så här spelar du',
@@ -626,6 +632,11 @@ const en: Record<Key, string> = {
   'first.import': 'Tap Import and pick MusicXML, MXL or PDF files.',
   'first.share': 'Send a file with AirDrop, or choose “Open in ChoirBird” in another app.',
   'first.files': 'Put files in the Files app under On My {device} › ChoirBird.',
+  'first.share.android': 'In Import › From files you can also pick files straight from Google Drive.',
+  'first.files.android': 'Download the music to your phone, then tap Import › From files and find it under Downloads.',
+  'backup.hint.android': 'Everything in your library in one file: scores, PDFs, notes, setlists and mixes. Save it to Google Drive or a computer.',
+  'sync.hint.android': 'Choose a folder in Google Drive or OneDrive. Scores, notes, setlists and mixes stay the same on every device using that folder.',
+  'tr.exported.android': 'Done: {n} file(s) saved in ChoirBird.',
   'first.try': 'Try Lacrymosa',
   'first.tryBody': 'Mozart’s Lacrymosa is included. Open it and hear every part.',
   'hint.title': 'How to play',
@@ -684,6 +695,9 @@ function initial(): Lang {
 
 export const i18n = $state({ lang: initial() })
 
+/** Running in the Android app (its web view says so in the user agent). */
+const android = typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent)
+
 export function setLang(l: Lang) {
   i18n.lang = l
   localStorage.setItem('cantor.lang', l)
@@ -691,6 +705,12 @@ export function setLang(l: Lang) {
 }
 
 export function t(key: Key, vars?: Record<string, string | number>): string {
+  // Android: a platform-specific wording ("<key>.android") wins, so the
+  // Apple names (iPhone, AirDrop, iCloud, the Files app) never show there.
+  if (android) {
+    const alt = `${key}.android` as Key
+    if (alt in sv) key = alt
+  }
   let s = dicts[i18n.lang][key] ?? sv[key] ?? key
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v))
   return s
