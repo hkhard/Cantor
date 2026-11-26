@@ -891,8 +891,18 @@
       <h1>ChoirBird</h1>
       <p class="sub">{t('lib.subtitle')}</p>
     </div>
-    <button class="icon" onclick={() => (aboutOpen = true)} aria-label={t('lib.about')}>ⓘ</button>
-    <Appearance />
+    <!-- LIB-11: layout, colours and About as three pills of one height. -->
+    <div class="pills">
+      <div class="segmented layoutsel" role="group" aria-label={t('lib.layout')}>
+        {#each LAYOUTS as l}
+          {#if l !== 'columns' || !phoneSize}
+            <button class:on={layout === l} aria-pressed={layout === l} onclick={() => setLayout(l)}>{t(`lib.layout.${l}`)}</button>
+          {/if}
+        {/each}
+      </div>
+      <Appearance />
+      <button class="aboutpill" onclick={() => (aboutOpen = true)} aria-label={t('lib.about')}>{t('lib.aboutShort')}</button>
+    </div>
   </header>
   {#if error}<p class="error">{error}</p>{/if}
   {#if loading}<p class="loading">{loading}</p>{/if}
@@ -913,13 +923,6 @@
   {/each}
 
   <div class="viewbar">
-    <div class="seg layoutsel" role="group" aria-label={t('lib.layout')}>
-      {#each LAYOUTS as l}
-        {#if l !== 'columns' || !phoneSize}
-          <button class:on={layout === l} aria-pressed={layout === l} onclick={() => setLayout(l)}>{t(`lib.layout.${l}`)}</button>
-        {/if}
-      {/each}
-    </div>
     {#if layout === 'tabs'}
       <label class="viewsel"
         >{t('lib.show')}
@@ -1123,14 +1126,54 @@
     min-height: 2.25rem;
   }
   .layoutsel button {
-    min-height: 2.25rem;
-    color: var(--text);
     /* Text and background change together (no unreadable moment). */
     transition: none;
   }
-  .layoutsel button.on {
-    background: var(--accent);
-    color: var(--accent-ink);
+  /* The three pills: one row with small gaps, all as tall as the colour
+     picker; on a narrow screen they take their own row below the title
+     and shrink their text and padding to fit. */
+  .pills {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    /* Wrap rather than run off screen (large text, narrow windows). */
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .aboutpill {
+    border-radius: var(--radius-pill);
+    background: var(--control);
+    border: 1px solid var(--line);
+    /* Outer 3px like the segmented pills, plus a segment's own padding. */
+    padding: 9px 17px;
+    font-size: 0.875rem;
+    color: var(--ink);
+    line-height: inherit;
+    align-self: stretch;
+  }
+  @media (max-width: 600px) {
+    /* Too narrow for all three in one row: layout and About first, the
+       colours below (same height and gaps). */
+    .pills {
+      flex-basis: 100%;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+      gap: 0.375rem;
+    }
+    .pills > :global(.segmented[role='radiogroup']) {
+      order: 3;
+    }
+    .pills > .aboutpill {
+      order: 2;
+    }
+    .pills :global(.segmented button) {
+      padding: 6px 9px;
+      font-size: 0.8125rem;
+    }
+    .aboutpill {
+      font-size: 0.8125rem;
+      padding: 9px 12px;
+    }
   }
   .rows {
     list-style: none;

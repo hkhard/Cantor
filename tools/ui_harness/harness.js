@@ -457,6 +457,57 @@ const H = Number(process.env.H || 1133)
   const layoutBtn = (name) => page.locator('.layoutsel button', { hasText: name })
   const rowNames = (scope = '') => page.locator(`${scope} .rows > li .rowname`).allInnerTexts()
 
+  await step('lib_11 the layout, colour and About pills sit side by side at the same height, also on iPhone', async () => {
+    const check = async (label) => {
+      await page.waitForTimeout(300)
+      const r = await page.evaluate(() => {
+        const box = (s) => document.querySelector(s)?.getBoundingClientRect()
+        return { lay: box('header .layoutsel'), skin: box('header .segmented[role=radiogroup]'), about: box('header button.aboutpill'), w: window.innerWidth }
+      })
+      if (!r.lay || !r.skin || !r.about) throw new Error(`${label}: pills not in the header ${JSON.stringify(r)}`)
+      const pills = [r.lay, r.skin, r.about]
+      for (const p of pills) if (p.left < -0.5 || p.right > r.w + 0.5) throw new Error(`${label}: a pill is off screen ${JSON.stringify(r)}`)
+      const mid = (p) => p.top + p.height / 2
+      if (Math.abs(r.lay.height - r.skin.height) > 2 || Math.abs(r.about.height - r.skin.height) > 2) throw new Error(`${label}: heights differ ${JSON.stringify(pills.map((p) => p.height))}`)
+      if (label === 'iPhone') {
+        // Narrow: layout and About on one row, the colours on the next.
+        if (Math.abs(mid(r.lay) - mid(r.about)) > 2) throw new Error(`${label}: layout and About not on one row`)
+        const g = r.about.left - r.lay.right
+        if (g < 4 || g > 16) throw new Error(`${label}: gap ${g}`)
+        const v = r.skin.top - r.lay.bottom
+        if (v < 4 || v > 16) throw new Error(`${label}: row gap ${v}`)
+      } else {
+        // Same row, in this order, with a small gap.
+        if (Math.abs(mid(r.lay) - mid(r.skin)) > 2 || Math.abs(mid(r.about) - mid(r.skin)) > 2) throw new Error(`${label}: not on one row`)
+        const g1 = r.skin.left - r.lay.right
+        const g2 = r.about.left - r.skin.right
+        if (g1 < 4 || g1 > 16 || g2 < 4 || g2 > 16) throw new Error(`${label}: gaps ${g1}, ${g2}`)
+      }
+      // The old icon is gone.
+      if (await page.locator('header button.icon').count()) throw new Error(`${label}: the ⓘ icon is still there`)
+    }
+    await page.waitForSelector('header .layoutsel')
+    await check('iPad')
+    await shot('36-header-pills')
+    try {
+      await page.setViewportSize({ width: 390, height: 844 })
+      await check('iPhone')
+      await shot('37-header-pills-iphone')
+      await page.locator('header button.aboutpill').click()
+      await page.waitForSelector('.about')
+      await page.locator('.about button', { hasText: 'Close' }).first().click()
+      // iPhone in landscape: one row beside a small title, header low.
+      await page.setViewportSize({ width: 844, height: 390 })
+      await check('iPhone landscape')
+      const headH = await page.evaluate(() => document.querySelector('.library header').getBoundingClientRect().bottom)
+      if (headH > 110) throw new Error('header too tall in landscape: ' + headH)
+      await shot('38-header-pills-iphone-landscape')
+    } finally {
+      await page.setViewportSize({ width: W, height: H })
+      await page.waitForTimeout(300)
+    }
+  })
+
   await step('lib_11 lists layout: setlists as rows, the arrow opens a list, back returns; kept after restart', async () => {
     await layoutBtn('Lists').click()
     await page.waitForSelector('.rows')

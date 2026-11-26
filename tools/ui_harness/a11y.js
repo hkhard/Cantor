@@ -30,7 +30,7 @@ const SCREENS = [
     await p.waitForSelector('.metasheet')
   }],
   ['about', async (p) => {
-    await p.click('header button.icon')
+    await p.click('header button.aboutpill')
     await p.waitForSelector('.about')
   }],
   ['setlist', async (p) => {

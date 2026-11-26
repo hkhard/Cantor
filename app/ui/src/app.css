@@ -170,6 +170,25 @@ select {
   color: var(--ink-muted);
   margin: 6px 0 0;
 }
+/* iPhone in landscape: little height, so a smaller mark and title, and the
+   pills stay beside them on one row. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .library header {
+    flex-wrap: nowrap;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .library .mark {
+    width: 40px;
+    height: 40px;
+  }
+  .library h1 {
+    font-size: 1.75rem;
+  }
+  .library .sub {
+    display: none;
+  }
+}
 .scores {
   list-style: none;
   padding: 0;
