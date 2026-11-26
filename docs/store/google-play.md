@@ -234,8 +234,26 @@ production access (Google reviews it, usually within 7 days).
    the test). Then publish to production.
 
 Upload: `git tag android-vX.Y.Z && bash tools/android.sh release` builds
-the signed AAB (`app-universal-release.aab`); upload it in Play Console ›
-Testing › Internal testing › Create new release. Play App Signing:
+the signed AAB (`app-universal-release.aab`). Then, with the Play service
+account key (`~/.android-keys/play-publisher.json`, 0600, never in git; the
+account `choirbird-publishing@choirbird-publishing.iam.gserviceaccount.com`
+must be invited in Play Console › Users and permissions with release and
+store-listing rights, and the "Google Play Android Developer API" enabled in
+its Google Cloud project):
+
+```
+D=$(dirname $(readlink -f $(which fastlane)))/../libexec
+R="env LC_ALL=en_US.UTF-8 GEM_HOME=$D GEM_PATH=$D /opt/homebrew/opt/ruby/bin/ruby tools/store/play_upload.rb"
+$R status            # read-only
+$R listing           # texts and graphics, en-GB and sv-SE
+$R bundle internal   # the AAB as a draft release on Internal testing
+$R rollout internal  # make it available to internal testers
+$R bundle alpha      # the same build on Closed testing (the 12-tester test)
+```
+
+The very first release of a new app may have to be created in the Play
+Console by hand (Google requires the app's first AAB there); after that the
+API works for every update. Play App Signing:
 accept Google-managed app signing; the upload key stays in
 `~/.android-keys/` (password in the macOS Keychain, item
 `choirbird-android-upload`). **Back the upload key up** (a password
