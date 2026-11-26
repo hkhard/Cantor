@@ -499,11 +499,19 @@ const H = Number(process.env.H || 1133)
       await page.waitForSelector('.about')
       await page.locator('.about button', { hasText: 'Close' }).first().click()
       // iPhone in landscape: one row beside a small title, header low.
-      await page.setViewportSize({ width: 844, height: 390 })
+      await page.setViewportSize({ width: 852, height: 393 })
       await check('iPhone landscape')
       const headH = await page.evaluate(() => document.querySelector('.library header').getBoundingClientRect().bottom)
       if (headH > 110) throw new Error('header too tall in landscape: ' + headH)
       await shot('38-header-pills-iphone-landscape')
+      // The notch / Dynamic Island is kept clear in landscape. WebKit here
+      // has no safe area to simulate, so check that the library pads by it
+      // on every side (the device is the real check).
+      const css = await page.evaluate(() => {
+        const s = [...document.styleSheets].flatMap((x) => { try { return [...x.cssRules] } catch { return [] } }).map((r) => r.cssText).join('\n')
+        return ['left', 'right'].every((side) => new RegExp(`\\.library[^{]*\\{[^}]*safe-area-inset-${side}`).test(s))
+      })
+      if (!css) throw new Error('the library does not keep clear of the side safe areas (notch in landscape)')
     } finally {
       await page.setViewportSize({ width: W, height: H })
       await page.waitForTimeout(300)

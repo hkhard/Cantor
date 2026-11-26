@@ -139,11 +139,20 @@ select {
   overflow-x: hidden;
   overscroll-behavior-x: none;
   touch-action: pan-y;
-  padding: calc(env(safe-area-inset-top) + 24px) 32px 32px;
+  /* Clear of the notch / Dynamic Island on either side in landscape. */
+  padding: calc(env(safe-area-inset-top) + 24px) calc(env(safe-area-inset-right) + 32px) calc(env(safe-area-inset-bottom) + 32px)
+    calc(env(safe-area-inset-left) + 32px);
 }
 @media (max-width: 600px) {
   .library {
-    padding: calc(env(safe-area-inset-top) + 16px) 16px 24px;
+    padding: calc(env(safe-area-inset-top) + 16px) calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 24px)
+      calc(env(safe-area-inset-left) + 16px);
+  }
+}
+/* iPhone in landscape: the status bar is hidden, so less space on top. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .library {
+    padding-top: calc(env(safe-area-inset-top) + 12px);
   }
 }
 .library header {
