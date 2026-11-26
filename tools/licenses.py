@@ -30,6 +30,8 @@ ALLOWED = {
 # Copyleft packages allowed after a review (name -> reason).
 REVIEWED = {
     "verovio": "LGPL-3.0: whole app source is public under AGPL, so relinking is possible; lawyer check in phase L",
+    # Android only (Gradle, not scanned by this tool; listed for the record).
+    "com.google.android.gms:play-services-mlkit-document-scanner": "ML Kit Terms of Service (proprietary, free): LIB-12 camera scan on Android, runs in Google Play services on the device; accepted by the product owner 2026-11-26 (option a, like homr)",
 }
 
 # Our own crates (AGPL-3.0-only, covered by LICENSE-EXCEPTIONS.md).
@@ -169,6 +171,11 @@ def notices(packages):
         "transformer on OpenScore Lieder and StringQuartets (CC0), GrandStaff (MIT)",
         "and the public-domain subset of PDMX (CC BY 4.0,",
         "https://zenodo.org/records/15571083). ONNX Runtime (Microsoft, MIT) runs them.",
+        "",
+        "Android builds use Google's ML Kit document scanner",
+        "(`com.google.android.gms:play-services-mlkit-document-scanner`, ML Kit Terms",
+        "of Service, https://developers.google.com/ml-kit/terms) for scanning sheet",
+        "music with the camera. It runs on the device in Google Play services.",
         "",
         "| Package | Version | Licence | Source |",
         "|---|---|---|---|",

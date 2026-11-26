@@ -17,6 +17,11 @@ transformer on OpenScore Lieder and StringQuartets (CC0), GrandStaff (MIT)
 and the public-domain subset of PDMX (CC BY 4.0,
 https://zenodo.org/records/15571083). ONNX Runtime (Microsoft, MIT) runs them.
 
+Android builds use Google's ML Kit document scanner
+(`com.google.android.gms:play-services-mlkit-document-scanner`, ML Kit Terms
+of Service, https://developers.google.com/ml-kit/terms) for scanning sheet
+music with the camera. It runs on the device in Google Play services.
+
 | Package | Version | Licence | Source |
 |---|---|---|---|
 | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | crates.io |
