@@ -1613,6 +1613,40 @@ const H = Number(process.env.H || 1133)
     await page.emulateMedia({ reducedMotion: 'no-preference' })
   })
 
+  await step('and_02 the PDF opens on an older Android WebView (no Uint8Array.toHex/fromBase64)', async () => {
+    // Android WebView 133 (the Android 16 emulator, many phones) lacks the
+    // new Uint8Array hex/base64 helpers that the modern pdf.js build calls.
+    const ctx4 = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, hasTouch: true })
+    const p4 = await ctx4.newPage()
+    await require('./mock.js').setup(p4, DIR)
+    // The pdf.js worker has its own globals: strip the helpers there too.
+    const strip = "for (const k of ['toHex','toBase64','setFromHex','setFromBase64']) delete Uint8Array.prototype[k]; for (const k of ['fromHex','fromBase64']) delete Uint8Array[k];\n"
+    let workerSeen = 0
+    await p4.route(/pdf\.worker.*\.mjs/, async (route) => {
+      const r = await route.fetch()
+      workerSeen++
+      await route.fulfill({ response: r, body: strip + (await r.text()) })
+    })
+    await p4.addInitScript(() => {
+      for (const k of ['toHex', 'toBase64', 'setFromHex', 'setFromBase64']) delete Uint8Array.prototype[k]
+      for (const k of ['fromHex', 'fromBase64']) delete Uint8Array[k]
+      window.__store.hints = ['reader', 'intro', 'start']
+    })
+    const errs = []
+    p4.on('pageerror', (e) => errs.push(e.message))
+    await p4.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
+    await p4.waitForSelector('ul.scores > li')
+    await p4.locator('ul.scores > li', { hasText: 'Lacrymosa' }).first().locator('button.open').click()
+    try {
+      await p4.waitForSelector('.pdfhost canvas', { timeout: 15000 })
+    } catch {
+      const msg = await p4.locator('.pdfhost .error').innerText().catch(() => '')
+      throw new Error('PDF did not open: ' + (msg || errs.join('; ')))
+    }
+    if (!workerSeen) throw new Error('the pdf.js worker was not loaded through the test route')
+    await ctx4.close()
+  })
+
   await step('view_07 landscape: the PDF page fills the width, the system is whole', async () => {
     await page.setViewportSize({ width: 1133, height: 744 })
     await page.evaluate(() => localStorage.setItem('cantor.lang', 'en'))
