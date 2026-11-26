@@ -87,7 +87,7 @@ Svenska:
 • Nytt: forScore-filer (.4sc) med bara PDF kan läsas in på samma sätt. Behåller stycket sitt namn?
 • Repriser, volta (1. och 2. gång), D.S. al Coda och Coda spelas nu som i MuseScore. Lyssna på ett stycke med många repriser: hoppar uppspelningen rätt?
 • Nytt i 0.3.2: en båge mellan två noter på samma ton spelas som en enda utdragen ton, både bindebåge och legatobåge (till exempel "da-ah" i slutet av Only You). Bundna noter hålls ut även när två stämmor håller samma ton. Låter det som du sjunger det?
-• Nytt i 0.9: tre sätt att visa startsidan, välj längst upp: Flikar (som förut), Listor (repertoarlistorna som rader, tryck på en för att öppna) och Kolumner (noterna bredvid listorna). I Kolumner: håll in en not och dra den till en lista. Håll den kvar över listan så öppnas den, och du kan släppa noten där den ska ligga. Svep åt höger för att gå tillbaka. Fungerar det med fingret, och syns hela titlarna?
+• Nytt i 0.9: tre sätt att visa startsidan, välj längst upp: Standard (som förut), Listor (repertoarlistorna som rader, tryck på en för att öppna) och Kolumner (noterna bredvid listorna). I Kolumner: håll in en not och dra den till en lista. Håll den kvar över listan så öppnas den, och du kan släppa noten där den ska ligga. Svep åt höger för att gå tillbaka. Fungerar det med fingret, och syns hela titlarna?
 • Nytt i 0.9: när du går tillbaka från ett stycke hamnar du där du var i biblioteket, inte högst upp.
 • Sidvändningen är jämnare. När du sveper syns nästa sida under bladet som vänds, i stället för en tom sida.
 • Fortsätt gärna testa som förut: din stämma, Utan mig, tempo, slinga, bladvändning och läget Framför.
@@ -98,7 +98,7 @@ English:
 • New: forScore files (.4sc) with only a PDF can be read the same way. Does the piece keep its name?
 • Repeats, first and second endings, D.S. al Coda and Coda now play as in MuseScore. Listen to a piece with many repeats: does playback jump to the right places?
 • New in 0.3.2: an arc between two notes of the same pitch plays as one held note, whether it is a tie or a slur (for example "da-ah" at the end of Only You). Tied notes are held also when two parts hold the same note. Does it sound the way you sing it?
-• New in 0.9: three ways to show the home screen, pick at the top: Tabs (as before), Lists (setlists as rows, tap one to open it) and Columns (scores beside the setlists). In Columns: press and hold a score and drag it to a list. Hold it over the list and the list opens, so you can drop the score where it belongs. Swipe right to go back. Does it work with your finger, and do you see the whole titles?
+• New in 0.9: three ways to show the home screen, pick at the top: Standard (as before), Lists (setlists as rows, tap one to open it) and Columns (scores beside the setlists). In Columns: press and hold a score and drag it to a list. Hold it over the list and the list opens, so you can drop the score where it belongs. Swipe right to go back. Does it work with your finger, and do you see the whole titles?
 • New in 0.9: coming back from a piece puts you where you were in the library, not at the top.
 • Smoother page turns. When you swipe, the next page shows under the sheet being turned instead of a blank page.
 • Please keep testing as before: your part, Without me, tempo, loop, page turns and Performance mode.

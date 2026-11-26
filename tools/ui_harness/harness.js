@@ -451,7 +451,7 @@ const H = Number(process.env.H || 1133)
     if (await page.locator('.library.editing').count()) throw new Error('still editing')
   })
 
-  // LIB-11: home layouts. Tabs (above), Lists (setlists as rows with an
+  // LIB-11: home layouts. Standard (the chips above one list), Lists (setlists as rows with an
   // arrow into each) and Columns (scores | setlists, and the list's content
   // as a third column in landscape) with drag-to-add.
   const layoutBtn = (name) => page.locator('.layoutsel button', { hasText: name })
@@ -487,6 +487,8 @@ const H = Number(process.env.H || 1133)
       if (await page.locator('header button.icon').count()) throw new Error(`${label}: the ⓘ icon is still there`)
     }
     await page.waitForSelector('header .layoutsel')
+    // The first layout is called Standard (not Tabs).
+    if ((await page.locator('header .layoutsel button').first().innerText()).trim() !== 'Standard') throw new Error('first layout is not called Standard')
     await check('iPad')
     await shot('36-header-pills')
     try {
@@ -815,7 +817,7 @@ const H = Number(process.env.H || 1133)
       await page.setViewportSize({ width: W, height: H })
       await page.waitForTimeout(300)
       if (await page.locator('button.drillback').count()) await page.click('button.drillback')
-      await layoutBtn('Tabs').click()
+      await layoutBtn('Standard').click()
       await page.waitForSelector('[role=tab] >> text=All scores')
     }
   })
