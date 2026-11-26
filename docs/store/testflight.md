@@ -18,8 +18,8 @@ TestFlight › External Testing › (group) › Public Link, then paste it here:
 the team):
 
 1. **Source is public (AGPL section 6):** done. `hkhard/Cantor` is public and
-   About › Source points at the tag of the build (build 0.9.0 →
-   tag `v0.9.0`).
+   About › Source points at the tag of the build (build 1.0.0 →
+   tag `v1.0.0`).
 2. ***The Anchor Song* fixture:** removed from GitHub and its history
    (2026-11-25); only Lacrymosa is public.
 3. **External testing needs Beta App Review** by Apple for the first build:
@@ -80,13 +80,14 @@ Mozart's Lacrymosa is included so you can try it straight away.
 
 ChoirBird is free software (GNU AGPL-3.0). The source is linked in About ChoirBird › Licence.
 
-## What to Test (build 0.9.0)
+## What to Test (build 1.0.0)
 
 Svenska:
 • Nytt: ChoirBird kan läsa noterna ur en PDF, direkt på enheten. Öppna en PDF som saknar MusicXML och tryck "Läs in noterna" längst ner. Det tar ungefär en minut per sida (första gången längre) och fortsätter medan du gör annat. Spelar stämmorna rätt efteråt? Blev det rätt antal stämmor?
 • Nytt: forScore-filer (.4sc) med bara PDF kan läsas in på samma sätt. Behåller stycket sitt namn?
 • Repriser, volta (1. och 2. gång), D.S. al Coda och Coda spelas nu som i MuseScore. Lyssna på ett stycke med många repriser: hoppar uppspelningen rätt?
 • Nytt i 0.3.2: en båge mellan två noter på samma ton spelas som en enda utdragen ton, både bindebåge och legatobåge (till exempel "da-ah" i slutet av Only You). Bundna noter hålls ut även när två stämmor håller samma ton. Låter det som du sjunger det?
+• Nytt i 1.0: startsidans val är nu tre knappar överst: layout (Standard, Listor, Kolumner), färger och Om. På iPhone ligger de på två rader. I Kolumner har noterna en ⋯ i hörnet (lägg till i lista, Info, ta bort) och hela titlarna syns.
 • Nytt i 0.9: tre sätt att visa startsidan, välj längst upp: Standard (som förut), Listor (repertoarlistorna som rader, tryck på en för att öppna) och Kolumner (noterna bredvid listorna). I Kolumner: håll in en not och dra den till en lista. Håll den kvar över listan så öppnas den, och du kan släppa noten där den ska ligga. Svep åt höger för att gå tillbaka. Fungerar det med fingret, och syns hela titlarna?
 • Nytt i 0.9: när du går tillbaka från ett stycke hamnar du där du var i biblioteket, inte högst upp.
 • Sidvändningen är jämnare. När du sveper syns nästa sida under bladet som vänds, i stället för en tom sida.
@@ -98,6 +99,7 @@ English:
 • New: forScore files (.4sc) with only a PDF can be read the same way. Does the piece keep its name?
 • Repeats, first and second endings, D.S. al Coda and Coda now play as in MuseScore. Listen to a piece with many repeats: does playback jump to the right places?
 • New in 0.3.2: an arc between two notes of the same pitch plays as one held note, whether it is a tie or a slur (for example "da-ah" at the end of Only You). Tied notes are held also when two parts hold the same note. Does it sound the way you sing it?
+• New in 1.0: the home screen choices are now three pills at the top: layout (Standard, Lists, Columns), colours and About. On iPhone they sit on two rows. In Columns each score has a ⋯ in its corner (add to list, Info, delete) and the whole titles show.
 • New in 0.9: three ways to show the home screen, pick at the top: Standard (as before), Lists (setlists as rows, tap one to open it) and Columns (scores beside the setlists). In Columns: press and hold a score and drag it to a list. Hold it over the list and the list opens, so you can drop the score where it belongs. Swipe right to go back. Does it work with your finger, and do you see the whole titles?
 • New in 0.9: coming back from a piece puts you where you were in the library, not at the top.
 • Smoother page turns. When you swipe, the next page shows under the sheet being turned instead of a blank page.
