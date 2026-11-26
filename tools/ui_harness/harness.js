@@ -1679,6 +1679,38 @@ const H = Number(process.env.H || 1133)
     await page.emulateMedia({ reducedMotion: 'no-preference' })
   })
 
+  await step('and_04 on Android a picked file is sent as base64 JSON (Tauri there passes no raw bytes)', async () => {
+    const ctx5 = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 1, hasTouch: true })
+    const p5 = await ctx5.newPage()
+    // Before mock.js: the first navigator.userAgent override wins (mock.js
+    // sets its own for the score URL branch; an Android UA takes that too).
+    await p5.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 12; SM-G973F) Harness' })
+    })
+    await require('./mock.js').setup(p5, DIR)
+    try {
+      await p5.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
+      await p5.waitForSelector('.splash', { state: 'detached' })
+      await p5.click('[role=tab] >> text=All scores').catch(() => {})
+      await p5.setInputFiles('input[type=file]', { name: 'Hymn.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 hymn') })
+      await p5.waitForFunction(() => window.__calls.some((c) => c[0] === 'import_bytes'))
+      const body = await p5.evaluate(() => window.__calls.find((c) => c[0] === 'import_bytes')[1])
+      if (!body || typeof body.data !== 'string') throw new Error('body is not {data}: ' + JSON.stringify(body).slice(0, 80))
+      if (Buffer.from(body.data, 'base64').toString() !== '%PDF-1.4 hymn') throw new Error('base64 does not round-trip')
+      // iOS and desktop still send raw bytes (checked by the main page's user agent).
+      const raw = await page.evaluate(async () => {
+        const { api } = await import('/src/lib/api.ts')
+        window.__calls.length = 0
+        await api.importFile(new File([new Uint8Array([37, 80, 68, 70])], 'x.pdf'))
+        const a = window.__calls.find((c) => c[0] === 'import_bytes')[1]
+        return a instanceof Uint8Array
+      })
+      if (!raw) throw new Error('non-Android import no longer sends raw bytes')
+    } finally {
+      await ctx5.close()
+    }
+  })
+
   await step('and_02 the PDF opens on an older Android WebView (no Uint8Array.toHex/fromBase64)', async () => {
     // Android WebView 133 (the Android 16 emulator, many phones) lacks the
     // new Uint8Array hex/base64 helpers that the modern pdf.js build calls.

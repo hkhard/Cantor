@@ -1287,6 +1287,35 @@ async fn scan_document(name: String, app: tauri::AppHandle) -> Result<Option<Str
     Ok(Some(id))
 }
 
+/// The file bytes of an `import_bytes` call: raw bytes (iOS, desktop) or,
+/// on Android where Tauri only passes JSON, `{"data": "<base64>"}`.
+fn import_body(body: &tauri::ipc::InvokeBody) -> Result<Vec<u8>, String> {
+    match body {
+        tauri::ipc::InvokeBody::Raw(b) => Ok(b.clone()),
+        tauri::ipc::InvokeBody::Json(v) => v
+            .get("data")
+            .and_then(|d| d.as_str())
+            .and_then(scan::base64_decode)
+            .ok_or_else(|| "expected the file's bytes".into()),
+    }
+}
+
+#[cfg(test)]
+mod lib_01_import_body {
+    use super::*;
+
+    #[test]
+    fn lib_01_import_takes_raw_bytes_or_base64_json_on_android() {
+        let raw = tauri::ipc::InvokeBody::Raw(b"%PDF-1.4".to_vec());
+        assert_eq!(import_body(&raw).unwrap(), b"%PDF-1.4");
+        // Android: Tauri turns every body into JSON.
+        let json = tauri::ipc::InvokeBody::Json(serde_json::json!({ "data": "JVBERi0xLjQ=" }));
+        assert_eq!(import_body(&json).unwrap(), b"%PDF-1.4");
+        let bad = tauri::ipc::InvokeBody::Json(serde_json::json!({ "x": 1 }));
+        assert!(import_body(&bad).is_err());
+    }
+}
+
 /// Import a file picked in the app (raw bytes, name in the `x-name` header).
 #[tauri::command]
 fn import_bytes(
@@ -1299,9 +1328,8 @@ fn import_bytes(
         .and_then(|v| v.to_str().ok())
         .map(percent_decode)
         .ok_or("missing file name")?;
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
-        return Err("expected raw file bytes".into());
-    };
+    let bytes = import_body(request.body())?;
+    let bytes = bytes.as_slice();
     let lower = name.to_lowercase();
     if lower.ends_with(&format!(".{}", cantor_library::backup::BACKUP_EXT)) {
         // Parked in Documents/Backups; the library screen asks before restoring.
@@ -1521,9 +1549,8 @@ fn restore_library(
     request: tauri::ipc::Request<'_>,
     paths: State<'_, Paths>,
 ) -> Result<usize, String> {
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
-        return Err("expected raw file bytes".into());
-    };
+    let bytes = import_body(request.body())?;
+    let bytes = bytes.as_slice();
     let r = cantor_library::backup::restore(&paths.user, bytes)?;
     Ok(r.files)
 }
@@ -1795,9 +1822,8 @@ fn attach_track(request: tauri::ipc::Request<'_>, paths: State<'_, Paths>) -> Re
     };
     let file = h("x-score").ok_or("missing score")?;
     let name = h("x-name").ok_or("missing file name")?;
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
-        return Err("expected raw file bytes".into());
-    };
+    let bytes = import_body(request.body())?;
+    let bytes = bytes.as_slice();
     let ext = name
         .rsplit_once('.')
         .map(|(_, e)| e.to_lowercase())
@@ -2731,34 +2757,17 @@ fn resource_paths(app: &tauri::App) -> Paths {
     // Android: resources are APK assets; copy them out once per version
     // into app data and read them from there (android_assets.rs).
     #[cfg(target_os = "android")]
-    let res = {
-        let dest = app
-            .path()
-            .app_data_dir()
-            .map(|d| d.join("bundled"))
-            .unwrap_or(res);
-        match android_assets::apk::Apk::open() {
-            Some(apk) => {
-                let v = app.package_info().version.to_string();
-                match android_assets::extract(
-                    &apk,
-                    &dest,
-                    &v,
-                    // resources/homr only exists in builds with the homr
-                    // models (tauri.homr.conf.json); a missing folder copies
-                    // nothing.
-                    &["resources/scores", "resources/homr"],
-                    &["resources/GeneralUser-GS.sf2"],
-                ) {
-                    Ok(n) => log::info!("android assets: {n} file(s) copied to {}", dest.display()),
-                    Err(e) => log::error!("android assets: {e}"),
-                }
-            }
-            None => log::error!("android assets: no AssetManager"),
-        }
-        dest
-    };
+    let res = app
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("bundled"))
+        .unwrap_or(res);
     let pick = |rel: &str, dev: &str| {
+        // Android: always app_data/bundled (filled right after, see
+        // extract_android_assets).
+        if cfg!(target_os = "android") {
+            return res.join(rel);
+        }
         // Desktop bundles put resources under resource_dir; the iOS bundle
         // puts them under Cantor.app/assets.
         for base in [res.clone(), res.join("assets")] {
@@ -2783,6 +2792,35 @@ fn resource_paths(app: &tauri::App) -> Paths {
             "resources/GeneralUser-GS.sf2",
             "../../assets/sf2/GeneralUser-GS.sf2",
         ),
+    }
+}
+
+/// Android: the bundled resources are APK assets (the homr models in a Play
+/// asset pack); copy them out into `app_data/bundled` once per build
+/// (android_assets.rs). Called after `Paths` is managed, so commands the web
+/// view sends meanwhile do not panic; the models take a few seconds.
+#[cfg(target_os = "android")]
+fn extract_android_assets(app: &tauri::App) {
+    let Ok(dest) = app.path().app_data_dir().map(|d| d.join("bundled")) else {
+        return;
+    };
+    match android_assets::apk::Apk::open() {
+        Some(apk) => {
+            let v = app.package_info().version.to_string();
+            match android_assets::extract(
+                &apk,
+                &dest,
+                &v,
+                // resources/homr only exists in builds with the homr models;
+                // a missing folder copies nothing.
+                &["resources/scores", "resources/homr"],
+                &["resources/GeneralUser-GS.sf2"],
+            ) {
+                Ok(n) => log::info!("android assets: {n} file(s) copied to {}", dest.display()),
+                Err(e) => log::error!("android assets: {e}"),
+            }
+        }
+        None => log::error!("android assets: no AssetManager"),
     }
 }
 
@@ -2815,6 +2853,11 @@ pub fn run() {
                 paths.soundfont.display()
             );
             app.manage(paths);
+            // Android: copy the bundled files out of the APK (the homr models
+            // take seconds) only now that `Paths` is managed: the web view
+            // already sends commands, and they must find it.
+            #[cfg(target_os = "android")]
+            extract_android_assets(app);
             app.manage(Shared::default());
             app.manage(Mutex::new(Annotations::default()));
             let slot: remote::SharedEngine = Default::default();

@@ -58,6 +58,25 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    // LIB-10: homr models in a Play install-time asset pack (AAB only; the
+    // pack is empty unless tools/bundle_homr_models.sh --android filled it).
+    assetPacks += listOf(":homr_models")
+    // Upload key from keystore.properties (git-ignored; see DEVELOPING.md).
+    val keyProps = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    if (keyProps.getProperty("storeFile") != null) {
+        signingConfigs {
+            create("upload") {
+                storeFile = file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("upload")
+    }
 }
 
 kotlin {

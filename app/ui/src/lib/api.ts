@@ -1,6 +1,16 @@
 // Thin typed wrapper over the Tauri commands in app/src-tauri/src/lib.rs.
 import { invoke } from '@tauri-apps/api/core'
 
+/** A picked file's bytes as an IPC body. Tauri on Android passes only JSON,
+ *  so there the bytes go as base64 (`{data}`); the backend accepts both. */
+async function fileBody(f: File): Promise<Uint8Array | { data: string }> {
+  const bytes = new Uint8Array(await f.arrayBuffer())
+  if (!/Android/.test(navigator.userAgent)) return bytes
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return { data: btoa(bin) }
+}
+
 export interface ScoreEntry {
   /** Score id "<dir>:<stem>" (0 = bundled demo, 1 = your library). */
   file: string
@@ -177,7 +187,7 @@ export const api = {
   exportItem: (kind: 'pdf' | '4sc' | 'setlist' | '4ss', id: string) => invoke<string>('export_item', { kind, id }),
   /** DATA-03: whole-library backup (share sheet) and restore. */
   backupLibrary: () => invoke<string>('backup_library'),
-  restoreLibrary: async (f: File) => invoke<number>('restore_library', new Uint8Array(await f.arrayBuffer())),
+  restoreLibrary: async (f: File) => invoke<number>('restore_library', await fileBody(f)),
   pendingBackups: () => invoke<string[]>('pending_backups'),
   restorePending: (name: string, discard = false) => invoke<number>('restore_pending', { name, discard }),
   /** NFR-03/04 probe: log a timing plus the app's memory footprint. */
@@ -190,7 +200,7 @@ export const api = {
     invoke<void>('correct_note', { file, part, measure, note, edit }),
   /** PERF-04: attach a recording to a score as its backing track. */
   attachTrack: async (file: string, f: File) =>
-    invoke<void>('attach_track', new Uint8Array(await f.arrayBuffer()), {
+    invoke<void>('attach_track', await fileBody(f), {
       headers: { 'x-score': encodeURIComponent(file), 'x-name': encodeURIComponent(f.name) },
     }),
   removeTrack: (file: string) => invoke<void>('remove_track', { file }),
@@ -219,7 +229,7 @@ export const api = {
   scanDocument: (name: string) => invoke<string | null>('scan_document', { name }),
   /** Import a picked file; returns the new score ids. */
   importFile: async (f: File) =>
-    invoke<string[]>('import_bytes', new Uint8Array(await f.arrayBuffer()), {
+    invoke<string[]>('import_bytes', await fileBody(f), {
       headers: { 'x-name': encodeURIComponent(f.name) },
     }),
   deleteScore: (file: string) => invoke<void>('delete_score', { file }),

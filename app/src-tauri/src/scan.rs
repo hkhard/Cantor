@@ -9,8 +9,7 @@
 pub type Pages = Option<Vec<Vec<u8>>>;
 
 /// Standard base64 (with or without padding) to bytes; None on a bad digit.
-/// (Android hands the pages over as base64.)
-#[cfg(any(target_os = "android", test))]
+/// (Android hands scanned pages and imported files over as base64.)
 pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
     fn val(c: u8) -> Option<u32> {
         Some(match c {

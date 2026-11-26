@@ -1,3 +1,6 @@
 include ':app'
+// LIB-10: homr models as a Play install-time asset pack (empty unless
+// tools/bundle_homr_models.sh --android has filled it).
+include ':homr_models'
 
 apply from: 'tauri.settings.gradle'
