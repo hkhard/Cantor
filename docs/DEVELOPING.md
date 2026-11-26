@@ -120,6 +120,44 @@ xcrun devicectl device process launch --device <UDID> <bundle id>
   `xcrun devicectl device copy from --device <UDID> --domain-type appDataContainer --domain-identifier <bundle id> --source Documents/.perf.log --destination perf.log`.
   The log records timings and memory (`perf_mark`) and text recognition runs.
 
+## Android
+
+Tooling (macOS, Homebrew):
+
+```sh
+brew install --cask android-commandlinetools zulu@17
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home
+sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+export NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358
+rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+```
+
+Build and run a debug APK (from `app/src-tauri`):
+
+```sh
+CARGO_TARGET_DIR=../../target-android cargo tauri android build --debug --apk --target aarch64
+adb install -r gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+adb shell am start -n se.nikielhard.choirbird/.MainActivity
+```
+
+Notes:
+
+- `gen/android` is committed; Tauri copies `resources/` into
+  `gen/android/app/src/main/assets/` on each build, and that folder is
+  git-ignored (it may hold private scores, as on iOS).
+- On first start after an install or update, `android_assets.rs` copies the
+  bundled scores and the SoundFont out of the APK into app data.
+- minSdk is 26 (Android 8), the first version with AAudio.
+- The system WebView may be older than current Chrome. pdf.js is the legacy
+  build for that reason (harness step `and_02`).
+- Debug the web view with Chrome DevTools:
+  `adb forward tcp:9333 localabstract:webview_devtools_remote_$(adb shell pidof se.nikielhard.choirbird)`,
+  then open `http://localhost:9333/json`.
+- Emulator: `sdkmanager "emulator" "system-images;android-36;google_apis;arm64-v8a"`,
+  `avdmanager create avd -n choirbird-tab -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_tablet`,
+  `$ANDROID_HOME/emulator/emulator -avd choirbird-tab`.
+
 ## Note recognition for PDFs (desktop)
 
 PDFs and forScore files have no note data. `cantor-omr` reads them with

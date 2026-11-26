@@ -730,6 +730,9 @@ tests (NFR-11: 100% of P0 criteria automated).
   and three private OMR scores plan the same lines as before. Not verified:
   listening on device, crossing voices inside a chord (always ordered by
   pitch), passages where the chord share varies section by section.
+- **Android started (2026-11-26, roadmap phase A).** `gen/android` (Tauri 2, minSdk 26, target 36), package `se.nikielhard.choirbird`. The bundled scores and SoundFont are APK assets; `android_assets.rs` copies them into app data once per app version (test `and_01_bundled_resources_are_copied_once_per_version`). The PDF did not open on Android System WebView 133 (`a.toHex is not a function`: the modern pdf.js 6.5 build calls `Uint8Array.toHex`/`fromBase64`); `pdf.ts` now loads the pdf.js legacy build, which brings polyfills (harness `and_02 the PDF opens on an older Android WebView …`, which strips those helpers in page and worker: failed before, passes now). Launcher icon: an adaptive vector drawn from the `ChoirBird.icon` layers, scaled to the safe zone. Harness 65 OK, a11y 0, skins OK.
+  - **Checked on the emulator** (Pixel Tablet, Android 16, WebView 133): library with Getting started, Lacrymosa opens on the PDF, plays through AAudio (cpal) and the cursor follows bar by bar; icon in the launcher.
+  - **Not verified:** a real Android device (the product owner's Samsung), audio latency (NFR-01), page-turn fps, sound quality, TalkBack, the back button, insets, files and sharing, background playback, phones. Whether the legacy pdf.js build changes iOS speed was not measured (same rendering code, extra polyfills).
 
 ## 8. Future features (parked)
 

@@ -72,6 +72,25 @@ later. Sharing-with-instructions and Band groundwork were moved to phase 5
 
 Who: you. Cost: nothing.
 
+## Phase A: Android (started 2026-11-26; no firm)
+
+Decided 2026-11-26 (product owner): the same app on Android phones and
+tablets, package `se.nikielhard.choirbird`, Android 8 and later (minSdk 26,
+needed for AAudio). homr comes along, with its models in a Play asset pack.
+No OCR. Published on Google Play under the product owner's own account,
+free like the iOS app. Fixes to iOS 1.0.x come first.
+
+| Work | Exit check |
+|---|---|
+| **Project and first run on the emulator** | `gen/android` builds an APK; library, Lacrymosa, PDF, playback and cursor work on the Pixel Tablet emulator (Android 16, WebView 133). **Done 2026-11-26:** bundled resources come out of the APK once per version (`and_01`); the PDF opens on older WebViews (`and_02`, pdf.js legacy build); ChoirBird launcher icon |
+| **Real device** (the product owner's Samsung) | Same checks by hand; NFR-01 latency ≤ 20 ms and page-turn fps measured and written in plan section 7 |
+| **Files:** open-with for `.mxl`, `.musicxml`, `.pdf`, `.4sc`, `.cantorset`, `.cantorbackup`; a sync folder through the Storage Access Framework; share sheet; backups | Each one done by hand on the device, plus a Rust test per parser path |
+| **Background playback** (PLAY-12): MediaSession with lock-screen controls | Plays on with the screen off; play/pause from the lock screen |
+| **Android back button, insets, TalkBack** | Back closes dialogs, then the reader; nothing under the status or navigation bar; TalkBack walkthrough of library, reader, mixer |
+| **homr on Android:** ONNX Runtime for Android, PDF pages via `PdfRenderer`, models as a Play asset pack | A PDF becomes a playable score on the device |
+| **Practice-track export** | WAV first, then AAC through MediaCodec |
+| **Release:** upload key, AAB, Play internal testing, sv/en listing, Data safety form (no data collected) | Internal testers install from Play |
+
 ## Version 1.1 or later: noted for redesign
 
 Kept as they are for 1.0 (decided by the product owner 2026-11-26), to be
