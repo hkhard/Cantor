@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ChoirBird, drawn from the layers in gen/apple/ChoirBird.icon/Assets.
+     Scaled to 0.75 around the bird so the tail and the waves stay inside
+     the adaptive-icon safe zone (the launcher masks to the middle 72/108). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <group
+        android:pivotX="500"
+        android:pivotY="555"
+        android:scaleX="0.75"
+        android:scaleY="0.75"
+        android:translateX="12"
+        android:translateY="-43">
+        <path android:fillColor="#FF7A5C"
+            android:pathData="M190,560a230,230 0,1 0,460 0a230,230 0,1 0,-460 0z" />
+        <path android:fillColor="#FF7A5C"
+            android:pathData="M224.5,583L116.4,518.6L194.6,675z" />
+        <group android:pivotX="392.4" android:pivotY="610.6" android:rotation="-15">
+            <path android:fillColor="#FFB4A2"
+                android:pathData="M272.8,610.6a119.6,69 0,1 0,239.2 0a119.6,69 0,1 0,-239.2 0z" />
+        </group>
+        <path android:fillColor="#0D1B3E"
+            android:pathData="M500.5,484.1a23,23 0,1 0,46 0a23,23 0,1 0,-46 0z" />
+        <path android:fillColor="#F2A541"
+            android:pathData="M622.4,456.5L746.6,445L640.8,527.8z" />
+        <path android:fillColor="#F2A541"
+            android:pathData="M643.1,550.8L732.8,592.2L622.4,601.4z" />
+        <path android:strokeColor="#F4EBDD" android:strokeWidth="34"
+            android:strokeLineCap="round"
+            android:pathData="M800,448A110,110 0,0 1,800 592" />
+        <path android:strokeColor="#F4EBDD" android:strokeWidth="34"
+            android:strokeLineCap="round"
+            android:pathData="M862,402A180,180 0,0 1,862 638" />
+    </group>
+</vector>

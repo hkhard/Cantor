@@ -16,7 +16,10 @@ app/src-tauri/resources/scores/
 app/ui/dist/
 # Copied into the iOS project on every build (contains the private scores)
 app/src-tauri/gen/apple/assets/
+# Same for Android (Tauri copies the resources into the APK assets)
+app/src-tauri/gen/android/app/src/main/assets/
 target-wt/
+target-android/
 
 # homr ONNX models (AGPL, 129 MB): tools/omr/homr_port/fetch_models.sh
 /models/

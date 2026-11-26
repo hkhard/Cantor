@@ -7,6 +7,9 @@
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod apple_convert;
+// The copy logic is tested everywhere; only Android uses it.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+mod android_assets;
 mod audio;
 mod convert;
 mod folder;
@@ -2651,6 +2654,33 @@ fn resource_paths(app: &tauri::App) -> Paths {
         .path()
         .resource_dir()
         .unwrap_or_else(|_| PathBuf::from("."));
+    // Android: resources are APK assets; copy them out once per version
+    // into app data and read them from there (android_assets.rs).
+    #[cfg(target_os = "android")]
+    let res = {
+        let dest = app
+            .path()
+            .app_data_dir()
+            .map(|d| d.join("bundled"))
+            .unwrap_or(res);
+        match android_assets::apk::Apk::open() {
+            Some(apk) => {
+                let v = app.package_info().version.to_string();
+                match android_assets::extract(
+                    &apk,
+                    &dest,
+                    &v,
+                    &["resources/scores"],
+                    &["resources/GeneralUser-GS.sf2"],
+                ) {
+                    Ok(n) => log::info!("android assets: {n} file(s) copied to {}", dest.display()),
+                    Err(e) => log::error!("android assets: {e}"),
+                }
+            }
+            None => log::error!("android assets: no AssetManager"),
+        }
+        dest
+    };
     let pick = |rel: &str, dev: &str| {
         // Desktop bundles put resources under resource_dir; the iOS bundle
         // puts them under Cantor.app/assets.

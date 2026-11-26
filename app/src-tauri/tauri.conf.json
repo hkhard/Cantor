@@ -40,6 +40,9 @@
     "iOS": {
       "developmentTeam": "33ZQ6Q226L",
       "minimumSystemVersion": "16.0"
+    },
+    "android": {
+      "minSdkVersion": 26
     }
   }
 }

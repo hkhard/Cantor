@@ -49,6 +49,14 @@ block2 = "0.6"
 objc2-ui-kit = { version = "0.3", features = ["UIActivity", "UIActivityViewController", "UIApplication", "UIPopoverPresentationController", "UIPresentationController", "UIResponder", "UIView", "UIViewController", "UIWindow", "UIDocumentPickerViewController", "objc2-core-foundation", "objc2-uniform-type-identifiers", "block2"] }
 objc2-uniform-type-identifiers = { version = "0.3", features = ["UTType", "UTCoreTypes"] }
 
+# Android: read the APK's bundled assets (android_assets.rs). Same versions as
+# Tauri and cpal already pull in, so nothing new is compiled.
+[target.'cfg(target_os = "android")'.dependencies]
+ndk = { version = "0.9", default-features = false }
+ndk-sys = "0.6"
+ndk-context = "0.1"
+jni = "0.21"
+
 [features]
 # LIB-10: on-device note recognition (homr port, AGPL-only crate, 129 MB of
 # models in resources/homr). Off by default until the port is complete.
