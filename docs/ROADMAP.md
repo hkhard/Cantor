@@ -55,8 +55,8 @@ not part of this phase (see "held back").
 | **Accessibility on the device:** VoiceOver through library, reader, mixer; larger text; reduced motion | Product owner or VoiceOver walkthrough notes; axe stays at 0. VoiceOver walkthrough: waiting for the product owner's confirmation |
 | **Swedish and English complete** | `nfr_10_sv_en_localisation_complete` passes; no hard-coded strings in the UI. **Passes (2026-11-23), in CI** |
 | **Long-session soak:** 2 hours of playback without drift or memory growth | `nfr_02_no_drift_gt_5ms`; memory probe in `.perf.log`. **Done 2026-11-25 on the iPad mini (A17 Pro):** 120 min, 40 plays of Lacrymosa on the speaker; audio clock vs wall clock 1.1 ms apart after 2 h (0.15 ppm), no trend; memory 55 MB throughout (see plan section 7) |
-| **Release build:** version and build number from a git tag, shown in About with the source link; Release (not debug) configuration; final app icon and launch screen; `PrivacyInfo.xcprivacy` (no tracking, no data collected) | `tools/ipad.sh release` builds an archive; About shows the tag |
-| **Store-ready material (not submitted):** description sv/en, screenshots of the iPad mini and 13", privacy statement, support page | Files in a new store folder under docs; submission waits for the decision below |
+| **Release build:** version and build number from a git tag, shown in About with the source link; Release (not debug) configuration; final app icon and launch screen; `PrivacyInfo.xcprivacy` (no tracking, no data collected) | `tools/ipad.sh release` builds an archive; About shows the tag. **1.0.0 (build 195, tag `v1.0.0`) built and uploaded 2026-11-26** |
+| **Store-ready material (not submitted):** description sv/en, screenshots of the iPad mini and 13", privacy statement, support page | Files in a new store folder under docs; submission waits for the decision below. **2026-11-26:** listing sv/en and 36 current screenshots uploaded, build 1.0.0 attached to App Store version 1.0.0, review contact, copyright, age 4+ and price in place; Submit for Review is the product owner's step |
 
 Who: you plus agents. Cost: nothing.
 

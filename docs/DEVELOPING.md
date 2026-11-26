@@ -186,10 +186,13 @@ to get the exact source. Before handing out a build:
    in `docs/store/testflight.md`.
 
 First upload: ChoirBird 0.2.0 (build 0.2.0.110, tag `v0.2.0`), 2026-11-23,
-"Upload succeeded". Latest: ChoirBird 0.9.0 (build 0.9.0.189, tag `v0.9.0`,
+"Upload succeeded". Latest: ChoirBird 1.0.0 (build 1.0.0.195, tag `v1.0.0`,
 with on-device note recognition, `HOMR=1`), 2026-11-26, "Upload succeeded";
 What to Test set and the build added to the external group with
-`tools/store/testflight_notes.rb`, submitted for Beta App Review.
+`tools/store/testflight_notes.rb`, submitted for Beta App Review; attached to
+the App Store version 1.0.0 with `tools/store/prepare_release.rb 1.0.0`
+(sets the version string, attaches the build, reports readiness; does not
+submit).
 If `-exportArchive` says "Failed to Use Accounts" (Xcode's sign-in lapsed),
 upload with the App Store Connect API key instead: write the key from
 `~/.appstoreconnect/choirbird-asc.json` to a private `AuthKey_<id>.p8` and add
