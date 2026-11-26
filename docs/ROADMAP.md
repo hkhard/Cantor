@@ -89,6 +89,7 @@ free like the iOS app. Fixes to iOS 1.0.x come first.
 | **Android back button, insets, TalkBack** | Back closes dialogs, then the reader; nothing under the status or navigation bar; TalkBack walkthrough of library, reader, mixer |
 | **homr on Android:** ONNX Runtime for Android, PDF pages via `PdfRenderer`, models as a Play asset pack | A PDF becomes a playable score on the device |
 | **Practice-track export** | WAV first, then AAC through MediaCodec |
+| **Scan to PDF (LIB-12) on Android** — needs a decision: Google's ML Kit document scanner is free but under the *ML Kit Terms of Service* (proprietary, delivered through Google Play services), not an open-source licence, so it fails `tools/licenses.py`'s rule for the client. Options: (a) accept it as a reviewed exception, like homr (the app already needs Play to be installed from Play); (b) an open edge-detection scanner in Rust (more work, no Play services needed). The Kotlin plugin for (a) is written and the Rust side is ready; it is not committed until decided | Product owner decision; then a scan on the S10 becomes a PDF score |
 | **Release:** upload key, AAB, Play internal testing, sv/en listing, Data safety form (no data collected) | Internal testers install from Play |
 
 ## Version 1.1 or later: noted for redesign

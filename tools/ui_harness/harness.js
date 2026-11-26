@@ -202,6 +202,72 @@ const H = Number(process.env.H || 1133)
     await page.waitForSelector('ul.scores > li >> text=Ave verum', { state: 'detached' })
   })
 
+  await step('lib_12 scan with the camera from Import: named, saved as a PDF score, opened; cancel adds nothing', async () => {
+    const imp = page.locator('.libbar button.import')
+    // No camera scanner (desktop, simulator): Import goes straight to files.
+    if ((await imp.getAttribute('aria-haspopup')) !== null) throw new Error('Import has a menu without a scanner')
+    await page.evaluate(() => (window.__store.scanAvailable = true))
+    await page.reload()
+    await page.waitForSelector('.libbar button.import[aria-haspopup=menu]')
+    // The menu is on top of the cards (nothing shows through) and a tap
+    // outside closes it.
+    await page.click('.libbar button.import')
+    await page.waitForSelector('.importmenu')
+    const top = await page.evaluate(() => {
+      const r = document.querySelector('.importmenu .scan').getBoundingClientRect()
+      return document.elementFromPoint(r.right - 8, r.top + r.height / 2)?.closest('.importmenu') != null
+    })
+    if (!top) throw new Error('something covers the Import menu')
+    await page.mouse.click(5, 5)
+    await page.waitForSelector('.importmenu', { state: 'detached' })
+    const scanFromImport = async () => {
+      await page.click('.libbar button.import')
+      await page.waitForSelector('.importmenu [role=menuitem] >> text=From files')
+      await page.click('.importmenu [role=menuitem].scan')
+    }
+    const before = await page.evaluate(() => (window.__store.scans ?? []).length)
+    // Cancel at the name: the scanner is not even started.
+    await scanFromImport()
+    await page.waitForSelector('.dlg input')
+    if (await page.locator('.importmenu').count()) throw new Error('menu stays open')
+    const def = await page.inputValue('.dlg input')
+    if (!/^Scan \d{4}-\d\d-\d\d \d\d\.\d\d$/.test(def)) throw new Error('default name ' + def)
+    await page.click('.dlg button:not(.primary)')
+    if ((await page.evaluate(() => (window.__store.scans ?? []).length)) !== before) throw new Error('scanned after cancel')
+    // Cancel in the camera: nothing added, no message.
+    const cards = await page.locator('ul.scores > li').count()
+    await page.evaluate(() => (window.__store.scanResult = 'cancel'))
+    await scanFromImport()
+    await page.fill('.dlg input', 'Nothing')
+    await page.click('.dlg button.primary')
+    await page.waitForFunction(() => !document.querySelector('.libbar button.import[disabled]'))
+    if ((await page.locator('ul.scores > li').count()) !== cards) throw new Error('cancel added a score')
+    // A scanner error is shown in plain words.
+    await page.evaluate(() => (window.__store.scanResult = 'Camera in use'))
+    await scanFromImport()
+    await page.click('.dlg button.primary')
+    await page.waitForSelector('.libbar .notice >> text=The scan could not be saved')
+    // A scan: the named PDF score is added and opens in the reader.
+    await page.evaluate(() => (window.__store.scanResult = 'ok'))
+    await scanFromImport()
+    await page.fill('.dlg input', 'Vårvindar friska')
+    await page.click('.dlg button.primary')
+    await page.waitForSelector('main.reader')
+    const title = await page.locator('.top h2').first().innerText()
+    if (!title.includes('Vårvindar friska')) throw new Error('opened ' + title)
+    if (await page.locator('.hintbg').count()) await page.locator('.hintbg').click({ position: { x: 5, y: 5 } })
+    await shot('lib12-scanned')
+    await page.click(`.top button[aria-label="Library"]`)
+    await page.waitForSelector('ul.scores > li >> text=Vårvindar friska')
+    // Leave the library as the later steps expect it.
+    await page.evaluate(() => {
+      window.__removeScore('1:Vårvindar friska', true)
+      window.__store.scanAvailable = false
+    })
+    await page.reload()
+    await page.waitForSelector('main.library')
+  })
+
   await step('lib_05 combine later from Info after answering no', async () => {
     // The user said "No, they differ" (or the names never matched): the
     // pair is no longer suggested, but Info still offers "Combine with".

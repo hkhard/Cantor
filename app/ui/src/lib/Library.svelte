@@ -602,6 +602,49 @@
     notice = [added.length ? t('lib.imported', { n: added.length }) : '', ...failed].filter(Boolean).join(' · ')
   }
 
+  // LIB-12: scan paper sheet music with the camera (only offered where the
+  // device has a camera and the system scanner).
+  let canScan = $state(false)
+  let scanning = $state(false)
+  let importMenu = $state(false)
+  // The Import menu closes on a tap outside it or Escape.
+  $effect(() => {
+    if (!importMenu) return
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !(e.target as Element)?.closest?.('.importwrap')) importMenu = false
+    }
+    document.addEventListener('pointerdown', close, true)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('pointerdown', close, true)
+      document.removeEventListener('keydown', close)
+    }
+  })
+  api.scanAvailable().then((v) => (canScan = v), () => {})
+
+  async function scan() {
+    // Ask for the name first, inside the tap, so iOS shows the keyboard.
+    const now = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    const date = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`
+    const time = `${p(now.getHours())}.${p(now.getMinutes())}`
+    const name = (await ask(t('lib.scanName'), t('lib.scanDefault', { date, time })))?.trim()
+    if (!name) return
+    scanning = true
+    notice = ''
+    try {
+      const id = await api.scanDocument(name)
+      if (!id) return
+      await onrefresh()
+      const s = scores.find((x) => x.file === id)
+      if (s) onopen(s)
+    } catch (e) {
+      notice = t('lib.scanFailed', { e: String(e) })
+    } finally {
+      scanning = false
+    }
+  }
+
   async function removeScore(s: ScoreEntry) {
     if (!(await confirmBox(t('lib.removeConfirm', { title: s.title })))) return
     await api.deleteScore(s.file)
@@ -760,7 +803,21 @@
 {#snippet libBar()}
   <div class="libbar">
     <input class="search" type="search" placeholder={t('lib.search')} bind:value={query} oninput={onSearch} aria-label={t('lib.search')} />
-    <button class="chip on" onclick={() => fileInput?.click()} disabled={importing}>{importing ? t('lib.importing') : t('lib.import')}</button>
+    <span class="importwrap">
+      <button
+        class="chip on import"
+        onclick={() => (canScan ? (importMenu = !importMenu) : fileInput?.click())}
+        disabled={importing || scanning}
+        aria-haspopup={canScan ? 'menu' : undefined}
+        aria-expanded={canScan ? importMenu : undefined}
+      >{importing ? t('lib.importing') : scanning ? t('lib.scanning') : t('lib.import')}</button>
+      {#if importMenu}
+        <span class="addmenu glass importmenu" role="menu">
+          <button role="menuitem" onclick={() => { importMenu = false; fileInput?.click() }}>{t('lib.fromFiles')}</button>
+          <button role="menuitem" class="scan" onclick={() => { importMenu = false; scan() }}>{t('lib.scan')}</button>
+        </span>
+      {/if}
+    </span>
     {#if notice}<span class="notice">{notice}</span>{/if}
   </div>
 {/snippet}
@@ -1546,6 +1603,22 @@
     min-height: 40px;
     font-size: 0.9375rem;
     padding: 8px 14px;
+  }
+  .importwrap {
+    position: relative;
+  }
+  /* Solid (not glass): card buttons must not show through it. */
+  .importmenu {
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 12rem;
+    z-index: 30;
+    background: var(--surface);
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18);
+  }
+  .importmenu :global(button) {
+    text-align: start;
+    white-space: nowrap;
   }
   .addmenu {
     position: absolute;

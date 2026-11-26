@@ -118,6 +118,18 @@ exports.setup = async function setup(page, dir) {
           const setlists = store.setlists.map((s, i) => [s, i]).sort((a, b) => pos(a[0].id) - pos(b[0].id) || a[1] - b[1]).map((x) => x[0])
           return { metadata: store.metadata, setlists, home: store.home, hints: store.hints }
         },
+        // LIB-12 scan to PDF: tests set store.scanAvailable and store.scanResult
+        // ('ok' adds a PDF-only score, 'cancel' adds nothing, else an error).
+        scan_available: () => !!store.scanAvailable,
+        scan_document: ({ name }) => {
+          store.scans = [...(store.scans ?? []), name]
+          const r = store.scanResult ?? 'ok'
+          if (r === 'cancel') return null
+          if (r !== 'ok') throw r
+          const file = '1:' + name
+          scores.push({ file, title: name, playable: false, pdf: true, user: true })
+          return file
+        },
         pdf_url_of: ({ file }) => (scores.find((s) => s.file === file)?.pdf ? '0/x.pdf' : null),
         read_title_page: ({ png }) => {
           store.ocrBytes = png.length

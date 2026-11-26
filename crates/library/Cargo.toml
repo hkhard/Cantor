@@ -18,5 +18,6 @@ unicode-normalization = "0.1"
 
 [dev-dependencies]
 cantor-score.workspace = true
+lopdf = "0.47.0"
 plist = "1.10"
 flate2 = "1.1"

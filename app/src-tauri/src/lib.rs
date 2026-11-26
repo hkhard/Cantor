@@ -18,6 +18,7 @@ mod guard;
 mod homr_recognizer;
 mod m4a;
 mod remote;
+mod scan;
 mod share;
 
 use cantor_audio::{Engine, Preset, SoundFontSynth};
@@ -1219,6 +1220,29 @@ fn set_order(kind: String, ids: Vec<String>, paths: State<'_, Paths>) -> Result<
         _ => return Err(format!("unknown order {kind}")),
     }
     save_store(&st)
+}
+
+/// LIB-12: whether this device can scan sheet music with the camera.
+#[tauri::command]
+fn scan_available(app: tauri::AppHandle) -> bool {
+    scan::available(&app)
+}
+
+/// LIB-12: show the system document scanner; the pages become one PDF score
+/// named `name`. Returns the new score id, or None if the user cancelled.
+#[tauri::command]
+async fn scan_document(name: String, app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let a = app.clone();
+    let pages = tauri::async_runtime::spawn_blocking(move || scan::scan(&a))
+        .await
+        .map_err(|e| e.to_string())??;
+    let Some(pages) = pages else {
+        return Ok(None);
+    };
+    let paths = app.state::<Paths>();
+    let item = cantor_library::scan::save_scan(&paths.user, &name, &pages)?;
+    log::info!("scan: {} page(s) saved as {}", pages.len(), item.stem);
+    Ok(Some(format!("1:{}", item.stem)))
 }
 
 /// Import a file picked in the app (raw bytes, name in the `x-name` header).
@@ -2721,6 +2745,7 @@ fn resource_paths(app: &tauri::App) -> Paths {
 pub fn run() {
     started_at();
     tauri::Builder::default()
+        .plugin(scan::plugin())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -2905,6 +2930,8 @@ pub fn run() {
             perf_mark,
             perf_selftest,
             audio_latency,
+            scan_available,
+            scan_document,
             correct_note,
             attach_track,
             remove_track,

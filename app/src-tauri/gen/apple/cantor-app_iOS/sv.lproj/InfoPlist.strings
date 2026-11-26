@@ -1,0 +1,2 @@
+/* LIB-12: shown when ChoirBird first asks for the camera. */
+"NSCameraUsageDescription" = "ChoirBird använder kameran för att skanna noter till en PDF. Bilderna stannar på den här enheten.";

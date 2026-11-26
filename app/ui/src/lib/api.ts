@@ -213,6 +213,10 @@ export const api = {
   seek: (seconds: number) => invoke<void>('seek', { seconds }),
   setTempo: (scale: number) => invoke<void>('set_tempo', { scale }),
   status: () => invoke<Status>('status'),
+  /** LIB-12: the device can scan sheet music with the camera. */
+  scanAvailable: () => invoke<boolean>('scan_available'),
+  /** LIB-12: system scanner → one PDF score named `name`; null if cancelled. */
+  scanDocument: (name: string) => invoke<string | null>('scan_document', { name }),
   /** Import a picked file; returns the new score ids. */
   importFile: async (f: File) =>
     invoke<string[]>('import_bytes', new Uint8Array(await f.arrayBuffer()), {

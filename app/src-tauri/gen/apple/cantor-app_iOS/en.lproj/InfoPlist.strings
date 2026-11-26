@@ -1,0 +1,2 @@
+/* LIB-12: shown when ChoirBird first asks for the camera. */
+"NSCameraUsageDescription" = "ChoirBird uses the camera to scan sheet music into a PDF. The pictures stay on this device.";

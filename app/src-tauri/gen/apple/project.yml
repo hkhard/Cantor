@@ -75,6 +75,9 @@ targets:
         UIBackgroundModes: [audio]
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: false
+        # LIB-12 scan to PDF (Swedish in sv.lproj/InfoPlist.strings).
+        NSCameraUsageDescription: ChoirBird uses the camera to scan sheet music into a PDF. The pictures stay on this device.
+        CFBundleLocalizations: [en, sv]
         UISupportsDocumentBrowser: false
         CFBundleDocumentTypes:
           - CFBundleTypeName: MusicXML
@@ -175,6 +178,7 @@ targets:
       - sdk: CoreMIDI.framework
       - sdk: MediaPlayer.framework
       - sdk: Vision.framework
+      - sdk: VisionKit.framework
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework

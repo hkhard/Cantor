@@ -4,4 +4,5 @@ pub mod backup;
 pub mod bundle;
 pub mod forscore;
 pub mod import;
+pub mod scan;
 pub mod store;

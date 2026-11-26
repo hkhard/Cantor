@@ -169,6 +169,7 @@ version = "0.1.0"
 dependencies = [
  "cantor-score",
  "flate2",
+ "lopdf",
  "plist",
  "serde",
  "serde_json",
