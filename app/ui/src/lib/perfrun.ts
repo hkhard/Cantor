@@ -145,5 +145,50 @@ export async function perfRun(launchMs: number) {
       await scrollBy(mixer, -mixer.scrollTop, 800)
     }))
   }
+  // LIB-04: back to the library, scroll down, open a piece in view, come
+  // back: where the list lands and how long until it is there.
+  q<HTMLElement>('.top > button.icon')?.click()
+  const lib2 = await until(() => q<HTMLElement>('main.library'))
+  await wait(1500)
+  const max = lib2.scrollHeight - lib2.clientHeight
+  if (max < 40) {
+    await api.perfMark('perf library back: skipped (the library does not scroll)', 0).catch(() => {})
+  } else {
+    await scrollBy(lib2, Math.min(max, 900) - lib2.scrollTop, 600)
+    await wait(500)
+    const at = lib2.scrollTop
+    const view = lib2.getBoundingClientRect()
+    const item = [...document.querySelectorAll<HTMLElement>('ul.scores > li button.open, button.trycard')].find((b) => {
+      const r = b.getBoundingClientRect()
+      return r.top > view.top + 40 && r.bottom < view.bottom - 40
+    })
+    if (!item) {
+      await api.perfMark(`perf library back: skipped (no piece in view at ${Math.round(at)})`, 0).catch(() => {})
+    } else {
+      item.click()
+      await until(() => q('main.reader'))
+      await wait(1500)
+      q<HTMLElement>('.readerhint button.primary')?.click()
+      await wait(300)
+      const t1 = performance.now()
+      let landed = -1
+      let ms = 0
+      const s = await frames(async () => {
+        q<HTMLElement>('.top > button.icon')?.click()
+        const el = await until(() => q<HTMLElement>('main.library'))
+        for (;;) {
+          await raf()
+          if (Math.abs(el.scrollTop - at) < 2) break
+          if (performance.now() - t1 > 3000) break
+        }
+        ms = performance.now() - t1
+        await wait(500)
+        landed = el.scrollTop
+      })
+      await api
+        .perfMark(`perf library back: was ${Math.round(at)}, back at ${Math.round(landed)}, in place after ${Math.round(ms)} ms, dropped ${s.dropped}`, Math.abs(landed - at))
+        .catch(() => {})
+    }
+  }
   await api.perfMark('perf done', 0).catch(() => {})
 }

@@ -1657,7 +1657,7 @@ const H = Number(process.env.H || 1133)
     await p2.goto(process.env.CANTOR_UI_URL || 'http://localhost:5173/')
     await p2.waitForFunction(() => (window.__store.perf ?? []).some(([n]) => n === 'perf done'), null, { timeout: 60000 })
     const names = await p2.evaluate(() => window.__store.perf.map(([n]) => n))
-    for (const want of ['perf launch to library', 'perf library scroll', 'perf open Lacrymosa to first page', 'perf open Lacrymosa', 'perf page turn tap x8', 'perf page turn swipe x4', 'perf mixer scroll']) {
+    for (const want of ['perf launch to library', 'perf library scroll', 'perf open Lacrymosa to first page', 'perf open Lacrymosa', 'perf page turn tap x8', 'perf page turn swipe x4', 'perf mixer scroll', 'perf library back']) {
       if (!names.some((n) => n.startsWith(want))) throw new Error(`missing "${want}": ${JSON.stringify(names)}`)
     }
     if (names.some((n) => n.startsWith('perf error'))) throw new Error(JSON.stringify(names))
