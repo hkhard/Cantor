@@ -56,6 +56,10 @@ objc2-uniform-type-identifiers = { version = "0.3", features = ["UTType", "UTCor
 # (the fast mixer). Without it Android used the deep-buffer mixer: 215 ms
 # output delay on the S10 (2026-11-26).
 cpal = { version = "0.18", features = ["realtime"] }
+# LIB-10 (feature `homr`): note recognition, linked dynamically against
+# Microsoft's libonnxruntime.so (tools/omr/homr_port/fetch_ort_android.sh).
+cantor-homr = { path = "../../crates/homr", optional = true, default-features = false }
+libc = { version = "0.2", optional = true }
 ndk = { version = "0.9", default-features = false }
 ndk-sys = "0.6"
 ndk-context = "0.1"

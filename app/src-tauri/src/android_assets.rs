@@ -27,7 +27,16 @@ pub fn extract(
     files: &[&str],
 ) -> std::io::Result<usize> {
     let stamp = dest.join(".version");
-    if std::fs::read_to_string(&stamp).ok().as_deref() == Some(version) {
+    // The stamp is the version plus the list of bundled files, so a build
+    // that adds files (the homr models) without a version bump copies too.
+    // Listing is cheap; reading the 123 MB of models is not.
+    let mut names: Vec<String> = dirs
+        .iter()
+        .flat_map(|d| src.list(d).into_iter().map(move |f| format!("{d}/{f}")))
+        .collect();
+    names.extend(files.iter().map(|f| f.to_string()));
+    let want = format!("{version}\n{}", names.join("\n"));
+    if std::fs::read_to_string(&stamp).ok().as_deref() == Some(want.as_str()) {
         return Ok(0);
     }
     let mut n = 0;
@@ -55,7 +64,7 @@ pub fn extract(
         write(f)?;
     }
     std::fs::create_dir_all(dest)?;
-    std::fs::write(stamp, version)?;
+    std::fs::write(stamp, want)?;
     Ok(n)
 }
 
@@ -143,6 +152,29 @@ mod tests {
             ("resources/GeneralUser-GS.sf2".into(), b"SF".to_vec()),
             ("other/x".into(), b"X".to_vec()),
         ]))
+    }
+
+    #[test]
+    fn and_03_a_build_with_new_assets_copies_them_at_the_same_version() {
+        // A development build adds the homr models without a version bump:
+        // they must still be copied.
+        let d = std::env::temp_dir().join(format!("cantor-and03-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let dirs = ["resources/scores", "resources/homr"];
+        let sf = ["resources/GeneralUser-GS.sf2"];
+        assert_eq!(extract(&fake(), &d, "0.1.0", &dirs, &sf).unwrap(), 3);
+        let mut with_models = fake();
+        with_models
+            .0
+            .insert("resources/homr/segnet.onnx".into(), b"M".to_vec());
+        assert_eq!(extract(&with_models, &d, "0.1.0", &dirs, &sf).unwrap(), 4);
+        assert_eq!(
+            std::fs::read(d.join("resources/homr/segnet.onnx")).unwrap(),
+            b"M"
+        );
+        // Unchanged: nothing copied again.
+        assert_eq!(extract(&with_models, &d, "0.1.0", &dirs, &sf).unwrap(), 0);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

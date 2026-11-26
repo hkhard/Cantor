@@ -10,11 +10,16 @@ mod apple_convert;
 // The copy logic is tested everywhere; only Android uses it.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 mod android_assets;
+#[cfg(target_os = "android")]
+mod android_pdf;
 mod audio;
 mod convert;
 mod folder;
 mod guard;
-#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+#[cfg(all(
+    feature = "homr",
+    any(target_os = "ios", target_os = "macos", target_os = "android")
+))]
 mod homr_recognizer;
 mod m4a;
 mod remote;
@@ -1021,11 +1026,18 @@ fn mark_hint_seen(id: String, paths: State<'_, Paths>) -> Result<(), String> {
 /// LIB-10: the background converter (PDF -> notes on the device). Events go
 /// to the UI as `convert` and a finished job posts a local notification.
 fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
-    #[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+    #[cfg(all(
+        feature = "homr",
+        any(target_os = "ios", target_os = "macos", target_os = "android")
+    ))]
     {
         use tauri::{Emitter, Manager};
-        // The iOS bundle puts resources under ChoirBird.app/assets.
+        // The iOS bundle puts resources under ChoirBird.app/assets; Android
+        // copies them out of the APK into app data (android_assets.rs).
+        #[cfg(not(target_os = "android"))]
         let res = app.path().resource_dir().ok()?;
+        #[cfg(target_os = "android")]
+        let res = app.path().app_data_dir().ok()?.join("bundled");
         let models = [
             res.join("resources/homr"),
             res.join("assets/resources/homr"),
@@ -1033,10 +1045,17 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
         .into_iter()
         .find(|d| d.exists())?;
         let cache = app.path().app_cache_dir().ok()?.join("coreml");
+        #[cfg(any(target_os = "ios", target_os = "macos"))]
+        let pages = apple_convert::CgPdfPages::default();
+        #[cfg(target_os = "android")]
+        let pages = android_pdf::AndroidPdfPages {
+            app: app.clone(),
+            tmp: app.path().app_cache_dir().ok()?.join("pdfpages"),
+        };
         let h = app.clone();
         return Some(convert::Converter::start(
             move || homr_recognizer::HomrRecognizer::load(&models, &cache),
-            apple_convert::CgPdfPages::default(),
+            pages,
             move |ev| {
                 // Once per finished job: never for progress, never twice.
                 if let convert::JobEvent::Done { id, title, .. } = &ev {
@@ -1055,7 +1074,10 @@ fn start_converter(app: tauri::AppHandle) -> Option<convert::Converter> {
                             "The notes are read. Open the piece and play.".to_string(),
                         )
                     };
+                    #[cfg(any(target_os = "ios", target_os = "macos"))]
                     apple_convert::notify(id, &t, &b);
+                    #[cfg(target_os = "android")]
+                    let _ = (id, t, b);
                 }
                 selftest_log(&h, &ev);
                 if let convert::JobEvent::Done { id, .. } = &ev {
@@ -1105,7 +1127,10 @@ fn bar_runs(order: &[usize]) -> String {
 /// (only `xcrun devicectl ... launch --environment-variables` can set it),
 /// the app converts that score at start and logs every event with its time
 /// and the process's peak memory to Documents/convert-selftest.log.
-#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+#[cfg(all(
+    feature = "homr",
+    any(target_os = "ios", target_os = "macos", target_os = "android")
+))]
 fn selftest_log(app: &tauri::AppHandle, ev: &convert::JobEvent) {
     use std::io::Write;
     use std::sync::OnceLock;
@@ -1129,7 +1154,10 @@ fn selftest_log(app: &tauri::AppHandle, ev: &convert::JobEvent) {
 }
 
 /// The title the library shows for `id` (as `list_scores` picks it).
-#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+#[cfg(all(
+    feature = "homr",
+    any(target_os = "ios", target_os = "macos", target_os = "android")
+))]
 fn display_title(paths: &Paths, id: &str) -> Option<String> {
     let e = paths.entry(id).ok()?;
     let st = store(paths);
@@ -1141,8 +1169,12 @@ fn display_title(paths: &Paths, id: &str) -> Option<String> {
     )
 }
 
-/// Peak resident memory of this process in MB (ru_maxrss is bytes on Apple).
-#[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+/// Peak resident memory of this process in MB (ru_maxrss is bytes on Apple,
+/// kilobytes on Linux and Android).
+#[cfg(all(
+    feature = "homr",
+    any(target_os = "ios", target_os = "macos", target_os = "android")
+))]
 fn peak_memory_mb() -> u64 {
     let mut u = std::mem::MaybeUninit::<libc::rusage>::zeroed();
     // SAFETY: getrusage fills the struct; RUSAGE_SELF is always valid.
@@ -1150,7 +1182,12 @@ fn peak_memory_mb() -> u64 {
         libc::getrusage(libc::RUSAGE_SELF, u.as_mut_ptr());
         u.assume_init()
     };
-    u.ru_maxrss as u64 / (1024 * 1024)
+    let unit = if cfg!(target_os = "android") {
+        1024
+    } else {
+        1024 * 1024
+    };
+    u.ru_maxrss as u64 / unit
 }
 
 /// LIB-10: read the notes of a PDF-only score on the device, in the
@@ -2707,7 +2744,10 @@ fn resource_paths(app: &tauri::App) -> Paths {
                     &apk,
                     &dest,
                     &v,
-                    &["resources/scores"],
+                    // resources/homr only exists in builds with the homr
+                    // models (tauri.homr.conf.json); a missing folder copies
+                    // nothing.
+                    &["resources/scores", "resources/homr"],
                     &["resources/GeneralUser-GS.sf2"],
                 ) {
                     Ok(n) => log::info!("android assets: {n} file(s) copied to {}", dest.display()),
@@ -2746,11 +2786,20 @@ fn resource_paths(app: &tauri::App) -> Paths {
     }
 }
 
+/// LIB-10: Android's PDF page renderer (`PdfPlugin.kt`); nothing elsewhere.
+fn android_pdf_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    #[cfg(target_os = "android")]
+    return android_pdf::plugin();
+    #[cfg(not(target_os = "android"))]
+    tauri::plugin::Builder::new("choirbird-pdf").build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     started_at();
     tauri::Builder::default()
         .plugin(scan::plugin())
+        .plugin(android_pdf_plugin())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -2802,7 +2851,10 @@ pub fn run() {
                     .unwrap_or_else(|e| format!("error: {e}"));
                 let _ = std::fs::write(paths.user.join("playorder.txt"), format!("{id}: {line}\n"));
             }
-            #[cfg(all(feature = "homr", any(target_os = "ios", target_os = "macos")))]
+            #[cfg(all(
+                feature = "homr",
+                any(target_os = "ios", target_os = "macos", target_os = "android")
+            ))]
             if let Ok(want) = std::env::var("CHOIRBIRD_CONVERT_SELFTEST") {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
@@ -2844,7 +2896,15 @@ pub fn run() {
         })
         .register_uri_scheme_protocol("cantor", |ctx, req| {
             // cantor://localhost/<dir>%2F<file>.pdf -> bytes of a library PDF.
-            let paths = ctx.app_handle().state::<Paths>();
+            // On Android the web view can ask before setup has finished
+            // copying the bundled files (the homr models take seconds):
+            // answer "not yet" instead of panicking.
+            let Some(paths) = ctx.app_handle().try_state::<Paths>() else {
+                return tauri::http::Response::builder()
+                    .status(503)
+                    .body(Vec::new())
+                    .unwrap();
+            };
             let path = percent_decode(req.uri().path().trim_start_matches('/'));
             // SET-04: practice/<safe id>/<file>: a practice track.
             if let Some(rest) = path.strip_prefix("practice/") {

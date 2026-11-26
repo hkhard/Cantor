@@ -158,6 +158,23 @@ Notes:
   `avdmanager create avd -n choirbird-tab -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_tablet`,
   `$ANDROID_HOME/emulator/emulator -avd choirbird-tab`.
 
+On-device note recognition (LIB-10, homr) on Android, a development build
+with the 123 MB of models inside the APK (a Play asset pack comes later):
+
+```sh
+bash tools/bundle_homr_models.sh                 # models into resources/homr (git-ignored)
+bash tools/omr/homr_port/fetch_ort_android.sh    # Microsoft's libonnxruntime.so, SHA-512 checked
+mkdir -p gen/android/app/src/main/jniLibs/arm64-v8a
+cp ../../vendor/onnxruntime-android/arm64-v8a/libonnxruntime.so gen/android/app/src/main/jniLibs/arm64-v8a/
+ORT_LIB_PATH=../../vendor/onnxruntime-android/arm64-v8a ORT_PREFER_DYNAMIC_LINK=1 \
+  CARGO_TARGET_DIR=../../target-android cargo tauri android build --debug --apk --target aarch64 \
+  --features homr --config tauri.homr.conf.json
+```
+
+Afterwards `bash tools/bundle_homr_models.sh --clear` keeps the models out
+of builds without the feature. PDF pages are rendered by Android's
+PdfRenderer (`PdfPlugin.kt`); homr runs on the CPU.
+
 ## Note recognition for PDFs (desktop)
 
 PDFs and forScore files have no note data. `cantor-omr` reads them with
