@@ -8,7 +8,7 @@
   import TrackPanel from './lib/TrackPanel.svelte'
   import VoicePanel from './lib/VoicePanel.svelte'
   import { scoreFileUrl, type PageMode } from './lib/pdf'
-  import { t, i18n, type Key } from './lib/i18n.svelte'
+  import { t, i18n, exportFormats, type Key } from './lib/i18n.svelte'
   import { ask } from './lib/prompts.svelte'
   import Dialog from './lib/Dialog.svelte'
   import Icon from './lib/Icon.svelte'
@@ -790,7 +790,10 @@
     }
   }
 
-  let audioFormat: 'm4a' | 'wav' = $state((localStorage.getItem('cantor.audioFormat') as 'm4a' | 'wav') ?? 'm4a')
+  // PLAY-11: a saved choice the platform cannot write falls back to its first format.
+  const formats = exportFormats()
+  const savedFormat = localStorage.getItem('cantor.audioFormat') as 'm4a' | 'wav' | null
+  let audioFormat: 'm4a' | 'wav' = $state(savedFormat && formats.includes(savedFormat) ? savedFormat : formats[0])
   async function exportAudio(what: 'mix' | 'parts') {
     exportOpen = false
     exporting = what === 'mix' ? t('tr.exportingMix') : t('tr.exportingParts')
@@ -1438,7 +1441,7 @@
             <button role="menuitem" onclick={() => exportAudio('mix')}>{t('tr.exportMix')}</button>
             <button role="menuitem" onclick={() => exportAudio('parts')}>{t('tr.exportParts')}</button>
             <span class="fmt" role="group" aria-label={t('tr.format')}>
-              {#each ['m4a', 'wav'] as const as f}
+              {#each formats as f}
                 <button
                   role="menuitemradio"
                   class:on={audioFormat === f}

@@ -1750,8 +1750,18 @@ const H = Number(process.env.H || 1133)
       await p6.waitForSelector('.splash', { state: 'detached' })
       const acc = await p6.evaluate(() => [...document.querySelectorAll('input[type=file]')].map((i) => i.getAttribute('accept')))
       if (!acc.length || acc.some((a) => a)) throw new Error('Android file inputs still filter: ' + JSON.stringify(acc))
-      const iosAcc = await page.evaluate(() => document.querySelector('input[type=file]')?.getAttribute('accept'))
+      // (The main page may be in the reader here, with no file input: ask the helper.)
+      const iosAcc = await page.evaluate(async () => (await import('/src/lib/i18n.svelte.ts')).pickerAccept('.mxl,.pdf'))
       if (!iosAcc || !iosAcc.includes('.mxl')) throw new Error('iOS lost its file filter: ' + iosAcc)
+      // Practice-track export: M4A needs Apple's encoder, so Android
+      // exports WAV and does not offer M4A.
+      const fmts = await p6.evaluate(async () => {
+        const { exportFormats } = await import('/src/lib/i18n.svelte.ts')
+        return exportFormats()
+      })
+      if (JSON.stringify(fmts) !== '["wav"]') throw new Error('Android export formats: ' + JSON.stringify(fmts))
+      const iosFmts = await page.evaluate(async () => (await import('/src/lib/i18n.svelte.ts')).exportFormats())
+      if (JSON.stringify(iosFmts) !== '["m4a","wav"]') throw new Error('iOS export formats: ' + JSON.stringify(iosFmts))
     } finally {
       await ctx6.close()
     }

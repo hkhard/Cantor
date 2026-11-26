@@ -11,6 +11,9 @@ find "$OUT" -mindepth 1 -maxdepth 1 -type f -delete
 # The iOS build copies resources into gen/apple/assets; clear that copy too.
 ASSETS="$ROOT/app/src-tauri/gen/apple/assets/resources/scores"
 [ -d "$ASSETS" ] && find "$ASSETS" -mindepth 1 -maxdepth 1 -type f -delete
+# Same for the Android APK assets.
+DROID="$ROOT/app/src-tauri/gen/android/app/src/main/assets/resources/scores"
+[ -d "$DROID" ] && find "$DROID" -mindepth 1 -maxdepth 1 -type f -delete
 while IFS= read -r line; do
   case "$line" in ''|'#'*) continue ;; esac
   src="$ROOT/$line"

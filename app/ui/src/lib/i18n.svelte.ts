@@ -705,6 +705,12 @@ export function pickerAccept(list: string): string | undefined {
   return android ? undefined : list
 }
 
+/** PLAY-11 practice-track formats this platform can write: M4A uses Apple's
+ *  AAC encoder, so Android writes WAV only. The first is the default. */
+export function exportFormats(): ('m4a' | 'wav')[] {
+  return android ? ['wav'] : ['m4a', 'wav']
+}
+
 export function setLang(l: Lang) {
   i18n.lang = l
   localStorage.setItem('cantor.lang', l)

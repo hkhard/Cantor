@@ -17,12 +17,24 @@ const DEVICES = {
   // Screen minus status bar (62 pt / 24 pt) and home indicator (34 / 20).
   iphone: { w: 440, h: 956 - 62 - 34, scale: 3 },
   ipad: { w: 1032, h: 1376 - 24 - 20, scale: 2 },
+  // Google Play (Android user agent, so the Android wording shows). Screen
+  // minus status bar (24 dp) and gesture navigation bar (24 dp).
+  //   phone:  412 x 892 dp @2.625 = 1081 x 2342 px (cropped to 1080 x 2340)
+  //   tablet: 800 x 1280 dp @2 = 1600 x 2560 px (10-inch)
+  aphone: { w: 412, h: 892 - 24 - 24, scale: 2.625, android: true },
+  atab: { w: 800, h: 1280 - 24 - 24, scale: 2, android: true },
 }
+// iPhone-like layout on the Android phone, iPad-like on the tablet.
+const like = (dev) => ({ aphone: 'iphone', atab: 'ipad' })[dev] ?? dev
 
 async function open(browser, dev, skin = 'light') {
   const d = DEVICES[dev]
   const ctx = await browser.newContext({ viewport: { width: d.w, height: d.h }, deviceScaleFactor: d.scale, hasTouch: true })
   const page = await ctx.newPage()
+  if (d.android)
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 Store' })
+    })
   await page.addInitScript(([s, l]) => {
     window.__marketing = true
     localStorage.setItem('cantor.skin', s)
@@ -79,7 +91,7 @@ async function cursorAt(page, sec) {
 }
 
 async function mixer(page, dev) {
-  if (dev === 'ipad') {
+  if (like(dev) === 'ipad') {
     // A wide iPad may open with the mixer already showing.
     if (!(await page.locator('.mixer').isVisible().catch(() => false))) await page.click('button[aria-label="Mixer"]')
   } else {
@@ -98,7 +110,7 @@ async function mixer(page, dev) {
 }
 
 async function closeMixer(page, dev) {
-  if (dev === 'ipad') {
+  if (like(dev) === 'ipad') {
     if (await page.locator('.mixer').isVisible().catch(() => false))
       await page.click(`button[aria-label="${sv ? 'Dölj mixer' : 'Hide mixer'}"]`).catch(() => {})
   } else {
@@ -153,13 +165,14 @@ async function annotate(page) {
 ;(async () => {
   const browser = await webkit.launch()
   const only = process.env.STORE_DEVICE
-  for (const dev of ['iphone', 'ipad']) {
+  const devs = process.env.STORE_PLAY ? ['aphone', 'atab'] : ['iphone', 'ipad']
+  for (const dev of devs) {
     if (only && only !== dev) continue
     // 1. Hero: the original PDF with the playing bar marked, practice controls.
     {
       const page = await open(browser, dev)
       await reader(page)
-      if (dev === 'iphone') await pageMode(page, 'scroll')
+      if (like(dev) === 'iphone') await pageMode(page, 'scroll')
       else await closeMixer(page, dev)
       await cursorAt(page, 9)
       await page.screenshot({ path: out(dev, '1-score') })
@@ -178,7 +191,7 @@ async function annotate(page) {
       await reader(page)
       await headerAction(page, sv ? 'Notbild' : 'Notation').catch(() => {})
       await page.waitForSelector('.score svg', { timeout: 20000 }).catch(() => {})
-      if (dev === 'ipad') await closeMixer(page, dev)
+      if (like(dev) === 'ipad') await closeMixer(page, dev)
       await cursorAt(page, 9)
       await page.waitForTimeout(1200)
       await page.screenshot({ path: out(dev, '3-notation') })
@@ -188,7 +201,7 @@ async function annotate(page) {
     {
       const page = await open(browser, dev)
       await reader(page)
-      if (dev === 'ipad') await closeMixer(page, dev)
+      if (like(dev) === 'ipad') await closeMixer(page, dev)
       await annotate(page)
       await page.screenshot({ path: out(dev, '4-annotate') })
       await page.context().close()
@@ -204,7 +217,7 @@ async function annotate(page) {
     {
       const page = await open(browser, dev, 'dark')
       await reader(page)
-      if (dev === 'ipad') await closeMixer(page, dev)
+      if (like(dev) === 'ipad') await closeMixer(page, dev)
       await cursorAt(page, 9)
       await page.screenshot({ path: out(dev, '6-dark') })
       await page.context().close()

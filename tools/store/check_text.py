@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Check the App Store texts in docs/store/app-store.md against App Store
-Connect's limits: name 30, subtitle 30, promotional text 170, keywords 100
-(and no word repeated from the name or subtitle), description and What's New
-4000. Exits 1 on any breach.
+"""Check the store texts against each console's limits.
 
-  python3 tools/store/check_text.py
+App Store (docs/store/app-store.md): subtitle 30, promotional text 170,
+keywords 100 (and no word repeated from the name or subtitle), description
+and What's New 4000. Google Play (docs/store/google-play.md, --play): app
+name 30, short description 80, full description 4000, release notes 500.
+Exits 1 on any breach.
+
+  python3 tools/store/check_text.py [--play]
 """
 
 import re
@@ -23,6 +26,10 @@ LIMITS = {
 
 
 def main():
+    global DOC, LIMITS
+    if "--play" in sys.argv:
+        DOC = DOC.with_name("google-play.md")
+        LIMITS = {"app name": 30, "short description": 80, "full description": 4000, "release notes": 500}
     text = DOC.read_text(encoding="utf-8")
     bad = 0
     for lang_block in re.split(r"^### ", text, flags=re.M)[1:]:
