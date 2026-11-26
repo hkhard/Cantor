@@ -268,13 +268,95 @@
   }
 
   /** Drop a score on a setlist tab: add it to the end of that list. */
-  async function dropOnTab(dragged: string, setlistId: string) {
+  async function dropOnTab(dragged: string, setlistId: string, at?: number) {
     const sl = setlists.find((x) => x.id === setlistId)
     const s = scores.find((x) => x.file === dragged)
     if (!sl || !s) return
-    sl.items.push({ kind: 'score', score: s.file, start_page: null })
+    const item = { kind: 'score' as const, score: s.file, start_page: null }
+    if (at === undefined || at >= sl.items.length) sl.items.push(item)
+    else sl.items.splice(Math.max(0, at), 0, item)
     await saveList(sl)
     notice = t('lib.addedTo', { title: s.title, name: sl.name })
+  }
+
+  // LIB-11 Columns: dragging a score. Rows of lists and the open list's
+  // items are measured once when the drag starts and again after the view
+  // slides; per frame only rectangles are compared (no layout reads).
+  let dragging = $state(false)
+  let hoverContent = $state(false)
+  /** Where a drop into the open list would go: insert before item `at`. */
+  let insertAt: number | null = $state(null)
+  let hoverRow: { id: string; since: number; el: HTMLElement } | null = null
+  let rowRects: { id: string; el: HTMLElement; r: DOMRect }[] = []
+  let contentRect: DOMRect | null = null
+  let itemMids: number[] = []
+  let measureAfter = 0
+  const OPEN_DWELL = 600 // ms over a list row before it opens beside
+  function measureTargets() {
+    rowRects = [...(listsEl?.querySelectorAll<HTMLElement>('.rows > li[data-drop]') ?? [])].map((el) => ({ id: el.dataset.drop!, el, r: el.getBoundingClientRect() }))
+    const visible = threeCols || !!drillList
+    contentRect = visible && drillList ? (contentEl?.getBoundingClientRect() ?? null) : null
+    itemMids = [...(contentEl?.querySelectorAll<HTMLElement>('ol.setlist > li[data-sort-id]') ?? [])].map((li) => {
+      const r = li.getBoundingClientRect()
+      return r.top + r.height / 2
+    })
+  }
+  function within(r: DOMRect, x: number, y: number) {
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
+  }
+  function setRowHover(el: HTMLElement | null) {
+    if (hoverRow?.el === el) return
+    hoverRow?.el.classList.remove('drop-over')
+    el?.classList.add('drop-over')
+    hoverRow = el ? { id: el.dataset.drop!, since: performance.now(), el } : null
+  }
+  function colHover(x: number, y: number, now: number) {
+    if (!dragging) {
+      dragging = true
+      // The lift turns on edit mode, which shows the sort bar and moves the
+      // columns down: measure once that has been laid out.
+      measureAfter = now + 120
+      measureTargets()
+    }
+    if (measureAfter && now >= measureAfter) {
+      // The view finished sliding (or the list opened): measure again.
+      measureAfter = 0
+      measureTargets()
+    }
+    const row = rowRects.find((t) => within(t.r, x, y)) ?? null
+    setRowHover(row?.el ?? null)
+    if (row && hoverRow && row.id !== drill && now - hoverRow.since > OPEN_DWELL) {
+      // Held over a list: open it beside (portrait: slide), keep dragging.
+      drill = row.id
+      measureAfter = now + 420
+    }
+    const inContent = !!contentRect && within(contentRect, x, y)
+    hoverContent = inContent
+    if (inContent) {
+      let k = itemMids.findIndex((m) => y < m)
+      if (k < 0) k = itemMids.length
+      insertAt = k
+    } else insertAt = null
+  }
+  function colDrop(dragged: string, x: number, y: number): boolean {
+    colHover(x, y, performance.now())
+    if (hoverContent && drillList) {
+      dropOnTab(dragged, drillList.id, insertAt ?? undefined)
+      return true
+    }
+    const row = rowRects.find((t) => within(t.r, x, y))
+    if (row) {
+      dropOnTab(dragged, row.id)
+      return true
+    }
+    return false
+  }
+  function colEnd() {
+    dragging = false
+    hoverContent = false
+    insertAt = null
+    setRowHover(null)
+    measureAfter = 0
   }
 
   let pending: string[] = $state([])
@@ -498,12 +580,15 @@
       onmerge: inPane ? undefined : makeList,
       onmergegesture: primeKeyboard,
       ondrop: dropOnTab,
-      dropRoot: () => (inPane ? colsEl : tabsEl),
+      dropRoot: () => tabsEl,
       onlift: () => (editMode = true),
       immediate: () => editMode,
       disabled: () => hits !== null && !inPane,
       scroller: () => (inPane ? songsEl : scrollerEl),
       copyOut: () => inPane,
+      onhover: colHover,
+      ondropat: colDrop,
+      onend: colEnd,
     }}
   >
     {#each shown as s (s.file)}
@@ -598,7 +683,8 @@
     }}
   >
     {#each cur.items as it, i (`${i}-${it.kind === 'score' ? it.score : it.title}`)}
-      <li data-sort-id={String(i)}>
+      <li data-sort-id={String(i)} class:insert-before={pane && insertAt === i && hoverContent}>
+        {#if pane && insertAt === i && hoverContent}<span class="insert-line" aria-hidden="true"></span>{/if}
         {#if it.kind === 'score' && byId.get(it.score)}
           <button class="open" onclick={() => openItem(cur, i)}
             ><span class="num">{i + 1}</span>
@@ -630,6 +716,7 @@
     {:else}
       <li class="empty">{t('set.empty')}</li>
     {/each}
+    {#if pane && hoverContent && insertAt === cur.items.length}<li class="insert-end" aria-hidden="true"><span class="insert-line"></span></li>{/if}
   </ol>
 {/snippet}
 
@@ -713,6 +800,13 @@
       </label>
     {/if}
     {#if editMode && layout !== 'tabs'}
+      {#if layout === 'columns'}
+        <!-- On this row, so starting a drag (edit mode) moves nothing below. -->
+        <div class="sortbar inline" role="group" aria-label={t('lib.sortBy')}>
+          <button class="chip" onclick={() => sortBy('title')}>{t('lib.sortTitle')}</button>
+          <button class="chip" onclick={() => sortBy('composer')}>{t('lib.sortComposer')}</button>
+        </div>
+      {/if}
       <button class="chip on done" onclick={() => (editMode = false)}>{t('common.done')}</button>
     {/if}
   </div>
@@ -765,7 +859,7 @@
       {/if}
     </div>
   {/if}
-  {#if editMode && (layout === 'columns' || (layout === 'tabs' && !current) || (layout === 'lists' && drill === ''))}
+  {#if editMode && ((layout === 'tabs' && !current) || (layout === 'lists' && drill === ''))}
     <div class="sortbar" role="group" aria-label={t('lib.sortBy')}>
       <button class="chip" onclick={() => sortBy('title')}>{t('lib.sortTitle')}</button>
       <button class="chip" onclick={() => sortBy('composer')}>{t('lib.sortComposer')}</button>
@@ -815,32 +909,31 @@
       {@render setlistView(drillList, undefined)}
     {/if}
   {:else}
-    <!-- Columns: scores | setlists (| the open list in landscape). Each
-         column scrolls on its own; the page does not. -->
-    <div class="columns" class:three={threeCols} bind:this={colsEl}>
-      <section class="pane songs" aria-label={t('lib.all')} bind:this={songsEl}>
+    <!-- Columns: scores | setlists | the open list. Each column scrolls on
+         its own; the page does not. In landscape all three show; in
+         portrait two at a time, and opening a list slides the view left
+         (scores out, the list's content in). -->
+    <div class="colclip" bind:this={colsEl}>
+    <div class="columns" class:three={threeCols} class:shifted={!threeCols && !!drillList}>
+      <section class="pane songs" aria-label={t('lib.all')} bind:this={songsEl} inert={!threeCols && !!drillList}>
         {@render libBar()}
         {@render scoreGrid(true)}
       </section>
       <section class="pane lists" aria-label={t('lib.setlists')} bind:this={listsEl}>
-        {#if !threeCols && drillList}
-          {@render backTo(t('lib.setlists'))}
-          {@render setlistView(drillList, listsEl)}
+        <h2 class="panetitle">{t('lib.setlists')}</h2>
+        <!-- Always there (no jump under a moving finger). -->
+        <p class="hint">{t('lib.dragToList')}</p>
+        {@render listRows(false, true)}
+      </section>
+      <section class="pane content" class:drop-over={hoverContent} aria-label={drillList ? drillList.name : t('lib.pickList')} bind:this={contentEl} inert={!threeCols && !drillList}>
+        {#if drillList}
+          {#if !threeCols}{@render backTo(t('lib.setlists'))}{/if}
+          {@render setlistView(drillList, contentEl)}
         {:else}
-          <h2 class="panetitle">{t('lib.setlists')}</h2>
-          {#if editMode}<p class="hint">{t('lib.dragToList')}</p>{/if}
-          {@render listRows(false, true)}
+          <p class="hint pickhint">{t('lib.pickList')}</p>
         {/if}
       </section>
-      {#if threeCols}
-        <section class="pane content" aria-label={drillList ? drillList.name : t('lib.pickList')} bind:this={contentEl} data-drop={drillList?.id}>
-          {#if drillList}
-            {@render setlistView(drillList, contentEl)}
-          {:else}
-            <p class="hint pickhint">{t('lib.pickList')}</p>
-          {/if}
-        </section>
-      {/if}
+    </div>
     </div>
   {/if}
 </main>
@@ -884,10 +977,19 @@
 
 <style>
   /* LIB-11 layouts. */
+  .sortbar.inline {
+    margin: 0;
+  }
   .viewbar {
     gap: 0.75rem;
     flex-wrap: wrap;
     align-items: center;
+    /* Same height with or without the edit-mode buttons (a drag that turns
+       edit mode on must not move the columns under the finger). */
+    min-height: 2.75rem;
+  }
+  .viewbar :global(.chip) {
+    min-height: 2.25rem;
   }
   .layoutsel button {
     min-height: 2.25rem;
@@ -973,6 +1075,52 @@
   }
   .columns.three {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1.1fr);
+  }
+  /* Portrait: three columns, two of them on screen (each half the width).
+     Opening a list slides the row left by one column (transform only). */
+  .colclip {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+  }
+  /* Portrait: two columns fill the clip box C with gap g, so a column is
+     (C - g) / 2 and the row of three is 3(C - g)/2 + 2g = 150% + g/2.
+     Sliding one column plus one gap is (C + g) / 2. Percentages in a
+     transform refer to the row itself, so use a custom property for C. */
+  .colclip > .columns:not(.three) {
+    flex: none;
+    gap: 1rem;
+    width: calc(150% + 0.5rem);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .colclip > .columns.shifted {
+    /* (C + g) / 2 where the row R = 1.5C + g/2, so C = (R - g/2) / 1.5:
+       (C + g) / 2 = R/3 - g/6 + g/2 = R/3 + g/3. */
+    transform: translateX(calc(-100% / 3 - 1rem / 3));
+  }
+  .colclip > .columns.three {
+    width: 100%;
+  }
+  .insert-before,
+  .insert-end {
+    position: relative;
+  }
+  .insert-end {
+    list-style: none;
+    height: 0;
+  }
+  .insert-line {
+    position: absolute;
+    left: 0.5rem;
+    right: 0.5rem;
+    top: -0.45rem;
+    height: 0.25rem;
+    border-radius: 0.125rem;
+    background: var(--accent);
+    pointer-events: none;
+    z-index: 5;
   }
   .pane {
     min-height: 0;

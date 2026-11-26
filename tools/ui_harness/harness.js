@@ -483,7 +483,9 @@ const H = Number(process.env.H || 1133)
     await layoutBtn('Columns').click()
     await page.waitForSelector('.pane.songs ul.scores > li')
     await page.waitForSelector('.pane.lists .rows')
-    if (await page.locator('.pane.content').count()) throw new Error('three columns in portrait')
+    // Portrait: two columns on screen; the list content waits off to the right.
+    const off = await page.evaluate(() => document.querySelector('.pane.content').getBoundingClientRect().left >= document.querySelector('.colclip').getBoundingClientRect().right - 2)
+    if (!off) throw new Error('three columns on screen in portrait')
     // The panes scroll, the page does not.
     const pageScroll = await page.locator('main.library').evaluate((el) => el.scrollHeight - el.clientHeight)
     if (pageScroll > 2) throw new Error('the page itself scrolls: ' + pageScroll)
@@ -506,16 +508,115 @@ const H = Number(process.env.H || 1133)
     const order1 = await page.locator('.pane.songs ul.scores > li .t > span:first-child').allInnerTexts()
     if (JSON.stringify(order1) !== JSON.stringify(order0)) throw new Error('scores reordered by the drop')
     await shot('32-columns-portrait')
-    // Tap the list: its content opens in the lists column; remove the added item.
+    // Tap the list: the view slides left so its content shows beside the
+    // lists (songs slide out); remove the added item; back slides home.
     if (await page.locator('.library.editing').count()) await page.click('button.done')
     await target.locator('button').first().click()
-    await page.waitForSelector('.pane.lists h2.setname >> text=Vårkonsert')
-    await page.locator('.pane.lists ol.setlist > li').last().locator('button.remove').click()
+    await page.waitForSelector('.pane.content h2.setname >> text=Vårkonsert')
+    await page.waitForFunction(() => document.querySelector('.columns')?.classList.contains('shifted'))
+    await page.waitForTimeout(400)
+    const vis = await page.evaluate(() => {
+      const clip = document.querySelector('.colclip').getBoundingClientRect()
+      const box = (s) => document.querySelector(s).getBoundingClientRect()
+      return { songsRight: box('.pane.songs').right - clip.left, contentLeft: box('.pane.content').left - clip.left, contentRight: box('.pane.content').right - clip.left, w: clip.width }
+    })
+    if (vis.songsRight > 8 || vis.contentRight > vis.w + 2 || vis.contentLeft < vis.w / 3) throw new Error('not slid to the content ' + JSON.stringify(vis))
+    await page.locator('.pane.content ol.setlist > li').last().locator('button.remove').click()
     await page.waitForTimeout(200)
     const back = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert').items.length)
     if (back !== n0) throw new Error('remove ' + back)
-    await page.click('.pane.lists button.drillback')
-    await page.waitForSelector('.pane.lists .rows')
+    await page.click('.pane.content button.drillback')
+    await page.waitForFunction(() => !document.querySelector('.columns')?.classList.contains('shifted'))
+  })
+
+  await step('lib_11 columns (portrait): hold a score over a list opens it beside; drop between two items puts it there', async () => {
+    const sl0 = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert').items.map((i) => i.score))
+    if (sl0.length < 2) throw new Error('need 2 items ' + sl0)
+    const song = page.locator('.pane.songs ul.scores > li', { hasText: 'Skannad' })
+    const row = page.locator('.pane.lists .rows > li', { hasText: 'Vårkonsert' })
+    // Long press, carry to the list row and hold there: the list opens and
+    // the view slides; keep dragging into the content, between items 1 and 2.
+    // Measure after the previous step's slide back has finished.
+    await page.waitForTimeout(500)
+    const a = await song.boundingBox()
+    const r = await row.boundingBox()
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+    await page.mouse.down()
+    await page.waitForTimeout(520)
+    for (let i = 1; i <= 20; i++) {
+      await page.mouse.move(a.x + a.width / 2 + (r.x + r.width / 2 - a.x - a.width / 2) * (i / 20), a.y + a.height / 2 + (r.y + r.height / 2 - a.y - a.height / 2) * (i / 20))
+      await page.waitForTimeout(16)
+    }
+    await page.waitForTimeout(900)
+    await shot('34a-holding-over-list')
+    await page.waitForFunction(() => document.querySelector('.columns')?.classList.contains('shifted'), null, { timeout: 2000 })
+    await page.waitForTimeout(450)
+    const items = page.locator('.pane.content ol.setlist > li')
+    const first = await items.nth(0).boundingBox()
+    const second = await items.nth(1).boundingBox()
+    const gapY = (first.y + first.height + second.y) / 2
+    const x = first.x + first.width / 2
+    for (let i = 1; i <= 15; i++) {
+      await page.mouse.move(r.x + r.width / 2 + (x - r.x - r.width / 2) * (i / 15), r.y + r.height / 2 + (gapY - r.y - r.height / 2) * (i / 15))
+      await page.waitForTimeout(16)
+    }
+    await page.waitForTimeout(150)
+    if (!(await page.locator('.pane.content .insert-line').count())) throw new Error('no insertion line')
+    await page.mouse.up()
+    await page.waitForTimeout(500)
+    const sl1 = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert').items.map((i) => i.score))
+    const want = [sl0[0], '1:Scanned', ...sl0.slice(1)]
+    if (JSON.stringify(sl1) !== JSON.stringify(want)) throw new Error(`order ${sl1} want ${want}`)
+    await shot('34-columns-drop-between')
+    // Tidy up: remove it again, slide back.
+    if (await page.locator('.library.editing').count()) await page.click('button.done')
+    await page.locator('.pane.content ol.setlist > li').nth(1).locator('button.remove').click()
+    await page.waitForTimeout(200)
+    await page.click('.pane.content button.drillback')
+    await page.waitForFunction(() => !document.querySelector('.columns')?.classList.contains('shifted'))
+  })
+
+  await step('lib_11 columns in edit mode: the song column still scrolls with a swipe', async () => {
+    // Enough cards to scroll the column.
+    await page.addStyleTag({ content: '.pane.songs ul.scores { padding-bottom: 1400px !important }' })
+    await page.evaluate(() => (document.head.lastElementChild.id = 'tallSongs'))
+    try {
+      // Edit mode on (long press a card and let go without moving), once
+      // the previous step's slide back has finished.
+      await page.waitForTimeout(500)
+      const card = page.locator('.pane.songs ul.scores > li').first()
+      const b = await card.boundingBox()
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+      await page.mouse.down()
+      await page.waitForTimeout(520)
+      await page.mouse.up()
+      await page.waitForSelector('.library.editing')
+      // The long press's card has flown back.
+      await page.waitForSelector('.sort-ghost', { state: 'detached' })
+      const pane = page.locator('.pane.songs')
+      const before = await pane.evaluate((el) => el.scrollTop)
+      // A quick vertical swipe on a card scrolls (touch: WebKit pans unless
+      // a drag took the touch): no drag may start from it.
+      const dragged = await pane.evaluate(async (el) => {
+        const card = el.querySelector('ul.scores > li')
+        const r = card.getBoundingClientRect()
+        const x = r.left + r.width / 2
+        const y = r.top + r.height / 2
+        const o = { pointerId: 9, isPrimary: true, pointerType: 'touch', bubbles: true }
+        card.dispatchEvent(new PointerEvent('pointerdown', { ...o, clientX: x, clientY: y }))
+        for (let i = 1; i <= 6; i++) window.dispatchEvent(new PointerEvent('pointermove', { ...o, clientX: x, clientY: y - i * 12 }))
+        const lifted = !!document.querySelector('.sort-ghost')
+        window.dispatchEvent(new PointerEvent('pointerup', { ...o, clientX: x, clientY: y - 72 }))
+        return lifted
+      })
+      if (dragged) throw new Error('a quick vertical swipe started a drag instead of scrolling')
+      await pane.evaluate((el) => el.scrollBy(0, 300))
+      await page.waitForTimeout(100)
+      if ((await pane.evaluate((el) => el.scrollTop)) <= before) throw new Error('song column did not scroll')
+    } finally {
+      await page.evaluate(() => document.getElementById('tallSongs')?.remove())
+      if (await page.locator('.library.editing').count()) await page.click('button.done')
+    }
   })
 
   await step('lib_11 columns layout (landscape): scores | setlists | list content; drop on the content adds; no columns on a phone', async () => {

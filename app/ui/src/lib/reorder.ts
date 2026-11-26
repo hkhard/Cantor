@@ -34,9 +34,15 @@ export interface SortOptions {
   scroller?: () => HTMLElement | null | undefined
   /** Drag a floating copy above everything instead of the item itself, and
    *  leave the others in place (no reordering): for dragging out of one
-   *  pane onto targets in another (columns layout). Targets are measured
-   *  in the viewport, so they may sit in other scrolling panes. */
+   *  pane onto targets in another (columns layout). The owner hit-tests:
+   *  `onhover` gets the pointer every frame (viewport coordinates) and
+   *  `ondropat` decides on release (true: taken). A copy-out drag always
+   *  starts with a long press, also in edit mode, so a swipe scrolls. */
   copyOut?: () => boolean
+  onhover?: (x: number, y: number, now: number) => void
+  ondropat?: (dragged: string, x: number, y: number) => boolean
+  /** The copy-out drag ended (dropped or cancelled). */
+  onend?: () => void
   longPressMs?: number
 }
 
@@ -84,6 +90,8 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
   let suppressClick = false
 
   const scrollTop = () => drag?.scroller?.scrollTop ?? 0
+  /** Drags start on the first movement (edit mode), never for copy-out. */
+  const immediateNow = () => (opts.immediate?.() ?? false) && !(opts.copyOut?.() ?? false)
 
   function itemOf(t: EventTarget | null): HTMLElement | null {
     const el = (t as Element | null)?.closest?.('[data-sort-id]') as HTMLElement | null
@@ -97,7 +105,7 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     const el = itemOf(e.target)
     if (!el) return
     clearPress()
-    const immediate = opts.immediate?.() ?? false
+    const immediate = immediateNow()
     press = {
       id: e.pointerId,
       el,
@@ -121,7 +129,7 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     }
     if (!press || e.pointerId !== press.id) return
     const d = Math.hypot(e.clientX - press.x, e.clientY - press.y)
-    if (opts.immediate?.()) {
+    if (immediateNow()) {
       if (d > 4) lift(e.pointerId, e.clientX, e.clientY)
     } else if (d > MOVE_CANCEL) clearPress() // a scroll
   }
@@ -217,7 +225,7 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
   // first touchmove after the lift can stop WebKit from starting a pan,
   // which would cancel the pointer and drop the item.
   function blockScroll(e: TouchEvent) {
-    if (drag || (press && opts.immediate?.())) e.preventDefault()
+    if (drag || (press && immediateNow())) e.preventDefault()
   }
 
   function setTransform(i: number, slot: number) {
@@ -242,14 +250,10 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     const cx = d.px
     const s = d.slots[d.from]
     if (d.ghost) {
-      // Copy-out: only the floating copy moves (viewport coordinates).
+      // Copy-out: only the floating copy moves (viewport coordinates); the
+      // owner hit-tests its targets (they may move: columns slide).
       d.ghost.style.transform = `translate3d(${cx - d.grab.x - s.x}px, ${d.py - d.grab.y - s.y}px, 0) scale(1.04)`
-      const over = d.dropTargets.find((t) => inside(cx, d.py, t.rect))?.el ?? null
-      if (over !== d.dropOn) {
-        d.dropOn?.classList.remove('drop-over')
-        over?.classList.add('drop-over')
-        d.dropOn = over
-      }
+      opts.onhover?.(cx, d.py, now)
       d.raf = requestAnimationFrame(frame)
       return
     }
@@ -326,7 +330,9 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
       d.el.classList.remove('sort-source')
       node.classList.remove('sorting')
       setTimeout(() => (suppressClick = false), 0)
-      if (dropped) {
+      const taken = e.type === 'pointerup' && (opts.ondropat?.(draggedId, d.px, d.py) ?? false)
+      opts.onend?.()
+      if (taken) {
         // Into the list: shrink away where it was dropped.
         g.style.transition = 'transform 180ms ease-in, opacity 180ms ease-in'
         g.style.transform += ' scale(0.6)'
@@ -336,10 +342,7 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
         g.style.transition = EASE
         g.style.transform = ''
       }
-      setTimeout(() => {
-        g.remove()
-        if (dropped && opts.ondrop) opts.ondrop(draggedId, dropped)
-      }, dropped ? 180 : 230)
+      setTimeout(() => g.remove(), taken ? 180 : 230)
       return
     }
     clearMerge()
