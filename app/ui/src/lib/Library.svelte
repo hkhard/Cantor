@@ -3,6 +3,10 @@
    * unmounted while a score is open, and coming back puts the list where
    * it was (not at the top). Not kept across launches. */
   let savedScroll = 0
+  /** LIB-11: the open list (Lists layout, lists column) and where each
+   * column was scrolled, kept the same way while a score is open. */
+  let savedDrill: string | null = null
+  const savedPanes: Record<string, number> = {}
 </script>
 
 <script lang="ts">
@@ -33,6 +37,7 @@
    * while reading and may report scroll 0 on the way out). */
   const onopen: Props['onopen'] = (s, set) => {
     if (scrollerEl) savedScroll = scrollerEl.scrollTop
+    for (const [k, el] of [['songs', songsEl], ['lists', listsEl], ['content', contentEl]] as const) if (el) savedPanes[k] = el.scrollTop
     leaving = true
     openScore(s, set)
   }
@@ -108,6 +113,42 @@
     group = g
     tab = ''
   }
+
+  // LIB-11: how the home screen is laid out (per device, kept in
+  // localStorage). 'tabs': the chips above one list (as before). 'lists':
+  // setlists as rows; the arrow opens one (drill-down). 'columns': scores
+  // beside the setlists, drag a score onto a list to add it; in landscape
+  // the open list's content is a third column. A phone has no room for
+  // columns and shows 'lists' instead.
+  type Layout = 'tabs' | 'lists' | 'columns'
+  const LAYOUTS: Layout[] = ['tabs', 'lists', 'columns']
+  let layoutPref: Layout = $state((LAYOUTS as string[]).includes(localStorage.getItem('cantor.layout') ?? '') ? (localStorage.getItem('cantor.layout') as Layout) : 'tabs')
+  let vw = $state(window.innerWidth)
+  let vh = $state(window.innerHeight)
+  $effect(() => {
+    const on = () => {
+      vw = window.innerWidth
+      vh = window.innerHeight
+    }
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  })
+  let phoneSize = $derived(Math.min(vw, vh) < 600)
+  let layout: Layout = $derived(phoneSize && layoutPref === 'columns' ? 'lists' : layoutPref)
+  /** Three columns: landscape and wide enough for songs | lists | content. */
+  let threeCols = $derived(layout === 'columns' && vw > vh && vw >= 1000)
+  function setLayout(l: Layout) {
+    layoutPref = l
+    localStorage.setItem('cantor.layout', l)
+    drill = null
+  }
+  /** Lists layout (and the lists column): the open entry. null = the index
+   *  of lists; '' = all scores; else a setlist id. */
+  let drill: string | null = $state(savedDrill)
+  $effect(() => {
+    savedDrill = drill
+  })
+  let drillList = $derived(drill ? (setlists.find((s) => s.id === drill) ?? null) : null)
   let query = $state('')
   let hits: Set<string> | null = $state(null)
   let editing: ScoreEntry | null = $state(null)
@@ -120,6 +161,33 @@
   // edit mode (cards wiggle, drags start at once); Done ends it.
   let editMode = $state(false)
   let scrollerEl: HTMLElement | undefined = $state()
+  // Columns layout: the columns and each scrolling pane.
+  let colsEl: HTMLElement | undefined = $state()
+  let songsEl: HTMLElement | undefined = $state()
+  let listsEl: HTMLElement | undefined = $state()
+  let contentEl: HTMLElement | undefined = $state()
+  // Back from a score in the Columns layout: each column where it was
+  // (same hold as for the page below, the lists fill in asynchronously).
+  function holdPane(key: string, el: HTMLElement | undefined) {
+    if (!el) return
+    const target = savedPanes[key] ?? 0
+    if (target <= 0) return
+    const t0 = performance.now()
+    let on = true
+    const stop = () => (on = false)
+    el.addEventListener('pointerdown', stop, { once: true })
+    el.addEventListener('touchstart', stop, { once: true, passive: true })
+    el.addEventListener('wheel', stop, { once: true, passive: true })
+    const step = () => {
+      if (!on) return
+      if (Math.abs(el.scrollTop - target) >= 2) el.scrollTop = target
+      if (performance.now() - t0 < 1500) requestAnimationFrame(step)
+    }
+    step()
+  }
+  $effect(() => holdPane('songs', songsEl))
+  $effect(() => holdPane('lists', listsEl))
+  $effect(() => holdPane('content', contentEl))
   // Back from a score: scroll to where the list was. The list fills in and
   // changes height asynchronously (metadata, setlists, sync, Getting
   // started), and WebKit may clamp the position when it shrinks for a
@@ -420,7 +488,185 @@
   }
 </script>
 
-<main class="library" bind:this={scrollerEl} class:editing={editMode}>
+<!-- The score cards (all scores or a filtered view). `inPane`: in the songs
+     column, where a drag carries a copy onto a list in the next column. -->
+{#snippet scoreGrid(inPane: boolean)}
+  <ul
+    class="scores"
+    use:sortable={{
+      onreorder: reorderScores,
+      onmerge: inPane ? undefined : makeList,
+      onmergegesture: primeKeyboard,
+      ondrop: dropOnTab,
+      dropRoot: () => (inPane ? colsEl : tabsEl),
+      onlift: () => (editMode = true),
+      immediate: () => editMode,
+      disabled: () => hits !== null && !inPane,
+      scroller: () => (inPane ? songsEl : scrollerEl),
+      copyOut: () => inPane,
+    }}
+  >
+    {#each shown as s (s.file)}
+      <li data-sort-id={s.file}>
+        <button class="open" onclick={() => onopen(s)}>
+          <span class="t">
+            <span>{s.title}</span>
+            {#if sub(s)}<span class="meta">{sub(s)}</span>{/if}
+          </span>
+          <span class="badges">
+            {#if s.playable}<span class="badge">{t('lib.plays')}</span>{/if}
+            {#if s.pdf}<span class="badge">PDF</span>{/if}
+            {#if s.user}<span class="badge mine">{t('lib.mine')}</span>{/if}
+          </span>
+        </button>
+        <button class="side info" data-nodrag onclick={() => (editing = s)} aria-label="{t('lib.edit')} {s.title}">{t('lib.edit')}</button>
+        {#if setlists.length}
+          <button class="side add" data-nodrag onclick={() => (addTo = addTo === s ? null : s)} aria-label="{t('set.add')}: {s.title}">＋</button>
+        {/if}
+        {#if s.user}
+          <button class="remove" data-nodrag onclick={() => removeScore(s)} aria-label="{t('common.delete')} {s.title}">×</button>
+        {/if}
+        {#if addTo === s}
+          <span class="addmenu glass">
+            {#each setlists as sl (sl.id)}
+              <button onclick={() => addToList(sl, s)}>{sl.name}</button>
+            {/each}
+          </span>
+        {/if}
+      </li>
+    {:else}
+      <li class="empty">{t('lib.noHits')}</li>
+    {/each}
+  </ul>
+{/snippet}
+
+<!-- Search and import above the scores. -->
+{#snippet libBar()}
+  <div class="libbar">
+    <input class="search" type="search" placeholder={t('lib.search')} bind:value={query} oninput={onSearch} aria-label={t('lib.search')} />
+    <button class="chip on" onclick={() => fileInput?.click()} disabled={importing}>{importing ? t('lib.importing') : t('lib.import')}</button>
+    {#if notice}<span class="notice">{notice}</span>{/if}
+  </div>
+{/snippet}
+
+<!-- One setlist: its actions, instructions and items. `pane`: inside a
+     column (the items list then scrolls with its pane). -->
+{#snippet setlistView(cur: Setlist, pane: HTMLElement | undefined)}
+  <div class="libbar">
+    <h2 class="setname">{cur.name}</h2>
+    {#if notice && !pane}<span class="notice">{notice}</span>{/if}
+    {#if cur.items.length}
+      <button class="chip on" onclick={() => openItem(cur, cur.items.findIndex((i) => i.kind === 'score'))}>{t('set.playlist')}</button>
+    {/if}
+    <button class="chip" onclick={() => share('setlist', cur.id)}>{t('share.title')}: ChoirBird</button>
+    <button class="chip" onclick={() => share('4ss', cur.id)}>forScore</button>
+    <button class="chip" onclick={() => deleteList(cur)}>{t('common.delete')}</button>
+  </div>
+  {#if received}
+    <p class="pending glass" role="status">{t('set.received', { name: cur.name })}</p>
+  {/if}
+  <section class="setins glass" aria-label={t('ins.forSet', { name: cur.name })}>
+    {#if setInsEdit !== null}
+      <label class="col"
+        >{t('ins.forSet', { name: cur.name })}
+        <textarea bind:value={setInsEdit} rows="5" placeholder={t('ins.placeholder')}></textarea>
+      </label>
+      <p class="hint">{t('ins.syntax')}</p>
+      <div class="row">
+        <button class="chip" onclick={() => (setInsEdit = null)}>{t('common.cancel')}</button>
+        <button class="chip on" onclick={() => saveSetInstructions(cur)}>{t('common.save')}</button>
+      </div>
+    {:else}
+      <div class="row">
+        <h3>{t('ins.title')}</h3>
+        <button class="chip" onclick={() => (setInsEdit = cur.instructions ?? '')}>{t('ins.edit')}</button>
+      </div>
+      {#if cur.instructions?.trim()}
+        <Instructions text={cur.instructions} />
+      {:else}
+        <p class="hint">{t('ins.emptySet')}</p>
+      {/if}
+    {/if}
+  </section>
+  <ol
+    class="scores setlist"
+    use:sortable={{
+      onreorder: (keys) => reorderItems(cur, keys),
+      onlift: () => (editMode = true),
+      immediate: () => editMode,
+      scroller: () => pane ?? scrollerEl,
+    }}
+  >
+    {#each cur.items as it, i (`${i}-${it.kind === 'score' ? it.score : it.title}`)}
+      <li data-sort-id={String(i)}>
+        {#if it.kind === 'score' && byId.get(it.score)}
+          <button class="open" onclick={() => openItem(cur, i)}
+            ><span class="num">{i + 1}</span>
+            <span class="t"
+              ><span>{byId.get(it.score)!.title}</span>{#if it.note}<span class="meta itemnote">{it.note}</span>{/if}</span
+            ></button
+          >
+          <button class="side notebtn" data-nodrag onclick={() => editNote(cur, i)} aria-label={t('set.noteFor', { title: byId.get(it.score)!.title })}
+            >✎</button
+          >
+        {:else}
+          <span class="open missing"
+            ><span class="num">{i + 1}</span>
+            {it.kind === 'placeholder' ? it.title : it.score} <span class="badge">{t('set.missing')}</span></span
+          >
+        {/if}
+        <button class="side up" data-nodrag onclick={() => move(cur, i, -1)} disabled={i === 0} aria-label={t('set.up')}>↑</button>
+        <button class="side down" data-nodrag onclick={() => move(cur, i, 1)} disabled={i === cur.items.length - 1} aria-label={t('set.down')}>↓</button>
+        <button
+          data-nodrag
+          class="remove"
+          onclick={() => {
+            cur.items.splice(i, 1)
+            saveList(cur)
+          }}
+          aria-label={t('set.remove')}>×</button
+        >
+      </li>
+    {:else}
+      <li class="empty">{t('set.empty')}</li>
+    {/each}
+  </ol>
+{/snippet}
+
+<!-- LIB-11: the setlists as rows with an arrow into each. `withAll`: a first
+     row for all scores (Lists layout; the songs column shows them already
+     in Columns). `drops`: rows accept a dragged score (Columns). -->
+{#snippet listRows(withAll: boolean, drops: boolean)}
+  <ul class="rows" aria-label={t('lib.setlists')}>
+    {#if withAll}
+      <li>
+        <button class="row" onclick={() => (drill = '')}>
+          <span class="rowname">{t('lib.all')}</span>
+          <span class="rowcount">{t('lib.nScores', { n: own.length })}</span>
+          <span class="chev" aria-hidden="true">›</span>
+        </button>
+      </li>
+    {/if}
+    {#each setlists as sl (sl.id)}
+      <li data-drop={drops ? sl.id : undefined} class:on={drill === sl.id}>
+        <button class="row" onclick={() => (drill = sl.id)} aria-current={drill === sl.id ? 'true' : undefined}>
+          <span class="rowname">{sl.name}</span>
+          <span class="rowcount">{t('lib.nScores', { n: sl.items.length })}</span>
+          <span class="chev" aria-hidden="true">›</span>
+        </button>
+      </li>
+    {:else}
+      <li class="empty">{t('lib.noLists')}</li>
+    {/each}
+  </ul>
+  <button class="chip newlist" onclick={newSetlist}>{t('lib.newSetlist')}</button>
+{/snippet}
+
+{#snippet backTo(label: string)}
+  <button class="drillback" onclick={() => (drill = null)}><span aria-hidden="true">‹</span> {label}</button>
+{/snippet}
+
+<main class="library" bind:this={scrollerEl} class:editing={editMode} class:cols={layout === 'columns'}>
   <header>
     <img class="mark" src="/choirbird-mark.svg" alt="" width="64" height="64" />
     <div class="titles">
@@ -449,222 +695,153 @@
   {/each}
 
   <div class="viewbar">
-    <label class="viewsel"
-      >{t('lib.show')}
-      <select value={group} onchange={(e) => setGroup((e.target as HTMLSelectElement).value as HomeGroup)}>
-        {#each GROUPS as g}
-          <option value={g}>{t(`lib.group.${g}`)}</option>
-        {/each}
-      </select>
-    </label>
-  </div>
-  <div class="tabs" bind:this={tabsEl}>
-    {#if group !== 'setlists'}
-      <div class="tablist" role="tablist" aria-label={t(`lib.group.${group}`)}>
-        <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
-        {#each groupTabs as g (g.value)}
-          <button role="tab" class="chip" class:on={tab === g.value} aria-selected={tab === g.value} onclick={() => (tab = g.value)}
-            >{g.label} <span class="count">{g.n}</span></button
-          >
-        {:else}
-          <span class="hint">{t('lib.groupEmpty')}</span>
-        {/each}
-      </div>
-    {:else}
-    <div
-      class="tablist"
-      role="tablist"
-      aria-label={t('lib.setlists')}
-      use:sortable={{ onreorder: reorderTabs, onlift: () => (editMode = true), immediate: () => editMode }}
-    >
-      <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
-      {#each setlists as sl (sl.id)}
-        <button
-          role="tab"
-          class="chip"
-          class:on={tab === sl.id}
-          aria-selected={tab === sl.id}
-          data-sort-id={sl.id}
-          data-drop={sl.id}
-          onclick={() => (tab = sl.id)}>{sl.name}</button
-        >
+    <div class="seg layoutsel" role="group" aria-label={t('lib.layout')}>
+      {#each LAYOUTS as l}
+        {#if l !== 'columns' || !phoneSize}
+          <button class:on={layout === l} aria-pressed={layout === l} onclick={() => setLayout(l)}>{t(`lib.layout.${l}`)}</button>
+        {/if}
       {/each}
     </div>
-    <button class="chip" onclick={newSetlist}>{t('lib.newSetlist')}</button>
+    {#if layout === 'tabs'}
+      <label class="viewsel"
+        >{t('lib.show')}
+        <select value={group} onchange={(e) => setGroup((e.target as HTMLSelectElement).value as HomeGroup)}>
+          {#each GROUPS as g}
+            <option value={g}>{t(`lib.group.${g}`)}</option>
+          {/each}
+        </select>
+      </label>
     {/if}
-    {#if editMode}
+    {#if editMode && layout !== 'tabs'}
       <button class="chip on done" onclick={() => (editMode = false)}>{t('common.done')}</button>
     {/if}
   </div>
-  {#if editMode && !current}
+  <input
+    bind:this={fileInput}
+    type="file"
+    multiple
+    accept=".mxl,.musicxml,.xml,.pdf,.mscz,.4sc,.4ss,.cantorset,.cantorbackup,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
+    style="display:none"
+    onchange={importPicked}
+  />
+
+  {#if layout === 'tabs'}
+    <div class="tabs" bind:this={tabsEl}>
+      {#if group !== 'setlists'}
+        <div class="tablist" role="tablist" aria-label={t(`lib.group.${group}`)}>
+          <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
+          {#each groupTabs as g (g.value)}
+            <button role="tab" class="chip" class:on={tab === g.value} aria-selected={tab === g.value} onclick={() => (tab = g.value)}
+              >{g.label} <span class="count">{g.n}</span></button
+            >
+          {:else}
+            <span class="hint">{t('lib.groupEmpty')}</span>
+          {/each}
+        </div>
+      {:else}
+      <div
+        class="tablist"
+        role="tablist"
+        aria-label={t('lib.setlists')}
+        use:sortable={{ onreorder: reorderTabs, onlift: () => (editMode = true), immediate: () => editMode }}
+      >
+        <button role="tab" class="chip" class:on={tab === ''} aria-selected={tab === ''} onclick={() => (tab = '')}>{t('lib.all')}</button>
+        {#each setlists as sl (sl.id)}
+          <button
+            role="tab"
+            class="chip"
+            class:on={tab === sl.id}
+            aria-selected={tab === sl.id}
+            data-sort-id={sl.id}
+            data-drop={sl.id}
+            onclick={() => (tab = sl.id)}>{sl.name}</button
+          >
+        {/each}
+      </div>
+      <button class="chip" onclick={newSetlist}>{t('lib.newSetlist')}</button>
+      {/if}
+      {#if editMode}
+        <button class="chip on done" onclick={() => (editMode = false)}>{t('common.done')}</button>
+      {/if}
+    </div>
+  {/if}
+  {#if editMode && (layout === 'columns' || (layout === 'tabs' && !current) || (layout === 'lists' && drill === ''))}
     <div class="sortbar" role="group" aria-label={t('lib.sortBy')}>
       <button class="chip" onclick={() => sortBy('title')}>{t('lib.sortTitle')}</button>
       <button class="chip" onclick={() => sortBy('composer')}>{t('lib.sortComposer')}</button>
     </div>
   {/if}
-  {#if editMode}<p class="hint sort-hint">{current ? t('lib.sortHintList') : t('lib.sortHint')}</p>{/if}
+  {#if editMode && layout !== 'columns'}<p class="hint sort-hint">{(layout === 'tabs' ? current : drillList) ? t('lib.sortHintList') : t('lib.sortHint')}</p>{/if}
 
-  {#if !current}
-    <div class="libbar">
-      <input class="search" type="search" placeholder={t('lib.search')} bind:value={query} oninput={onSearch} aria-label={t('lib.search')} />
-      <button class="chip on" onclick={() => fileInput?.click()} disabled={importing}>{importing ? t('lib.importing') : t('lib.import')}</button>
-      <input
-        bind:this={fileInput}
-        type="file"
-        multiple
-        accept=".mxl,.musicxml,.xml,.pdf,.mscz,.4sc,.4ss,.cantorset,.cantorbackup,application/pdf,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
-        style="display:none"
-        onchange={importPicked}
-      />
-      {#if notice}<span class="notice">{notice}</span>{/if}
-    </div>
-    {#if gettingStarted}
-      <section class="welcome glass" aria-labelledby="welcome-title">
-        <h2 id="welcome-title">{t('first.title')}</h2>
-        <p>{t('first.body')}</p>
-        <ul class="how">
-          <li><button class="linklike" onclick={() => fileInput?.click()}>{t('first.import')}</button></li>
-          <li>{t('first.share')}</li>
-          <li>{t('first.files', { device: Math.min(window.innerWidth, window.innerHeight) < 600 ? 'iPhone' : 'iPad' })}</li>
-        </ul>
-        {#if demo}
-          <button class="trycard" onclick={() => demo && onopen(demo)}>
-            <b>{t('first.try')}</b>
-            <span>{t('first.tryBody')}</span>
-          </button>
-        {/if}
-        <div class="welcomefoot">
-          <label class="never"><input type="checkbox" bind:checked={welcomeNever} /> {t('hint.never')}</label>
-          <button class="chip" onclick={closeWelcome} disabled={!welcomeNever}>{t('common.close')}</button>
-        </div>
-      </section>
-    {/if}
-    <ul
-      class="scores"
-      use:sortable={{
-        onreorder: reorderScores,
-        onmerge: makeList,
-        onmergegesture: primeKeyboard,
-        ondrop: dropOnTab,
-        dropRoot: () => tabsEl,
-        onlift: () => (editMode = true),
-        immediate: () => editMode,
-        disabled: () => hits !== null,
-        scroller: () => scrollerEl,
-      }}
-    >
-      {#each shown as s (s.file)}
-        <li data-sort-id={s.file}>
-          <button class="open" onclick={() => onopen(s)}>
-            <span class="t">
-              <span>{s.title}</span>
-              {#if sub(s)}<span class="meta">{sub(s)}</span>{/if}
-            </span>
-            <span class="badges">
-              {#if s.playable}<span class="badge">{t('lib.plays')}</span>{/if}
-              {#if s.pdf}<span class="badge">PDF</span>{/if}
-              {#if s.user}<span class="badge mine">{t('lib.mine')}</span>{/if}
-            </span>
-          </button>
-          <button class="side info" data-nodrag onclick={() => (editing = s)} aria-label="{t('lib.edit')} {s.title}">{t('lib.edit')}</button>
-          {#if setlists.length}
-            <button class="side add" data-nodrag onclick={() => (addTo = addTo === s ? null : s)} aria-label="{t('set.add')}: {s.title}">＋</button>
-          {/if}
-          {#if s.user}
-            <button class="remove" data-nodrag onclick={() => removeScore(s)} aria-label="{t('common.delete')} {s.title}">×</button>
-          {/if}
-          {#if addTo === s}
-            <span class="addmenu glass">
-              {#each setlists as sl (sl.id)}
-                <button onclick={() => addToList(sl, s)}>{sl.name}</button>
-              {/each}
-            </span>
-          {/if}
-        </li>
-      {:else}
-        <li class="empty">{t('lib.noHits')}</li>
-      {/each}
-    </ul>
-  {:else}
-    <div class="libbar">
-      <h2 class="setname">{current.name}</h2>
-      {#if notice}<span class="notice">{notice}</span>{/if}
-      {#if current.items.length}
-        <button class="chip on" onclick={() => openItem(current!, current!.items.findIndex((i) => i.kind === 'score'))}>{t('set.playlist')}</button>
+  {#if gettingStarted && (layout === 'columns' || (layout === 'tabs' && !current) || (layout === 'lists' && drill === null))}
+    <section class="welcome glass" aria-labelledby="welcome-title">
+      <h2 id="welcome-title">{t('first.title')}</h2>
+      <p>{t('first.body')}</p>
+      <ul class="how">
+        <li><button class="linklike" onclick={() => fileInput?.click()}>{t('first.import')}</button></li>
+        <li>{t('first.share')}</li>
+        <li>{t('first.files', { device: phoneSize ? 'iPhone' : 'iPad' })}</li>
+      </ul>
+      {#if demo}
+        <button class="trycard" onclick={() => demo && onopen(demo)}>
+          <b>{t('first.try')}</b>
+          <span>{t('first.tryBody')}</span>
+        </button>
       {/if}
-      <button class="chip" onclick={() => share('setlist', current!.id)}>{t('share.title')}: ChoirBird</button>
-      <button class="chip" onclick={() => share('4ss', current!.id)}>forScore</button>
-      <button class="chip" onclick={() => deleteList(current!)}>{t('common.delete')}</button>
-    </div>
-    {#if received}
-      <p class="pending glass" role="status">{t('set.received', { name: current.name })}</p>
-    {/if}
-    <section class="setins glass" aria-label={t('ins.forSet', { name: current.name })}>
-      {#if setInsEdit !== null}
-        <label class="col"
-          >{t('ins.forSet', { name: current.name })}
-          <textarea bind:value={setInsEdit} rows="5" placeholder={t('ins.placeholder')}></textarea>
-        </label>
-        <p class="hint">{t('ins.syntax')}</p>
-        <div class="row">
-          <button class="chip" onclick={() => (setInsEdit = null)}>{t('common.cancel')}</button>
-          <button class="chip on" onclick={() => saveSetInstructions(current!)}>{t('common.save')}</button>
-        </div>
-      {:else}
-        <div class="row">
-          <h3>{t('ins.title')}</h3>
-          <button class="chip" onclick={() => (setInsEdit = current!.instructions ?? '')}>{t('ins.edit')}</button>
-        </div>
-        {#if current.instructions?.trim()}
-          <Instructions text={current.instructions} />
-        {:else}
-          <p class="hint">{t('ins.emptySet')}</p>
-        {/if}
-      {/if}
+      <div class="welcomefoot">
+        <label class="never"><input type="checkbox" bind:checked={welcomeNever} /> {t('hint.never')}</label>
+        <button class="chip" onclick={closeWelcome} disabled={!welcomeNever}>{t('common.close')}</button>
+      </div>
     </section>
-    <ol
-      class="scores setlist"
-      use:sortable={{
-        onreorder: (keys) => reorderItems(current!, keys),
-        onlift: () => (editMode = true),
-        immediate: () => editMode,
-        scroller: () => scrollerEl,
-      }}
-    >
-      {#each current.items as it, i (`${i}-${it.kind === 'score' ? it.score : it.title}`)}
-        <li data-sort-id={String(i)}>
-          {#if it.kind === 'score' && byId.get(it.score)}
-            <button class="open" onclick={() => openItem(current!, i)}
-              ><span class="num">{i + 1}</span>
-              <span class="t"
-                ><span>{byId.get(it.score)!.title}</span>{#if it.note}<span class="meta itemnote">{it.note}</span>{/if}</span
-              ></button
-            >
-            <button class="side notebtn" data-nodrag onclick={() => editNote(current!, i)} aria-label={t('set.noteFor', { title: byId.get(it.score)!.title })}
-              >✎</button
-            >
+  {/if}
+
+  {#if layout === 'tabs'}
+    {#if !current}
+      {@render libBar()}
+      {@render scoreGrid(false)}
+    {:else}
+      {@render setlistView(current, undefined)}
+    {/if}
+  {:else if layout === 'lists'}
+    {#if drill === null}
+      {#if notice}<p class="notice">{notice}</p>{/if}
+      {@render listRows(true, false)}
+    {:else if drill === ''}
+      {@render backTo(t('lib.setlists'))}
+      {@render libBar()}
+      {@render scoreGrid(false)}
+    {:else if drillList}
+      {@render backTo(t('lib.setlists'))}
+      {@render setlistView(drillList, undefined)}
+    {/if}
+  {:else}
+    <!-- Columns: scores | setlists (| the open list in landscape). Each
+         column scrolls on its own; the page does not. -->
+    <div class="columns" class:three={threeCols} bind:this={colsEl}>
+      <section class="pane songs" aria-label={t('lib.all')} bind:this={songsEl}>
+        {@render libBar()}
+        {@render scoreGrid(true)}
+      </section>
+      <section class="pane lists" aria-label={t('lib.setlists')} bind:this={listsEl}>
+        {#if !threeCols && drillList}
+          {@render backTo(t('lib.setlists'))}
+          {@render setlistView(drillList, listsEl)}
+        {:else}
+          <h2 class="panetitle">{t('lib.setlists')}</h2>
+          {#if editMode}<p class="hint">{t('lib.dragToList')}</p>{/if}
+          {@render listRows(false, true)}
+        {/if}
+      </section>
+      {#if threeCols}
+        <section class="pane content" aria-label={drillList ? drillList.name : t('lib.pickList')} bind:this={contentEl} data-drop={drillList?.id}>
+          {#if drillList}
+            {@render setlistView(drillList, contentEl)}
           {:else}
-            <span class="open missing"
-              ><span class="num">{i + 1}</span>
-              {it.kind === 'placeholder' ? it.title : it.score} <span class="badge">{t('set.missing')}</span></span
-            >
+            <p class="hint pickhint">{t('lib.pickList')}</p>
           {/if}
-          <button class="side up" data-nodrag onclick={() => move(current!, i, -1)} disabled={i === 0} aria-label={t('set.up')}>↑</button>
-          <button class="side down" data-nodrag onclick={() => move(current!, i, 1)} disabled={i === current!.items.length - 1} aria-label={t('set.down')}>↓</button>
-          <button
-            data-nodrag
-            class="remove"
-            onclick={() => {
-              current!.items.splice(i, 1)
-              saveList(current!)
-            }}
-            aria-label={t('set.remove')}>×</button
-          >
-        </li>
-      {:else}
-        <li class="empty">{t('set.empty')}</li>
-      {/each}
-    </ol>
+        </section>
+      {/if}
+    </div>
   {/if}
 </main>
 
@@ -706,6 +883,141 @@
   />{/if}
 
 <style>
+  /* LIB-11 layouts. */
+  .viewbar {
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .layoutsel button {
+    min-height: 2.25rem;
+    color: var(--text);
+    /* Text and background change together (no unreadable moment). */
+    transition: none;
+  }
+  .layoutsel button.on {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .rows {
+    list-style: none;
+    margin: 0 0 0.75rem;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 47.5rem;
+  }
+  .rows > li {
+    border-radius: var(--radius-m);
+  }
+  .rows .row {
+    width: 100%;
+    min-height: 3.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    justify-content: flex-start;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-m);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    font-size: 1.0625rem;
+  }
+  .rows > li.on .row {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .rowname {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-display);
+  }
+  .rowcount {
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+  .chev {
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--muted);
+  }
+  .drillback {
+    background: transparent;
+    color: var(--accent);
+    padding: 0.4rem 0.25rem;
+    margin: 0 0 0.5rem;
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+  .drillback span {
+    font-size: 1.4rem;
+    line-height: 1;
+  }
+  .newlist {
+    margin-bottom: 0.75rem;
+  }
+  /* Columns: the library fills the screen and each pane scrolls itself. */
+  .library.cols {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .columns {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 1rem;
+  }
+  .columns.three {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1.1fr);
+  }
+  .pane {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.25rem 0.25rem 2rem;
+  }
+  .pane.songs .scores {
+    grid-template-columns: 1fr;
+  }
+  .pane.songs .libbar {
+    flex-wrap: wrap;
+  }
+  .pane.songs .search {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+  .pane.content {
+    border-radius: var(--radius-m);
+    border: 1px dashed transparent;
+  }
+  .pane.content:global(.drop-over) {
+    border-color: var(--accent);
+  }
+  .panetitle {
+    margin: 0.25rem 0 0.75rem;
+    font-size: 1.125rem;
+  }
+  .pickhint {
+    margin-top: 2rem;
+    text-align: center;
+  }
+  .pane .setlist {
+    max-width: none;
+  }
+  .pane .libbar {
+    flex-wrap: wrap;
+  }
+  .pane .setname {
+    flex-basis: 100%;
+  }
+  .pane .setlist li > :global(.open) {
+    padding-right: 10.625rem;
+  }
   .pending {
     display: flex;
     flex-wrap: wrap;

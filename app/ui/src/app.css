@@ -876,6 +876,17 @@ select {
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
   opacity: 0.96;
 }
+/* Columns layout: the floating copy being dragged to a list, and the item
+   it came from (stays in place, dimmed). */
+.sort-ghost {
+  will-change: transform;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  border-radius: var(--radius-m);
+  opacity: 0.96;
+}
+.sort-source {
+  opacity: 0.45;
+}
 .merge-target {
   outline: 3px solid var(--accent);
   outline-offset: 3px;

@@ -14,6 +14,17 @@ const H = Number(process.env.H || 1133)
 
 const SCREENS = [
   ['library', async () => {}],
+  // LIB-11 layouts: setlists as rows, and the columns (landscape: three).
+  ['library-lists', async (p) => {
+    await p.locator('.layoutsel button').nth(1).click()
+    await p.waitForSelector('.rows')
+  }],
+  ['library-columns', async (p) => {
+    await p.setViewportSize({ width: H, height: W })
+    await p.locator('.layoutsel button').nth(2).click()
+    await p.waitForSelector('.pane.content')
+    await p.locator('.pane.lists .rows > li button').first().click().catch(() => {})
+  }],
   ['metadata', async (p) => {
     await p.locator('ul.scores > li').first().locator('button.info').click()
     await p.waitForSelector('.metasheet')

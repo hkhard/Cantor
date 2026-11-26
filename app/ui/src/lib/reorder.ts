@@ -32,6 +32,11 @@ export interface SortOptions {
   disabled?: () => boolean
   /** Scrolling ancestor for edge auto-scroll. */
   scroller?: () => HTMLElement | null | undefined
+  /** Drag a floating copy above everything instead of the item itself, and
+   *  leave the others in place (no reordering): for dragging out of one
+   *  pane onto targets in another (columns layout). Targets are measured
+   *  in the viewport, so they may sit in other scrolling panes. */
+  copyOut?: () => boolean
   longPressMs?: number
 }
 
@@ -74,6 +79,7 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     edge: { slot: number; since: number } | null
     dropOn: HTMLElement | null
     raf: number
+    ghost: HTMLElement | null
   } = null
   let suppressClick = false
 
@@ -129,17 +135,34 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     const items = [...node.querySelectorAll<HTMLElement>(':scope > [data-sort-id]')]
     const from = items.indexOf(el)
     if (from < 0) return
-    const scroller = opts.scroller?.() ?? null
+    const copy = opts.copyOut?.() ?? false
+    // Copy-out: no auto-scroll of the source pane, all in viewport coordinates.
+    const scroller = copy ? null : (opts.scroller?.() ?? null)
     const st = scroller?.scrollTop ?? 0
     // One measurement for the whole drag (content coordinates).
     const slots = items.map((it) => {
       const r = it.getBoundingClientRect()
       return { x: r.left, y: r.top + st, w: r.width, h: r.height }
     })
+    // Copy-out targets live in other panes; with no scroller everything is
+    // in viewport coordinates.
+    const tst = st
     const dropTargets = [...(opts.dropRoot?.()?.querySelectorAll<HTMLElement>('[data-drop]') ?? [])].map((t) => {
       const r = t.getBoundingClientRect()
-      return { el: t, rect: { x: r.left, y: r.top + st, w: r.width, h: r.height } }
+      return { el: t, rect: { x: r.left, y: r.top + tst, w: r.width, h: r.height } }
     })
+    let ghost: HTMLElement | null = null
+    if (copy) {
+      // A floating copy on <body>, above every pane (not clipped by the
+      // pane's overflow); the item stays where it is.
+      const r = el.getBoundingClientRect()
+      ghost = el.cloneNode(true) as HTMLElement
+      ghost.classList.add('sort-ghost')
+      ghost.removeAttribute('data-sort-id')
+      ghost.setAttribute('aria-hidden', 'true')
+      ghost.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;margin:0;z-index:1000;pointer-events:none;list-style:none`
+      document.body.appendChild(ghost)
+    }
     drag = {
       pointer,
       el,
@@ -159,8 +182,21 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
       edge: null,
       dropOn: null,
       raf: 0,
+      ghost,
     }
     suppressClick = true
+    if (ghost) {
+      el.classList.add('sort-source')
+      node.classList.add('sorting')
+      try {
+        el.setPointerCapture(pointer)
+      } catch {
+        /* pointer already gone */
+      }
+      opts.onlift?.()
+      drag.raf = requestAnimationFrame(frame)
+      return
+    }
     // No will-change here: promoting every item to a layer in this frame
     // costs a ~30 ms stall in WebKit. Edit mode (CSS) promotes them ahead
     // of time, so drags started in edit mode pick up with no stall.
@@ -205,6 +241,18 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     const cy = d.py + scrollTop() // pointer in content coordinates
     const cx = d.px
     const s = d.slots[d.from]
+    if (d.ghost) {
+      // Copy-out: only the floating copy moves (viewport coordinates).
+      d.ghost.style.transform = `translate3d(${cx - d.grab.x - s.x}px, ${d.py - d.grab.y - s.y}px, 0) scale(1.04)`
+      const over = d.dropTargets.find((t) => inside(cx, d.py, t.rect))?.el ?? null
+      if (over !== d.dropOn) {
+        d.dropOn?.classList.remove('drop-over')
+        over?.classList.add('drop-over')
+        d.dropOn = over
+      }
+      d.raf = requestAnimationFrame(frame)
+      return
+    }
     d.el.style.transform = `translate3d(${cx - d.grab.x - s.x}px, ${cy - d.grab.y - s.y}px, 0) scale(1.06)`
 
     // External drop targets (setlist tabs).
@@ -272,6 +320,28 @@ export function sortable(node: HTMLElement, initial: SortOptions) {
     if (merged) opts.onmergegesture?.()
     const dropped = e.type === 'pointerup' ? d.dropOn?.dataset.drop ?? null : null
     d.dropOn?.classList.remove('drop-over')
+    if (d.ghost) {
+      const g = d.ghost
+      drag = null
+      d.el.classList.remove('sort-source')
+      node.classList.remove('sorting')
+      setTimeout(() => (suppressClick = false), 0)
+      if (dropped) {
+        // Into the list: shrink away where it was dropped.
+        g.style.transition = 'transform 180ms ease-in, opacity 180ms ease-in'
+        g.style.transform += ' scale(0.6)'
+        g.style.opacity = '0'
+      } else {
+        // Nowhere: fly back to its place.
+        g.style.transition = EASE
+        g.style.transform = ''
+      }
+      setTimeout(() => {
+        g.remove()
+        if (dropped && opts.ondrop) opts.ondrop(draggedId, dropped)
+      }, dropped ? 180 : 230)
+      return
+    }
     clearMerge()
     // Settle the dragged item into its slot (slots are in content
     // coordinates, so scrolling during the drag needs no correction).

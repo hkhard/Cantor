@@ -89,6 +89,7 @@ Each requirement has an ID, a priority (P0 = v1 must, P1 = v1 should, P2 = later
 | LIB-08 | P0 | Import forScore .4SS setlists and .4SB backups | Setlist order, placeholders and item start pages match; a full backup imports into a library with the same score count and setlists |
 | LIB-09 | P2 | Export to .4SC / .4SS for users going back to forScore | Round trip Cantor → forScore → Cantor keeps annotations |
 | LIB-10 | P1 | Read the notes of a PDF-only score on the device, in the background, with progress and a notice when done | A queued PDF produces `<name>.musicxml` beside it without blocking the UI; progress shows page n of m; on success the piece plays without reopening the app; a failure says why; the client makes no network call |
+| LIB-11 | P1 | Home screen layouts to choose from: Tabs (chips above one list), Lists (setlists as rows; an arrow opens one; back returns) and Columns (scores beside the setlists; drag a score onto a list to add it; in landscape the open list's content is a third column). Kept per device | Each layout reachable in one tap; a score dragged onto a list or onto the open list's column is added at the end at 60 fps; the dragged card floats above both columns; the scores' order does not change; a phone is not offered Columns and shows Lists; the open list and each column's scroll position survive opening a score; a11y 0 findings in every skin and language |
 
 ### Rendering and display (VIEW)
 

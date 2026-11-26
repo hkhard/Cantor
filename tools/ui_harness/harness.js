@@ -38,11 +38,11 @@ const H = Number(process.env.H || 1133)
   await require('./mock.js').setup(page, DIR)
   const shot = async (n) => page.screenshot({ path: path.join(out, `${n}.png`) })
   let failed = 0
-  // ONLY=<text>: run just the steps whose name contains it (quick checks;
-  // later steps may depend on earlier ones, so not every step runs alone).
-  const only = process.env.ONLY
+  // ONLY=<regex>: run just the steps whose name matches (quick checks; later
+  // steps may depend on earlier ones, e.g. ONLY='set_01 create|lib_01 hold|lib_11').
+  const only = process.env.ONLY ? new RegExp(process.env.ONLY) : null
   const step = async (name, fn) => {
-    if (only && !name.includes(only)) return
+    if (only && !only.test(name)) return
     try {
       await fn()
       console.log('ok  ', name)
@@ -449,6 +449,118 @@ const H = Number(process.env.H || 1133)
     await page.click('button.done')
     // A plain tap still opens a card (no drag left over).
     if (await page.locator('.library.editing').count()) throw new Error('still editing')
+  })
+
+  // LIB-11: home layouts. Tabs (above), Lists (setlists as rows with an
+  // arrow into each) and Columns (scores | setlists, and the list's content
+  // as a third column in landscape) with drag-to-add.
+  const layoutBtn = (name) => page.locator('.layoutsel button', { hasText: name })
+  const rowNames = (scope = '') => page.locator(`${scope} .rows > li .rowname`).allInnerTexts()
+
+  await step('lib_11 lists layout: setlists as rows, the arrow opens a list, back returns; kept after restart', async () => {
+    await layoutBtn('Lists').click()
+    await page.waitForSelector('.rows')
+    const rows = await rowNames()
+    for (const want of ['All scores', 'Vårkonsert', 'Duo']) if (!rows.includes(want)) throw new Error('rows ' + rows)
+    if (await page.locator('ul.scores').count()) throw new Error('scores shown on the index')
+    if ((await page.locator('.rows > li .chev').count()) < 3) throw new Error('no arrows')
+    await shot('31-lists-layout')
+    await page.locator('.rows > li', { hasText: 'Vårkonsert' }).locator('button').first().click()
+    await page.waitForSelector('h2.setname >> text=Vårkonsert')
+    if ((await page.locator('ol.setlist > li').count()) !== 2) throw new Error('items')
+    await page.click('button.drillback')
+    await page.waitForSelector('.rows')
+    await page.locator('.rows > li', { hasText: 'All scores' }).locator('button').first().click()
+    await page.waitForSelector('ul.scores > li')
+    await page.click('button.drillback')
+    await page.waitForSelector('.rows')
+    // Kept after a restart (per device).
+    await page.reload()
+    await page.waitForSelector('.rows')
+  })
+
+  await step('lib_11 columns layout (portrait): scores | setlists, drag a score onto a list adds it at 60 fps', async () => {
+    await layoutBtn('Columns').click()
+    await page.waitForSelector('.pane.songs ul.scores > li')
+    await page.waitForSelector('.pane.lists .rows')
+    if (await page.locator('.pane.content').count()) throw new Error('three columns in portrait')
+    // The panes scroll, the page does not.
+    const pageScroll = await page.locator('main.library').evaluate((el) => el.scrollHeight - el.clientHeight)
+    if (pageScroll > 2) throw new Error('the page itself scrolls: ' + pageScroll)
+    const order0 = await page.locator('.pane.songs ul.scores > li .t > span:first-child').allInnerTexts()
+    const n0 = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert').items.length)
+    // The dragged card is drawn above both panes (not clipped by its pane).
+    await page.evaluate(() => {
+      window.__ghost = 0
+      new MutationObserver((ms) => {
+        for (const m of ms) for (const a of m.addedNodes) if (a.classList?.contains('sort-ghost')) window.__ghost++
+      }).observe(document.body, { childList: true })
+    })
+    const song = page.locator('.pane.songs ul.scores > li', { hasText: 'Christmas Day' })
+    const target = page.locator('.pane.lists .rows > li', { hasText: 'Vårkonsert' })
+    const frames = await longDrag(song, target, { steps: 40 })
+    checkFrames(frames, 'columns drag')
+    const sl = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert'))
+    if (sl.items.length !== n0 + 1 || sl.items.at(-1).score !== '1:Christmas') throw new Error('not added ' + JSON.stringify(sl.items))
+    if (!(await page.evaluate(() => window.__ghost))) throw new Error('no floating card while dragging')
+    const order1 = await page.locator('.pane.songs ul.scores > li .t > span:first-child').allInnerTexts()
+    if (JSON.stringify(order1) !== JSON.stringify(order0)) throw new Error('scores reordered by the drop')
+    await shot('32-columns-portrait')
+    // Tap the list: its content opens in the lists column; remove the added item.
+    if (await page.locator('.library.editing').count()) await page.click('button.done')
+    await target.locator('button').first().click()
+    await page.waitForSelector('.pane.lists h2.setname >> text=Vårkonsert')
+    await page.locator('.pane.lists ol.setlist > li').last().locator('button.remove').click()
+    await page.waitForTimeout(200)
+    const back = await page.evaluate(() => window.__store.setlists.find((s) => s.name === 'Vårkonsert').items.length)
+    if (back !== n0) throw new Error('remove ' + back)
+    await page.click('.pane.lists button.drillback')
+    await page.waitForSelector('.pane.lists .rows')
+  })
+
+  await step('lib_11 columns layout (landscape): scores | setlists | list content; drop on the content adds; no columns on a phone', async () => {
+    try {
+      await page.setViewportSize({ width: H, height: W })
+      await page.waitForSelector('.pane.content')
+      await page.locator('.pane.lists .rows > li', { hasText: 'Duo' }).locator('button').first().click()
+      await page.waitForSelector('.pane.content h2.setname >> text=Duo')
+      // The lists column keeps showing the lists.
+      if (!(await page.locator('.pane.lists .rows').count())) throw new Error('lists column replaced')
+      const n0 = await page.locator('.pane.content ol.setlist > li').count()
+      const frames = await longDrag(page.locator('.pane.songs ul.scores > li', { hasText: 'Skannad' }), page.locator('.pane.content'), { steps: 40 })
+      checkFrames(frames, 'columns drag to content')
+      await page.waitForTimeout(200)
+      const n1 = await page.locator('.pane.content ol.setlist > li').count()
+      if (n1 !== n0 + 1) throw new Error(`content ${n0} -> ${n1}`)
+      await shot('33-columns-landscape')
+      if (await page.locator('.library.editing').count()) await page.click('button.done')
+      await page.locator('.pane.content ol.setlist > li').last().locator('button.remove').click()
+      await page.waitForTimeout(200)
+      // Open a piece from the songs column and come back: Duo is still open
+      // in the third column.
+      await page.locator('.pane.songs ul.scores > li', { hasText: 'Christmas Day' }).locator('button.open').click()
+      await page.waitForSelector('main.reader')
+      await page.waitForTimeout(400)
+      if (await page.locator('.hintbg').count()) await page.locator('.hintbg').click({ position: { x: 5, y: 5 } })
+      await page.click('.top button[aria-label="Library"]')
+      await page.waitForSelector('.pane.content h2.setname >> text=Duo')
+      // A phone has no room for columns: the choice is not offered, the
+      // Lists layout shows instead (here with Duo still open).
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.waitForTimeout(300)
+      if (await layoutBtn('Columns').count()) throw new Error('columns offered on a phone')
+      if (await page.locator('.pane').count()) throw new Error('panes on a phone')
+      if (!(await layoutBtn('Lists').evaluate((b) => b.classList.contains('on')))) throw new Error('Lists not shown on a phone')
+      await page.waitForSelector('h2.setname >> text=Duo')
+      await page.click('button.drillback')
+      await page.waitForSelector('.rows')
+    } finally {
+      await page.setViewportSize({ width: W, height: H })
+      await page.waitForTimeout(300)
+      if (await page.locator('button.drillback').count()) await page.click('button.drillback')
+      await layoutBtn('Tabs').click()
+      await page.waitForSelector('[role=tab] >> text=All scores')
+    }
   })
 
   await step('set_01 open from setlist, next piece', async () => {
