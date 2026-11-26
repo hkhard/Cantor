@@ -72,6 +72,16 @@ later. Sharing-with-instructions and Band groundwork were moved to phase 5
 
 Who: you. Cost: nothing.
 
+## Version 1.1 or later: noted for redesign
+
+Kept as they are for 1.0 (decided by the product owner 2026-11-26), to be
+updated and optimised in 1.1 or later:
+
+| Work | Exit check |
+|---|---|
+| **iPhone library header and landscape layout.** Today (0.9 and later): on iPhone in portrait the layout and About pills share a row with the colour picker on the row below; in landscape the mark and title shrink, the subtitle hides and all three pills sit on one row; the library pads by the safe areas on every side so nothing sits under the notch / Dynamic Island. The product owner does not like how it is done (screenshot from an iPhone 16 in landscape, 2026-11-26). | A redesigned iPhone home screen (portrait and landscape) agreed with the product owner from a mock-up first; checked on the iPhone 16 in both orientations; harness step `lib_11 the layout, colour and About pills…` updated to the new design; a11y 0 at 200% text |
+| **Columns layout polish on iPad** (drag feel, hold time before a list opens, slide speed, card density) once there is real use | Product owner and testers comfortable with it on device; numbers in plan section 7 |
+
 ## Phase 2: server code, written and run privately (no firm, no customers)
 
 The org server can be **developed and tested** before the firm exists. It is
