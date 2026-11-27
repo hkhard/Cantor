@@ -1,11 +1,16 @@
 # App Review attachment and notes for the version in review (called by
 # tools/store/review_video.sh). Args: VIDEO NOTES_DOC [--submit]
 require "json"
-video, doc, submit = ARGV
+# Run as `ruby -e '... load ARGV[0]' review_upload.rb VIDEO DOC`, so ARGV[0]
+# is this file itself.
+args = ARGV.dup
+args.shift if args.first && File.expand_path(args.first) == File.expand_path(__FILE__)
+video, doc, submit = args
+abort "usage: review_upload.rb VIDEO.mp4 NOTES.md [--submit]" unless video&.end_with?(".mp4") && doc&.end_with?(".md")
 key = JSON.parse(File.read(File.expand_path("~/.appstoreconnect/choirbird-asc.json")))
 Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(**key.transform_keys(&:to_sym).slice(:key_id, :issuer_id, :key, :in_house))
 
-notes = File.read(doc)[/\*\*Notes for the reviewer:\*\*.*?\n\n```\n(.*?)\n```/m, 1] or abort "no reviewer notes in #{doc}"
+notes = File.read(doc, encoding: "UTF-8")[/\*\*Notes for the reviewer:\*\*.*?\n\n```\n(.*?)\n```/m, 1] or abort "no reviewer notes in #{doc}"
 abort "notes are #{notes.size} characters (App Store Connect allows 4000)" if notes.size > 4000
 
 app = Spaceship::ConnectAPI::App.find("se.nikielhard.choirbird")

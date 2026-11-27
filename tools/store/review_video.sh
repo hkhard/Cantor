@@ -10,7 +10,7 @@
 # Uses the App Store Connect API key in ~/.appstoreconnect/choirbird-asc.json.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-IN="${1:?usage: review_video.sh RECORDING.mp4 [--submit]}"
+IN="${1:?usage: review_video.sh RECORDING.mov|.mp4 [--submit]}"
 SUBMIT="${2:-}"
 [ -f "$IN" ] || { echo "no such file: $IN" >&2; exit 1; }
 OUTDIR="$ROOT/store-out/review"
@@ -18,12 +18,21 @@ mkdir -p "$OUTDIR"
 OUT="$OUTDIR/ChoirBird-1.0.0-review.mp4"
 rm -f "$OUT"
 
-# Compress: 1080p H.264 with the AAC sound kept (Apple's own converter).
-/usr/bin/avconvert --source "$IN" --preset Preset1920x1080 --output "$OUT" --replace >/dev/null
+# Compress any .mov/.mp4 to H.264 + AAC at most 1920 px high, never
+# upscaled, video capped at 3 Mbit/s (about 25 MB a minute), sound kept.
+# Apple's avconvert presets scale small recordings *up* (888x1920 became
+# 101 MB), so ffmpeg is used when it is installed.
+FFMPEG="$(command -v ffmpeg || echo /opt/homebrew/bin/ffmpeg)"
+if [ -x "$FFMPEG" ]; then
+  "$FFMPEG" -v error -y -i "$IN" -vf "scale=-2:'min(1920,ih)'" -c:v libx264 -preset medium -crf 26 \
+    -maxrate 3M -bufsize 6M -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "$OUT"
+else
+  /usr/bin/avconvert --source "$IN" --preset PresetMediumQuality --output "$OUT" --replace >/dev/null
+fi
 SIZE=$(stat -f %z "$OUT")
 if [ "$SIZE" -gt 52428800 ]; then
-  /usr/bin/avconvert --source "$IN" --preset Preset1280x720 --output "$OUT" --replace >/dev/null
-  SIZE=$(stat -f %z "$OUT")
+  echo "video is $((SIZE / 1048576)) MB after compression (limit 50 MB): record a shorter take" >&2
+  exit 1
 fi
 DUR=$(/usr/bin/afinfo "$OUT" 2>/dev/null | awk '/estimated duration/ {print int($3)}')
 AUDIO=$(/usr/bin/afinfo "$OUT" 2>/dev/null | awk '/Data format/ {print $3}')

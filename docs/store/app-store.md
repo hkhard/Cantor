@@ -359,10 +359,12 @@ The recording lands in Photos. AirDrop it to the Mac (or Photos › Export
 Unmodified Original), then:
 
 ```
-tools/store/review_video.sh ~/Downloads/RPReplay_*.mp4
+tools/store/review_video.sh ~/Downloads/final-choirbird.mov   # .mov or .mp4
 ```
 
-It compresses the file (H.264 + AAC, under 50 MB, sound kept), uploads it
+It compresses the file with ffmpeg (H.264 + AAC, never upscaled, at most
+1920 px high and 3 Mbit/s, refused above 50 MB, sound kept; a 2 min 38 s
+888x1920 recording became 8 MB), uploads it
 as the App Review **Attachment**, writes the notes above into the **Notes**
 field, and prints what App Store Connect now has. Then in App Store
 Connect: reply in **App Review** › the message ("Attached a screen
