@@ -277,15 +277,97 @@ ChoirBirds första version på App Store.
 - **Contact:** fill in as `First Last, +46 70 123 45 67` on this line, then
   run `python3 tools/store/export_deliver.py` and `fastlane deliver` again
   (App Store Connect requires first name, last name and phone with the notes).
-- **Notes for the reviewer:**
+- **Notes for the reviewer:** (answers Guideline 2.1 "Information Needed",
+  2026-11-27; the screen recording is uploaded as the Attachment, see
+  "Screen recording for App Review" below)
 
 ```
-ChoirBird needs no account and makes no network connections.
-To try it: on first start the library shows "Getting started with ChoirBird"; tap "Try Lacrymosa" (Mozart, included), then press Play. Open the mixer (sliders icon) to hear one voice alone: tap a voice name, then "My part".
-On-device note recognition: open any PDF score that has no MusicXML and tap "Read the notes" at the bottom. It runs on the device and takes about a minute per page.
-Audio keeps playing in the background on purpose (rehearsal with the screen locked), which is why the app declares the audio background mode.
-The source code is public (GNU AGPL-3.0): https://github.com/hkhard/Cantor
+A screen recording is attached: ChoirBird 1.0.0 (195) on a physical iPhone 16 with iOS 27.2.1, with sound, starting with launching the app from the Home Screen.
+
+1. PURPOSE AND AUDIENCE
+ChoirBird is a practice app for choir singers (amateur and church choirs, students). Singers get printed or PDF sheet music from their conductor but cannot hear their own voice part on its own. ChoirBird shows the score and plays every voice (soprano, alto, tenor, bass, piano) on its own line, so a singer can make their own part louder, hear it alone, slow it down or loop a passage, and practise at home.
+
+2. HOW TO USE IT (no login, no setup)
+- No account exists. The app opens straight into the library.
+- Sample file included: on first start the library shows "Getting started with ChoirBird". Tap "Try Lacrymosa" (Mozart, public domain, bundled in the app). Press Play: all voices play and the current bar is marked on the PDF page.
+- Mixer: tap the sliders icon (top right). Tap a voice name, then "My part": that voice gets louder, the others softer. M = mute, S = solo.
+- Practice controls (bottom bar or the ⌃ sheet on iPhone): tempo, Loop between two bars, Click, Count-in, Pitch (first note).
+- Notation: the ••• menu › Notation shows the re-engraved score.
+- Annotate: Annotate › Pen / Highlighter / Stamp to mark the page.
+- Import: Library › + Import (MusicXML, MXL, PDF, forScore .4sc/.4ss) from Files, or share a file to ChoirBird. Another sample to import: https://github.com/hkhard/Cantor/raw/main/fixtures/scores/mozart-lacrymosa/mozart-lacrymosa-from-requiem-satb-with-piano.pdf
+- Read the notes: open a PDF that has no notes (for example the imported PDF above) and tap "Read the notes" at the bottom. Recognition runs on the device, about a minute per page; then the score plays.
+- Audio keeps playing with the screen locked on purpose (rehearsing), which is why the app declares the audio background mode.
+
+3. EXTERNAL SERVICES
+None. ChoirBird makes no network connections and has no server, accounts, analytics, ads, payments or AI services. Everything runs on the device: playback (a bundled SoundFont synthesiser), PDF display, note recognition (an open-source on-device model, homr, run with ONNX Runtime) and title reading (Apple Vision). The optional sync folder and backups are folders the user picks in the Files app (for example iCloud Drive); ChoirBird only reads and writes files there.
+
+4. REGIONS
+The app works the same in every region. The interface is in English and Swedish (chosen from the device language); all features and content are identical everywhere.
+
+5. REGULATED INDUSTRY / THIRD-PARTY MATERIAL
+Not a regulated industry. The bundled sample (Mozart's Lacrymosa, 1791) is in the public domain. Users bring their own scores. No in-app purchases, no paid content, no user accounts and no user-generated content shared with others. The app is free software (GNU AGPL-3.0); source code: https://github.com/hkhard/Cantor
 ```
+
+## Screen recording for App Review
+
+Asked for on 2026-11-27 (Guideline 2.1, Information Needed): a recording on
+a physical device with the latest iOS (27.2.1), **starting with launching
+the app**, showing the typical flow. ChoirBird has no accounts, no
+user-generated content shared with others and no paid content, so those
+parts are not needed. Record **build 1.0.0 (195), the one under review**,
+installed from TestFlight (not a development build).
+
+### Before recording (iPhone 16, iOS 27.2.1)
+
+1. Install ChoirBird 1.0.0 (195) from TestFlight (delete the development
+   build first if one is installed: same bundle id). Open it once, let it
+   load, then swipe it away so the recording starts from a cold launch.
+2. Settings › General › Language: English (the reviewer reads English).
+3. Do Not Disturb on (no notifications in the video). Volume about 60 %,
+   silent switch off: the system recording takes the app's sound.
+4. Control Center: add Screen Recording if it is not there. Long-press the
+   record button and turn **Microphone off** (app sound is recorded either
+   way; the mic would add room noise).
+
+### What to do on camera (about 2 minutes)
+
+1. Start the recording from Control Center, go to the Home Screen and tap
+   the ChoirBird icon (the launch must be in the video).
+2. The library opens with "Getting started with ChoirBird". Pause a
+   second so the text can be read.
+3. Tap **Try Lacrymosa**. Close the short intro hint.
+4. Press **Play**. Let it play about 10 s: the bar marker moves on the PDF
+   and all voices sound.
+5. Tap **⌃** (or the voices button) to open the practice sheet. Under
+   Voices tap **Alto**, then **My part**: the alto gets louder. Tap **S**
+   on Soprano for a few seconds (only the soprano), then tap S again.
+6. Drag **Tempo** down to about 70 %, let it play 3 s, back to 100 %.
+7. Close the sheet. **•••** › **Notation**: the re-engraved score with the
+   playing bar. Back to **Original**.
+8. Pause. **Annotate** › **Highlighter**, mark one bar; **Stamp** › *mf*,
+   tap the page; **Done**.
+9. Back to the library (top left). Tap **+ Import** to show the file
+   picker with Files, then cancel.
+10. Optional (shows the on-device note reading): Import the sample PDF
+    (link in the notes, save it to Files first), open it, tap
+    **Read the notes**, wait until it is ready, press Play.
+11. Stop the recording from Control Center.
+
+### Upload
+
+The recording lands in Photos. AirDrop it to the Mac (or Photos › Export
+Unmodified Original), then:
+
+```
+tools/store/review_video.sh ~/Downloads/RPReplay_*.mp4
+```
+
+It compresses the file (H.264 + AAC, under 50 MB, sound kept), uploads it
+as the App Review **Attachment**, writes the notes above into the **Notes**
+field, and prints what App Store Connect now has. Then in App Store
+Connect: reply in **App Review** › the message ("Attached a screen
+recording and added the requested information to the Notes") and press
+**Resubmit to App Review** (or `--submit` on the script).
 
 ## Export compliance
 
